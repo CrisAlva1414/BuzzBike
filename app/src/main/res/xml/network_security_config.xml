@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    network_security_config — BuzzBike (ADR-003 sync + AGENTS.md §7 privacy)
+
+    DECISIÓN: NO se permite cleartext (HTTP) en ningún destino, incluidos
+    dominios locales/private. Esto es deliberadamente más estricto que el
+    prior art `biketrackd` (android:usesCleartextTraffic="true").
+
+    Razonamiento:
+    1. El sync opcional a Hermes Agent va por Tailscale. Tailscale cifra
+       TODO el tráfico en capa WireGuard (chacha20-poly1305) de extremo a
+       extremo entre el teléfono y el NAS. El HTTP "cleartext" dentro de
+       la VPN no es realmente claro: el túnel ya está cifrado.
+    2. Aun así, forzar HTTPS en el endpoint del NAS es la postura segura:
+       protege contra un Tailscale mal configurado, contra DNS spoofing
+       local, y contra errores de operación. La HMAC (ADR-003) da
+       autenticidad e integridad del payload, no confidencialidad del
+       transporte.
+    3. Android Network Security Config NO soporta CIDR de forma fiable
+       para matchear rangos CGNAT de Tailscale (100.64.0.0/10) en todas
+       las API levels. Una lista de IPs sería frágil y quedaría desactual
+       izada. Bloquear todo cleartext es simple, auditable y no se rompe.
+    4. TODO(slice 4+ / sync): al implementar el client de Hermes, asegurar
+       que el endpoint sea HTTPS (Tailscale Serve con cert, cert pinning
+       propio, o CA local del NAS). Si algún NAS legado solo habla HTTP,
+       resolverlo con ADR — no relajando este config.
+
+    Esto NO es `usesCleartextTraffic="true"`. El anti-patrón del prior art
+    está descartado explícitamente.
+-->
+<network-security-config>
+    <!-- HTTPS (y TLS) permitido por defecto; cleartext prohibido. -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!--
+        Dominios de debug (localhost) — solo para desarrollo local de
+        instrumented tests contra un emulador. En release el base-config
+        manda y cleartext sigue prohibido salvo que se agregue un
+        domain-config explícito con revisión.
+    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">[::1]</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    data_extraction_rules — BuzzBike privacy (AGENTS.md §7).
+
+    Local-first: borrar la app borra todo. No hay backup a la nube de
+    tracks GPS ni de Room. allowBackup=false en el manifest es la regla
+    principal; este archivo es la capa explícita para Android 12+
+    (dataExtractionRules) por si allowBackup se revisita.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>

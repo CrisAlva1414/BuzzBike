@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Placeholder launcher background — dark green (cycling). Not brand-final. -->
+    <color name="ic_launcher_background">#1B5E20</color>
+</resources>

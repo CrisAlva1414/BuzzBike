@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Theme.BuzzBike — window theme mínimo para el arranque de la Activity.
+
+    Usa el tema de plataforma (android:Theme.Material.Light.NoActionBar)
+    en vez de Theme.Material3.* de XML: el proyecto es Compose-only y
+    Material3 se configura en Kotlin (ui/theme/). Este XML solo pinta el
+    window antes de que setContent() tome el control — evita el flash
+    blanco/negro del tema por defecto.
+
+    TODO(design): cuando exista brand palette/brand assets, agregar
+    valores/night/ y un splash screen (API 31+) con el color de marca.
+-->
+<resources>
+    <style name="Theme.BuzzBike" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

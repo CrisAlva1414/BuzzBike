@@ -23,6 +23,11 @@ secrets.properties
 *.pem
 *.key
 
+# Env files
+.env
+.env.*
+*.env
+
 # IDE
 .idea/
 *.iml
@@ -34,17 +39,6 @@ secrets.properties
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-
-# Docs / internal project notes
-docs/
-research/
-state/
-AGENTS.md
-README.md
-
-# Local/config
-config/
-.editorconfig
 
 # Logs
 *.log

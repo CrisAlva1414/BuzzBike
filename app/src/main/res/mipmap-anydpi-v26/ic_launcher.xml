@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher icon — ADAPTIVE PLACEHOLDER.
+
+    No brand assets exist yet (AGENTS.md §11: nombre definitivo pendiente).
+    Esto es un marcador geométrico mínimo (círculo sólido) para que el APK
+    sea instalable. NO es el ícono final de BuzzBike.
+
+    TODO(design): reemplazar con adaptive icon de marca cuando exista
+    design system (foreground vector + brand color + round variant).
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
