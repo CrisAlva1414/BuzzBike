@@ -2,6 +2,8 @@
 .gradle/
 build/
 local.properties
+gradle-app.setting
+!gradle-wrapper.jar
 
 # Android
 *.apk
@@ -9,17 +11,40 @@ local.properties
 *.ap_
 *.dex
 captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing / secrets
+*.keystore
+*.jks
+keystore.properties
+secrets.properties
+*.p12
+*.pem
+*.key
 
 # IDE
 .idea/
 *.iml
 .kotlin/
+.vscode/
 
 # OS
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Secrets — nunca commitear
-*.keystore
-*.jks
-secrets.properties
+# Docs / internal project notes
+docs/
+research/
+state/
+AGENTS.md
+README.md
+
+# Local/config
+config/
+.editorconfig
+
+# Logs
+*.log
