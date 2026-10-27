@@ -23,7 +23,7 @@ BuzzBike registra tus rides con el GPS y los sensores del teléfono, calcula des
 
 - No es una red social (sin feed, follows ni ranking).
 - No es un reloj deportivo de precisión de sensores.
-- No calcula calorías "exactas" — el techo realista sin sensores externos es ±25–35%. Lo dice la app, no lo escondemos.
+- No calcula calorías "exactas" — sin perfil la banda es ±30–40%, con perfil ±20–30% (ADR-001). Lo dice la app, no lo escondemos.
 - No usa Play Store. La distribución es vía GitHub Releases (APK).
 - No tiene backend propio ni cuentas de usuario.
 

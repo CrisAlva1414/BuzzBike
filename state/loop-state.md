@@ -147,3 +147,92 @@ aprobación explícita del usuario requerida antes de que `builder` escriba cód
 
 ### Iteraciones
 - Total: 0 (discovery)
+---
+
+## Iteration 0 — 2026-10-27 — Revisión de roadmap y plan (clase Heavy)
+
+### Tarea
+Revisar el roadmap del proyecto, opinar, y planificar la construcción con foco
+explícito en (a) integración con servicios externos y (b) diseño/frontend.
+
+### Estado
+**PLANIFICACIÓN — esperando aprobación humana del plan.** No se escribió código.
+
+### Hallazgos de verificación (esta máquina, /home/pc01)
+- El roadmap NO existe en este clon: está en el knowledge base (NAS), generado
+  en `/home/notebook01`. `docs/` solo tiene ADRs, format y sprint-00.
+- Toolchain distinto al de la sesión previa: JDK 21 (`~/.local/jdk-21`),
+  `ANDROID_HOME=/home/pc01/android-sdk`, platforms `android-37.0`/`android-37.2`,
+  build-tools 36.0.0/37.0.0. **Falta `platforms;android-36`** (compileSdk=36).
+- Wrapper pide Gradle 9.8.2; cache solo tiene 9.7.0 → descarga en el primer run.
+- Sin `local.properties` (AGP usará `ANDROID_HOME`).
+- Remote GitHub ya configurado (`CrisAlva1414/BuzzBike`).
+
+### Bloqueante
+El gate del slice 1 (`assembleDebug/test/ktlintCheck/detekt/lint`) **no puede
+pasar** hasta resolver el SDK platform 36 o bumpear compileSdk/targetSdk.
+
+### Decisiones pendientes (requieren al humano)
+1. `platforms;android-36` vs bump a 37 (cambia targetSdk y superficie de API).
+2. Reordenar a **design-first con datos fake** (UI antes que datos/captura).
+3. Contradicción ADR-003 vs `network_security_config` (cleartext prohibido vs
+   "Tailscale ya cifra") → decidir Tailscale Serve/HTTPS o domain-config.
+4. Gate de `security-reviewer`: mantener diferido al release salvo **fase 6
+   (secretos+red)**, donde debe ser obligatorio antes de mergear.
+5. Aprobación explícita del plan de manejo del secret HMAC (regla de escalado).
+
+### Iteraciones
+- Total: 0 (planificación)
+
+---
+
+## Iteration 1 — 2026-10-27 — Gate del scaffold + ADRs del algoritmo
+
+### Tarea
+Cerrar el gate de compilación (slice 1) y documentar el algoritmo de traza,
+segmentación y energía antes de implementar `domain/`.
+
+### Resultado del gate (verificado por orchestrator y por tester)
+| Comando | Exit |
+|---|---|
+| assembleDebug | 0 |
+| test | 0 (5 tests) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| lint | 0 (0 errores, 6 warnings) |
+
+APK: `app/build/outputs/apk/debug/app-debug.apk` (~60.5 MiB),
+`package=com.buzzbike.app`, `minSdk=26`, `targetSdk=36`, `compileSdk=37`,
+firma debug v2 válida, `versionCode=1`, `versionName=0.1.0`.
+
+### Cambios de código
+- `compileSdk 36 → 37` (AAR metadata de Compose 1.12.x / hilt-navigation 1.4.0
+  exige `minCompileSdk=37`; `targetSdk` queda en 36).
+- `detekt.yml`: corrección de schema para detekt 1.23.8 (reglas mal ubicadas
+  o inexistentes), sin desactivar checks.
+- `.editorconfig`: excepción acotada de naming para `@Composable`.
+- `Percent.kt`: constantes `PERCENT_MIN/MAX` + contrato `NaN → 0.0`.
+- `versionCode=1`, `versionName="0.1.0"`.
+
+### Documentación
+- `docs/adr/ADR-005-segmentacion-traza-y-moving-time.md` (nuevo):
+  máquina de estados moving/stopped, filtrado, distancia, validación.
+- `docs/adr/ADR-006-elevacion-y-desnivel.md` (nuevo): barómetro + DEM + GPS,
+  suavizado, histéresis, grade/VAM, guardia de ascensor.
+- `docs/adr/ADR-001`: actualización con tabla MET 2024, integración
+  sample-a-sample, perfil opcional, paradas y bandas de incertidumbre
+  corregidas (±30–40% sin perfil; ±20–30% con perfil; NO intervalos de
+  confianza).
+
+### Hallazgos abiertos del tester
+- No se pudo probar instalación/arranque en dispositivo (no hay emulador).
+- 6 warnings de lint (OldTargetApi, versiones de coroutines, icono, feature GPS).
+- Manifest declara permisos para slices futuros (background location, BLE)
+  antes de que las features existan: revisar antes del release.
+
+### Próximo paso
+Implementar `domain/` en slices: (A) limpieza + segmentación + distancia,
+(B) elevación, (C) energía. Tests JVM con trazas sintéticas.
+
+### Iteraciones
+- Total: 1 (gate cerrado)

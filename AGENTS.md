@@ -24,7 +24,7 @@
 - **No usa HR strap ni potenciómetro en v1** — el usuario no los tiene. La arquitectura los permite enchufar después, pero el motor calórico funciona sin ellos (fallback MET).
 - **No hay backend propio de BuzzBike.** No hay cuentas, ni servidores centrales, ni analytics de telemetría. El "servidor" opcional es el NAS del usuario.
 - **No distribuye por Play Store.** Distribución vía GitHub Releases (APK). F-Droid posible a futuro.
-- **No calcula calorías "exactas".** Ver ADR-001: el techo realista sin sensores externos es ±25–35%. La UI debe mostrar intervalo de incertidumbre y modelo usado.
+- **No calcula calorías "exactas".** Ver ADR-001 (actualización 2026-10-27): sin perfil corporal la banda es ±30–40% y con perfil ±20–30% — bandas de producto, no intervalos de confianza. La UI debe mostrar rango, modelo e inputs usados.
 - **No es un cliente genérico de Fitbit/Strava.** La integración con Hermes es vía webhook propio, no vía APIs de terceros.
 
 ---
