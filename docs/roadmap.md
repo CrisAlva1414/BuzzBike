@@ -50,9 +50,10 @@ de falla (DSL de AGP 9, KSP 2.3.12 vs Kotlin 2.4.21) en
 
 ### Repo (verificado 2026-10-26)
 
-- Rama: `main`. HEAD: `e54cce2` — `chore: add full project scaffold (docs/config included)`.
-- Historial: `c7eddea` (docs base, 2026-10-06) → `820fd53` (gitignore + untrack transitorio de docs) → `e54cce2` (scaffold + re-track de todo).
-- Working tree limpio. Sin remote configurado (TODO: URL del repo).
+- Rama: `main`. HEAD al escribir esta sección: `4ceff37` (`docs: add roadmap and sprint 01 session log`). Para el HEAD real, `git log -1`.
+- Historial: `c7eddea` (docs base, 2026-10-06) → `820fd53` (gitignore + untrack transitorio de docs) → `e54cce2` (scaffold + re-track de todo) → `4ceff37` (roadmap + bitácora de la sesión 01).
+- Remoto: `origin` → `https://github.com/CrisAlva1414/BuzzBike.git` (cuenta `CrisAlva1414`, push por HTTPS).
+- Working tree limpio al cierre de la sesión 2026-10-26.
 
 ---
 

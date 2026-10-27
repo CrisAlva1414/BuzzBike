@@ -5,6 +5,60 @@
 
 ---
 
+## 0. Estado actual y cómo retomar
+
+> **Última actualización: 2026-10-26.**
+
+**¿En qué quedó esto?** Fundación completa (investigación, ADR-001..004,
+docs). El scaffold del slice 1 (Gradle + Compose + Hilt + Room + ktlint/detekt)
+está **escrito y commiteado** (`e54cce2`), con remoto
+`github.com/CrisAlva1414/BuzzBike`. HEAD actual: `git log -1`.
+
+**Bloqueo actual, sin maquillaje:** `./gradlew assembleDebug` fue interrumpido
+en `:app:compileDebugKotlin` (no produjo APK) y `test`, `ktlintCheck`,
+`detekt` y `lint` **nunca se ejecutaron**. **No hay ningún PASS registrado**
+— el slice 1 no está cerrado.
+
+**Retomar (copiar y pegar):**
+
+```bash
+source ~/tools/androidenv.sh          # si acabás de instalar el toolchain
+cd <ruta-del-repo>
+./gradlew assembleDebug --console=plain   # nunca completó
+./gradlew test --console=plain            # nunca ejecutado
+./gradlew ktlintCheck --console=plain     # nunca ejecutado
+./gradlew detekt --console=plain          # nunca ejecutado
+./gradlew lint --console=plain            # nunca ejecutado
+```
+
+Arreglar lo que falle y solo entonces dar el slice por cerrado con
+`tester: PASS`. Candidatos probables de falla: DSL de AGP 9, KSP 2.3.12 ↔
+Kotlin 2.4.21.
+
+**Orden de lectura para un agente nuevo:**
+`AGENTS.md` (este archivo) → `docs/roadmap.md` →
+`docs/sessions/2026-10-26-sprint-01-toolchain-and-scaffold.md` →
+`state/loop-state.md` (solo lectura) para el detalle fino.
+**Si estás en una máquina nueva:** `docs/setup-entorno.md` va primero
+(toolchain sin sudo, verificación y pitfalls).
+
+**Reglas duras que no se negocian:**
+1. Ningún slice se cierra sin `tester: PASS` (roadmap §4).
+2. `security-reviewer` está **diferido al release** por decisión explícita del
+   usuario — la deuda de seguridad está registrada (roadmap §4). La tarea no
+   se marca completa sin ese pase.
+3. Toda fórmula de dominio físico requiere fuente citada + ADR (§6).
+4. La UI nunca muestra calorías como un número exacto: siempre intervalo de
+   incertidumbre y modelo usado (§6, ADR-001).
+
+**Pendientes que dependen del usuario:** app id definitivo (hoy
+`com.buzzbike.app` es placeholder), copyright holder del LICENSE (hoy
+`[TU NOMBRE]`), nombre definitivo de la app, y config del Hermes Agent en el
+NAS (ruta de webhook) para el slice 7 — si no está listo, se usa mock local
+(ADR-003).
+
+---
+
 ## 1. Qué es BuzzBike
 
 **BuzzBike** es una app Android open source (licencia MIT) de trackeo de rutas de bicicleta, orientada a ciclistas que quieren datos locales, auditable y sin dependencia de la nube.

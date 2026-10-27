@@ -46,6 +46,8 @@ El plan de implementación (fases, slices, criterios de aceptación y estado) es
 ## Cómo compilar
 
 > **Prerrequisito:** JDK 17+ y Android SDK 36. En la máquina de desarrollo del proyecto ya están instalados (2026-10-26) — cargalos con `source /home/notebook01/tools/androidenv.sh` antes de correr Gradle. En cualquier otra máquina: instalalos por tu cuenta (JDK Zulu 17.0.13 o compatible + Android SDK 36).
+>
+> **Arrancando en una máquina vacía (Linux, sin sudo)?** Seguí la guía completa paso a paso, con verificación y pitfalls: [`docs/setup-entorno.md`](docs/setup-entorno.md).
 
 ```bash
 git clone <URL_DEL_REPO>
