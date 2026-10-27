@@ -1,6 +1,16 @@
 package com.buzzbike.app.domain
 
 /**
+ * Lower bound of the valid percentage range.
+ */
+private const val PERCENT_MIN = 0.0
+
+/**
+ * Upper bound of the valid percentage range.
+ */
+private const val PERCENT_MAX = 100.0
+
+/**
  * Clamp a percentage into the inclusive range [0.0, 100.0].
  *
  * Placeholder pure function — exists solely to prove the JVM unit-test
@@ -11,7 +21,9 @@ package com.buzzbike.app.domain
  * sources cited in KDoc + ADR per AGENTS.md §6. Do not add constants here
  * without a published source.
  *
+ * NaN is treated as PERCENT_MIN.
+ *
  * @param value raw percentage, may be out of range
  * @return value coerced into [0.0, 100.0]
  */
-fun clampPercent(value: Double): Double = value.coerceIn(0.0, 100.0)
+fun clampPercent(value: Double): Double = if (value.isNaN()) PERCENT_MIN else value.coerceIn(PERCENT_MIN, PERCENT_MAX)

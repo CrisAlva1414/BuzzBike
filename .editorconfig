@@ -24,6 +24,10 @@ ij_kotlin_allow_trailing_comma_on_call_site = true
 # Package naming: lowercase, no underscores (docs/format/estilo-kotlin.md §1).
 ktlint_standard_package-name = enabled
 
+# @Composable functions are PascalCase by Compose convention
+# (docs/format/estilo-kotlin.md §1: `RideScreen`, `WearAlertCard`).
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
 [*.{xml,json,yml,yaml,md,toml}]
 indent_size = 2
 

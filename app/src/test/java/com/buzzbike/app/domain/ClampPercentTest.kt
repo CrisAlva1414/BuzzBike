@@ -11,7 +11,6 @@ import org.junit.Test
  * `given_<setup>_when_<action>_then_<expected>()`.
  */
 class ClampPercentTest {
-
     @Test
     fun given_negativeValue_when_clamped_then_zero() {
         assertEquals(0.0, clampPercent(-5.0), 0.0)
@@ -35,5 +34,10 @@ class ClampPercentTest {
     @Test
     fun given_boundaryHigh_when_clamped_then_hundred() {
         assertEquals(100.0, clampPercent(100.0), 0.0)
+    }
+
+    @Test
+    fun given_nan_when_clamped_then_min() {
+        assertEquals(0.0, clampPercent(Double.NaN), 0.0)
     }
 }

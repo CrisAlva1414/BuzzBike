@@ -17,17 +17,23 @@ plugins {
 // The keystore itself is gitignored (*.keystore / *.jks); never commit secrets.
 // ---------------------------------------------------------------------------
 val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = Properties().apply {
-    if (keystorePropertiesFile.exists()) {
-        keystorePropertiesFile.inputStream().use { load(it) }
+val keystoreProperties =
+    Properties().apply {
+        if (keystorePropertiesFile.exists()) {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        }
     }
-}
-val hasReleaseSigning = keystorePropertiesFile.exists() &&
-    keystoreProperties.getProperty("storeFile") != null
+val hasReleaseSigning =
+    keystorePropertiesFile.exists() &&
+        keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.buzzbike.app"
-    compileSdk = 36
+    // compileSdk 37 is forced by the resolved AndroidX artifacts: Compose
+    // 1.12.x, navigation-compose 2.10.2 and hilt-navigation-compose 1.4.0
+    // publish AAR metadata requiring compileSdk >= 37 (checkDebugAarMetadata).
+    // targetSdk stays at 36 so runtime behavior does not change.
+    compileSdk = 37
 
     defaultConfig {
         // TODO(app-id): applicationId is the approved placeholder
@@ -37,6 +43,10 @@ android {
         minSdk = 26
         // targetSdk 36 matches compileSdk; distribution is GitHub Releases APK.
         targetSdk = 36
+        // Explicit versioning: GitHub Releases upgrades rely on a monotonic
+        // versionCode, and versionName is surfaced to the user.
+        versionCode = 1
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -61,11 +71,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = if (hasReleaseSigning) {
-                signingConfigs.getByName("release")
-            } else {
-                null
-            }
+            signingConfig =
+                if (hasReleaseSigning) {
+                    signingConfigs.getByName("release")
+                } else {
+                    null
+                }
         }
     }
 
