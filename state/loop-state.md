@@ -147,3 +147,90 @@ aprobación explícita del usuario requerida antes de que `builder` escriba cód
 
 ### Iteraciones
 - Total: 0 (discovery)
+---
+
+## Iteration 1 — 2026-10-26 — Slice 1 (scaffold) — INCOMPLETO / SIN VERIFICAR
+
+### Cambio de proceso pedido por el usuario
+El usuario pidió acelerar: **solo `builder` + `tester` por slice**, y un único
+pase de `security-reviewer` al final como **gate de release**.
+Aceptado con estas condiciones (registradas como deuda):
+
+- **Deuda de seguridad acumulada**: slices 2–8 (y en particular el 7:
+  secret HMAC + Keystore + red) no pasan por security review hasta el final.
+- **Excepción**: si en el slice 7 aparece un hallazgo crítico, se revisa en el
+  momento, no se espera al release.
+- **Regla que NO se relaja**: ninguna fórmula de dominio físico se acepta sin
+  fuente citada + ADR (AGENTS.md §6).
+- La tarea **no se marca completa** hasta que `security-reviewer` dé PASS.
+
+### Toolchain — COMPLETO
+| Componente | Versión / ubicación |
+|---|---|
+| JDK | Zulu **17.0.13** en `~/tools/zulu17.54.21-ca-jdk17.0.13-linux_x64` |
+| Gradle | **9.8.2** y 8.14.5 en `~/tools/` |
+| Android SDK | **36** en `~/Android/Sdk` (platform-tools 37.0.1, platforms;android-36, build-tools;36.0.0) |
+| Licencias | aceptadas |
+| Env | `source /home/notebook01/tools/androidenv.sh` |
+| Restricciones | sin sudo; red lenta; sin emulador ni dispositivo conectado |
+
+### Bug de versiones encontrado y resuelto
+La matriz inicial era **inválida**: `Hilt 2.60.1` exige `AGP >= 9.0.0` pero se
+declaraba `AGP 8.13.2`. Error real al aplicar el plugin.
+
+Resuelto con **Camino A** (documentado en `gradle/libs.versions.toml`):
+AGP 9.4.1 · Gradle 9.8.2 · Kotlin 2.4.21 (solo plugin Compose) · KSP 2.3.12 ·
+Hilt 2.60.1 · Room 2.8.5 · Compose BOM 2026.09.00 · lifecycle 2.11.0 ·
+activity-compose 1.13.0 · navigation-compose 2.10.2 · hilt-nav 1.4.0 ·
+MapLibre 13.7.1 · ktlint 14.2.0 · detekt 1.23.8.
+
+**Datos técnicos a no olvidar:**
+- KSP pasó a versionado independiente en 2.3.0; la última acoplada a Kotlin es
+  `2.2.21-2.0.5`. **No existe KSP 2.4.x.**
+- Con AGP 9 el plugin `org.jetbrains.kotlin.android` es un **error duro**
+  (Kotlin viene embebido en AGP).
+
+### Prior art — decisión
+`higorslva/biketrackd` es **referencia, NO base**. Su wear es km-only sin
+eventos de service ni reset (no cumple ADR-004), no tiene calorías, no tiene
+sync, y tiene la atribución ODbL **deshabilitada** (issue #1 abierta) — riesgo
+legal a heredar. Reutilizable con atribución: patrón OpenFreeMap +
+OfflineManager, badges de alerta, semáforo de colores.
+`gear-tracker-app` aporta los defaults de service de suspensión (Fox/RockShox)
+que hay que citar en ADR-004 al implementar el slice 6.
+
+### Estado del gate — PENDIENTE
+| Comando | Estado |
+|---|---|
+| `./gradlew assembleDebug` | **Interrumpido en `:app:compileDebugKotlin`** (a pedido del usuario). Sin EXIT, sin APK. |
+| `./gradlew test` | **NUNCA ejecutado** |
+| `./gradlew ktlintCheck` | **NUNCA ejecutado** |
+| `./gradlew detekt` | **NUNCA ejecutado** |
+| `./gradlew lint` | **NUNCA ejecutado** |
+
+**No hay ningún PASS registrado.**
+
+### Violación de proceso detectada
+El scaffold fue commiteado en `e54cce2 chore: add full project scaffold` **antes
+de pasar ningún gate**. No es fatal (es solo scaffold y se corrige con commits
+posteriores), pero queda registrado: a partir de ahora ningún slice se commitea
+sin `tester: PASS` sobre el diff.
+
+### Git
+- `c7eddea docs: add project foundation and architecture decisions`
+- `820fd53 chore: harden .gitignore and untrack docs/config/internal files`
+- `e54cce2 chore: add full project scaffold (docs/config included)`
+
+### Punto exacto de reanudación
+1. `source /home/notebook01/tools/androidenv.sh`
+2. `cd /home/notebook01/Proyectos/BuzzBike`
+3. Correr los 5 comandos del gate y **arreglar lo que falle**.
+   Sospechosos: DSL de AGP 9, y compatibilidad KSP 2.3.12 ↔ Kotlin 2.4.21.
+4. `tester` valida el diff → si PASS, commit de correcciones.
+5. Recién entonces: slice 2 (schema Room).
+
+### Pendientes del usuario
+- App id definitivo (`com.buzzbike.app` es placeholder).
+- Copyright holder del LICENSE.
+- Nombre definitivo de la app.
+- Config del Hermes Agent (ruta de webhook) para el slice 7.

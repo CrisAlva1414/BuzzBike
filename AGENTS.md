@@ -80,7 +80,17 @@ app/
 
 ## 4. Comandos de build / test / lint / format
 
-> **Estado del entorno (2026-10-02):** JDK y Android SDK **ausentes** en esta máquina. Estos comandos se vuelven reales recién con `./gradlew` wrapper + SDK instalado. Ver `docs/sessions/2026-10-02-sprint-00-discovery.md`.
+> **Estado del entorno (2026-10-26):** toolchain **instalado** en esta máquina (instalación manual, sin sudo). Cargá las variables antes de cualquier comando Gradle:
+>
+> ```bash
+> source /home/notebook01/tools/androidenv.sh
+> ```
+>
+> Detalle: JDK **Zulu 17.0.13** en `/home/notebook01/tools/zulu17.54.21-ca-jdk17.0.13-linux_x64`, Android SDK **36** en `~/Android/Sdk` (platform-tools 37.0.1, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper del proyecto. Matriz de versiones Camino A documentada en `gradle/libs.versions.toml`.
+>
+> **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lint`.
+>
+> **Estado del gate del scaffold (2026-10-26): SIN CERRAR.** `assembleDebug` fue interrumpido en `:app:compileDebugKotlin` (no produjo APK); `test`, `ktlintCheck`, `detekt` y `lint` **nunca se ejecutaron**. No hay ningún PASS registrado. Ver `docs/sessions/2026-10-26-sprint-01-toolchain-and-scaffold.md` y `docs/roadmap.md` §1.
 
 ```bash
 # Build
@@ -218,7 +228,7 @@ Los tracks GPS son **datos de ubicación sensibles** bajo GDPR (y legislaciones 
 ## 11. Pendientes abiertos (TODO)
 
 - [ ] **Confirmar app id / package name.** Placeholder actual: `com.buzzbike.app`.
-- [ ] **Instalar JDK 17+ y Android SDK** en la máquina de desarrollo (~8–12 GB de los ~20 GB libres). Sin esto no hay build.
+- [x] **Instalar JDK 17+ y Android SDK** — **hecho el 2026-10-26.** JDK Zulu 17.0.13 (`/home/notebook01/tools/zulu17.54.21-ca-jdk17.0.13-linux_x64`), Gradle 9.8.2 (wrapper del proyecto), Android SDK 36 en `~/Android/Sdk` (platform-tools 37.0.1, build-tools 36.0.0, licencias aceptadas). Cargar con `source /home/notebook01/tools/androidenv.sh`. Nota: el **gate de build del scaffold sigue sin cerrar** (ver §4).
 - [ ] **Copyright holder del LICENSE.** Placeholder `[TU NOMBRE]`.
 - [ ] **Decidir nombre definitivo de la app** (BuzzBike es tentativo).
 - [ ] Future: HR strap BLE + potenciómetro (Nordic BLE Library ya elegida, sin implementar).
