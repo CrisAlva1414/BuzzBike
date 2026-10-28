@@ -672,3 +672,32 @@ Corregir los dos gaps del Slice 3.2.1: FAILED nunca se reintentaba y faltaba mig
 
 ### Próximo paso
 Slice 3.2.2: ConnectivityChecker (health check 200 cerrado).
+
+---
+
+## Iteration 13 — 2026-10-27 — Slice 3.2.2: ConnectivityChecker (COMPLETADO)
+
+### Tarea
+Health check previo al envío: solo HTTP 200 exacto cuenta como backend disponible; cualquier otro resultado deja el ride en outbox.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (99 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/ConnectivityChecker.kt` — puerto puro `isReachable(url): Boolean`.
+- `domain/sync/HermesConfig.kt` — `healthCheckUrl` opcional + `effectiveHealthCheckUrl()`.
+- `sync/HttpConnectivityChecker.kt` — HttpURLConnection en Dispatchers.IO, timeouts 5 s configurables, **`responseCode == 200` estricto**, redirects deshabilitados, sin excepciones al caller.
+- `test/sync/HttpConnectivityCheckerTest.kt` — 7 tests con HttpServer efímero (200/204/500/302/malformada/rechazada/timeout).
+
+### Decisiones
+- Redirects deshabilitados: sin eso un 302 terminaría en 200 y violaría "200 cerrado".
+- Cualquier IOException/SecurityException → false (el ride se guarda y reintenta).
+
+### Próximo paso
+Slice 3.2.3: HmacSigner con Android Keystore (aprobación humana ya otorgada para el bloque 3.2).

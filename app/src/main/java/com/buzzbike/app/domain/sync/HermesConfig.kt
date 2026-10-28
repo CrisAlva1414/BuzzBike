@@ -16,7 +16,22 @@ data class HermesConfig(
     val timeoutSeconds: Int = 30,
     val retryCount: Int = 3,
     val senderType: SenderType = SenderType.WEBHOOK,
-)
+    /**
+     * Optional dedicated health-check URL. When blank or absent the sync
+     * stack falls back to [endpoint] — see [effectiveHealthCheckUrl].
+     */
+    val healthCheckUrl: String? = null,
+) {
+    /**
+     * URL the connectivity check should probe, or `null` when none is usable.
+     *
+     * A non-blank [healthCheckUrl] wins over [endpoint]; a blank optional URL
+     * is treated as "not configured" instead of failing the check.
+     */
+    fun effectiveHealthCheckUrl(): String? =
+        healthCheckUrl?.takeIf { it.isNotBlank() }
+            ?: endpoint.takeIf { it.isNotBlank() }
+}
 
 /** Transport used to reach the Hermes Agent. */
 enum class SenderType {
