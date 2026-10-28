@@ -8,6 +8,27 @@
 
 ---
 
+## Estado de implementación (v1, 2026-10-27)
+
+Implementado en `domain/`:
+- `TrackPoint` con campos opcionales `Double?` (sin `NaN` como sentinel).
+- Limpieza: orden por tiempo monotónico, dedupe de timestamp, rechazo de lat/lon/accuracy inválidos, teleport de un paso >25 m/s, corte de segmento >60 s, lower bound por gaps/rechazos.
+- Velocidad **solo Doppler** (`Location.getSpeed()`); sin fallback por distancia/tiempo. Un fix sin velocidad usable se trata como gap/sin evidencia.
+- Máquina moving/stopped con histéresis, vetos de desplazamiento y acelerómetro, override de reanudación, backdating, gaps 5–60 s y reset a STOPPED en gaps >60 s.
+- Distancia WGS84 vía puerto `GeodesicDistance` (Haversine para tests JVM).
+- Agregados: elapsed/moving/stopped, avgMoving/avg, maxSpeed p95 sobre mediana centrada 5 s.
+
+Diferido (no implementado en v1):
+- `TrackPointFlag`/`LOW_QUALITY` como enum (v1 usa `accuracyH <= 15 m` directamente).
+- `STATE_UNCERTAIN`/`movingTimeUncertain`.
+- Teleport sostenido >60 km/h por >5 s.
+- Interpolación de gaps <=5 s.
+- Adaptador WGS84 real (`Location.distanceBetween`) y `parametersHash`.
+
+Si el cuerpo de este ADR menciona flags, `NaN` o fallback por desplazamiento, prevalece esta sección para v1.
+
+---
+
 ## Contexto
 
 ### Sensores disponibles y restricciones
@@ -85,13 +106,13 @@ Fuentes de referencia: Wang et al. 2024 (CycleTrajectory) reporta un criterio de
 | `altitudeMslM` | `Double?` | m | sí | Altura sobre el nivel del mar, si el proveedor/API la expone. No asumir que existe. |
 | `accuracyH` | `Double` | m | no | `Location.getAccuracy()`. Radio al percentil 68, no 95%. |
 | `accuracyV` | `Double` | m | no | `Location.getVerticalAccuracyMeters()` si existe; `NaN` + flag si no. |
-| `speedMps` | `Double` | m/s | no | Doppler de `Location.getSpeed()`, o fallback por ventana. Nunca negativa; el flag indica la fuente. |
+| `speedMps` | `Double?` | m/s | sí | Doppler de `Location.getSpeed()`; `null` si no hay velocidad usable. En v1 NO hay fallback por ventana. |
 | `speedAccuracy` | `Double` | m/s | no | `Location.getSpeedAccuracyMetersPerSecond()` si existe; `NaN` + flag si no. |
 | `pressureHpa` | `Double?` | hPa | sí | Barómetro. Solo tendencia relativa; no se usa para segmentar. |
 | `accelNormStd` | `Double?` | m/s² | sí | Desviación estándar de la magnitud de aceleración en ventana de 3 s. Se usa como veto. |
 | `flags` | `Set<TrackPointFlag>` | — | no | Ver tabla de flags. |
 
-**Contrato de construcción:** el adaptador solo emite un `TrackPoint` si tiene `lat`, `lon`, `timestampMonotonicNanos`, `accuracyH` y una velocidad utilizable (Doppler o fallback). Si no hay velocidad, el fix se trata como **gap**, no como punto de velocidad cero. Esto evita confundir "no sé" con "está quieto". La altitud **no** es requisito para segmentar: si el proveedor no la reporta, se usa `NaN` y el punto sigue siendo válido para moving/distancia; el desnivel queda fuera de alcance.
+**Contrato de construcción:** el adaptador emite el `TrackPoint` con `speedMps = null` si no hay Doppler; el punto se trata como **gap**, no como velocidad cero. Esto evita confundir "no sé" con "está quieto". La altitud **no** es requisito para segmentar: si el proveedor no la reporta, se usa `NaN` y el punto sigue siendo válido para moving/distancia; el desnivel queda fuera de alcance.
 
 #### Flags de `TrackPoint`
 
@@ -99,7 +120,7 @@ Fuentes de referencia: Wang et al. 2024 (CycleTrajectory) reporta un criterio de
 |---|---|---|
 | `LOW_QUALITY` | `accuracyH` en el rango 15–30 m. El punto se usa con cautela; no se descarta. | Decisión de ingeniería |
 | `INTERPOLATED` | Punto sintético insertado en un gap ≤5 s. No es una medición. | Decisión de ingeniería |
-| `SPEED_DERIVED` | `speedMps` calculada por desplazamiento en ventana 3–5 s, no por Doppler. | Decisión de ingeniería |
+| `SPEED_DERIVED` | `speedMps` calculada por desplazamiento en ventana 3–5 s, no por Doppler. **No se usa en v1:** solo Doppler. | Decisión de ingeniería |
 | `SPEED_ACCURACY_UNKNOWN` | `speedAccuracy` no reportada (`NaN`). | Decisión de ingeniería |
 | `VERTICAL_ACCURACY_UNKNOWN` | `accuracyV` no reportada (`NaN`). | Decisión de ingeniería |
 | `SEGMENT_BREAK_BEFORE` | El punto inicia un nuevo segmento después de un gap >60 s. | Decisión de ingeniería |
@@ -146,11 +167,11 @@ El pipeline es determinista y se ejecuta en `domain/`, sobre la lista de `TrackP
 
 | Fuente | Condición | Uso | Notas |
 |---|---|---|---|
-| **Doppler** — `Location.getSpeed()` | `hasSpeed()` es verdadero | **Primaria** | m/s. `speedAccuracy` si está disponible. Es la fuente preferida porque no deriva posición. |
-| **Desplazamiento en ventana 3–5 s** | No hay Doppler, pero hay al menos 3 muestras aceptadas en la ventana | **Fallback** | Se marca `SPEED_DERIVED`. La ventana mejora la relación señal/ruido frente a un solo intervalo. |
+| **Doppler** — `Location.getSpeed()` | `hasSpeed()` es verdadero | **Primaria y única en v1** | m/s. `speedAccuracy` si está disponible. Es la fuente preferida porque no deriva posición. |
+| **Desplazamiento en ventana 3–5 s** | — | **Descartado en v1** | Reemplazado por la regla de v1: solo Doppler. El fallback por desplazamiento se descarta por el jitter urbano (reproducido en tests). |
 | **Distancia/tiempo entre fixes consecutivos a baja velocidad** | Cualquier caso | **Prohibido** | A 4 km/h se avanza 1.11 m/s; a 1 Hz, 1.11 m entre fixes. Con `accuracyH` de 5 m, el desplazamiento es ~4.5 veces menor que el radio de incertidumbre: el ruido domina el módulo y la dirección. |
 
-**Aclaración importante:** el fallback por ventana no es "distancia entre dos fixes consecutivos". Es el desplazamiento neto entre el inicio y el fin de una ventana de 3–5 s, con al menos 3 muestras, lo que reduce el efecto de un único fix ruidoso. Aun así, en una curva de herradura el desplazamiento neto puede subestimar la velocidad real; por eso el fallback se marca y no se usa para presumir precisión.
+**Nota v1 — velocidad solo Doppler:** en v1 la velocidad usada es únicamente `Location.getSpeed()` (Doppler). Si el fix no trae una velocidad finita y no negativa, se trata como gap/sin evidencia: el estado no cambia por ese sample y no se infiere velocidad por distancia/tiempo entre fixes consecutivos ni por ventana de desplazamiento. Un fix sin velocidad no se interpreta como velocidad cero. Esto reemplaza la mención anterior al fallback de 3–5 s: el jitter urbano lo vuelve poco confiable (reproducido en tests).
 
 **Umbral de ruido:** la literatura de GPS reporta una precisión de velocidad Doppler del orden de 0.2 m/s al 95% en condiciones nominales (GPS.gov SPS 2020). Ese valor es una referencia de cielo abierto; en cañón urbano puede degradarse. Con `V_STOP = 0.4 m/s`, el ruido Doppler puede ser una fracción significativa del umbral, lo que justifica histéresis y temporizadores en la máquina de estados.
 
@@ -339,8 +360,8 @@ Cada fila está marcada como **fuente** o **decisión de ingeniería**. Una deci
 | `GAP_INTERPOLATE_MAX` | 5 s | **decisión de ingeniería** | A velocidades de ciclismo, 5 s es un hueco pequeño; la interpolación lineal es aceptable. |
 | `GAP_NO_DISTANCE_MAX` | 60 s | **decisión de ingeniería** | Por encima de 5 s no hay evidencia de trayectoria; no se inventa distancia. |
 | `GAP_SEGMENT_BREAK` | >60 s | **decisión de ingeniería** | Discontinuidad de muestreo; se refleja como `trkseg` separado en GPX [S5]. |
-| `SPEED_WINDOW_MIN` | 3 s | **decisión de ingeniería** | Mínimo para que el fallback por desplazamiento tenga ≥3 muestras a 1 Hz. |
-| `SPEED_WINDOW_MAX` | 5 s | **decisión de ingeniería** | Más ventana suaviza demasiado y pierde cambios reales de velocidad. |
+| `SPEED_WINDOW_MIN` | 3 s | **diferido en v1** | Referencia de diseño para un futuro fallback por desplazamiento; en v1 no se usa (solo Doppler). |
+| `SPEED_WINDOW_MAX` | 5 s | **diferido en v1** | Referencia de diseño para un futuro fallback; no se usa en v1 (solo Doppler). |
 | `V_STOP` | 0.4 m/s | **decisión de ingeniería** | Dentro del rango 0.3–1.9 m/s de la literatura; anclado en 0.3 m/s de CycleTrajectory [S6]. Conservador para no marcar paradas falsas. |
 | `T_STOP` | 10 s | **decisión de ingeniería** | **Por debajo** del rango 15–120 s de la literatura. Se elige para capturar semáforos cortos y se compensa con los vetos de desplazamiento y acelerómetro. Requiere validación explícita. |
 | `V_GO` | 0.8 m/s | **decisión de ingeniería** | Histéresis 2× `V_STOP`; evita oscilación en la banda 0.4–0.8 m/s. |

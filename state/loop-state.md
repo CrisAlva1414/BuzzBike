@@ -236,3 +236,60 @@ Implementar `domain/` en slices: (A) limpieza + segmentación + distancia,
 
 ### Iteraciones
 - Total: 1 (gate cerrado)
+
+---
+
+## Iteration 2 — 2026-10-27 — Domain slice A: segmentación de traza
+
+### Tarea
+Implementar ADR-005: limpieza de traza, máquina moving/stopped, distancia y
+agregados de ride, en `domain/` puro (sin Android).
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| test | 0 (39 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+Tester: **PASS**. Security-reviewer: **PASS** (hallazgos medios de robustez,
+corregidos los de validación/calidad/overflow).
+
+### Archivos
+- `domain/model/TrackPoint.kt`, `RideDescriptors.kt`
+- `domain/geo/GeodesicDistance.kt` (puerto + Haversine para tests JVM)
+- `domain/ride/RideParameters.kt`, `SpeedResolver.kt`, `TraceCleaner.kt`,
+  `MovingTimeEstimator.kt`, `RideAggregator.kt`
+- tests: `TraceCleanerTest`, `MovingTimeEstimatorTest`, `RideAggregatorTest`,
+  `RideDomainEdgeCaseTest` (12 casos borde del tester)
+
+### Decisiones
+- Velocidad **solo Doppler**; sin fallback por distancia/tiempo (el jitter
+  urbano lo rompe). Fix sin velocidad = gap/sin evidencia.
+- Gaps: 5–60 s cortan moving pero no distancia; >60 s reinician a STOPPED y
+  cierran parada/movimiento abiertos.
+- maxSpeed = p95 sobre mediana centrada de 5 s, solo samples moving con
+  accuracy <=15 m.
+- Entradas no finitas/fuera de rango se rechazan o sanean a null.
+
+### Bugs encontrados y corregidos en iteración
+- speed infinito contaminaba maxSpeed.
+- NaN/Inf/accuracy inválida se filtraban.
+- jitter estacionario sin Doppler se auto-reanudaba.
+- gap >60 s no reiniciaba estado.
+- parada confirmada antes de un gap se perdía.
+
+### Residual (documentado, no bloqueante)
+- `movingTimeUncertain`/`STATE_UNCERTAIN` diferido.
+- Promedios devuelven 0.0 en vez de null; `InsufficientData` no implementado.
+- `maxSpeedConfidence` diferido.
+- Adaptador WGS84 real (`Location.distanceBetween`) pendiente para `sensor/`.
+- Sin prueba en dispositivo real.
+
+### Próximo paso
+Slice B: elevación (ADR-006) — barómetro relativo + ancla DEM/MSL, suavizado,
+histéresis, grade/VAM. Después slice C: energía (ADR-001).
+
+### Iteraciones
+- Total: 2 (slice A cerrado)
