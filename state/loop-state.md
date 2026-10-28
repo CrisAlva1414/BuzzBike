@@ -764,3 +764,31 @@ Lógica pura del outbox: health check 200 → enviar pendientes → marcar envia
 
 ### Próximo paso
 Slice 3.2.4b: transporte HTTP real (HttpHermesSender con headers HMAC) y luego 3.2.4c: Worker + WorkManager.
+
+---
+
+## Iteration 16 — 2026-10-27 — Slice 3.2.4b: HttpHermesSender (COMPLETADO)
+
+### Tarea
+Transporte HTTP real del puerto HermesSender con headers HMAC ADR-003.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (124 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `sync/HttpHermesSender.kt` — HttpURLConnection, headers `X-Webhook-Timestamp`, `X-Webhook-Signature-V2` (hex), `X-Ride-Id`; éxito de envío = 2xx; redirects off; errores → SendResult sin lanzar ni filtrar URL.
+- `sync/HermesSenderProvider.kt` — factory Hilt-inyectable que usa el HmacSigner real.
+- `test/sync/HttpHermesSenderTest.kt` — 6 tests con HttpServer efímero (200, 500, 204, 302, rechazada, firma variable).
+
+### Decisiones
+- Health check = 200 estricto; envío = 2xx. Diferencia documentada en KDoc.
+- Stubs `HermesSenderFactory` intactos; el Worker usará el provider real.
+
+### Próximo paso
+Slice 3.2.4c: HermesWorker (WorkManager) + scheduler con constraints de red.

@@ -1,0 +1,141 @@
+package com.buzzbike.app.sync
+
+import com.buzzbike.app.domain.sync.HermesConfig
+import com.buzzbike.app.domain.sync.HermesSender
+import com.buzzbike.app.domain.sync.HmacSigner
+import com.buzzbike.app.domain.sync.SendResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+
+/**
+ * [HermesSender] backed by [HttpURLConnection] — the real transport for the
+ * optional Hermes sync defined in ADR-003.
+ *
+ * Every request is signed with HMAC-SHA256 over `"<timestamp>." + payload`
+ * (ADR-003 §"Firma HMAC V2"). The signature travels in
+ * `X-Webhook-Signature-V2` as lowercase hex, next to the matching
+ * `X-Webhook-Timestamp` (Unix epoch seconds) and the ride identifier. The
+ * receiver can therefore reject replayed or tampered payloads without
+ * trusting the body itself.
+ *
+ * **Success rule:** delivery succeeds on **any 2xx** status (`200..299`). This
+ * differs from [HttpConnectivityChecker], which requires **exactly 200**:
+ * a health probe answers "is the agent reachable at all?", while a ride
+ * delivery only needs the receiver to accept it, and `202 Accepted` or
+ * `204 No Content` are valid acknowledgements.
+ *
+ * Redirects are not followed (`instanceFollowRedirects = false`): a 3xx is a
+ * non-2xx answer and is reported as a failure so the outbox keeps the ride.
+ *
+ * Expected transport problems (bad URL, DNS/connect failure, timeout, refused
+ * connection, blocked cleartext) are returned as [SendResult] failures instead
+ * of being thrown. Error messages never include the endpoint, because the URL
+ * may carry credentials in its query string.
+ */
+class HttpHermesSender(
+    private val config: HermesConfig,
+    private val hmacSigner: HmacSigner,
+    private val nowSeconds: () -> Long = { System.currentTimeMillis() / MILLIS_PER_SECOND },
+    private val connectTimeoutMillis: Int = DEFAULT_CONNECT_TIMEOUT_MILLIS,
+    private val readTimeoutMillis: Int = DEFAULT_READ_TIMEOUT_MILLIS,
+) : HermesSender {
+    override suspend fun sendRide(
+        rideId: String,
+        payload: ByteArray,
+    ): SendResult = withContext(Dispatchers.IO) { deliver(rideId, payload) }
+
+    /** Performs the blocking request; extracted so [sendRide] only switches context. */
+    private fun deliver(
+        rideId: String,
+        payload: ByteArray,
+    ): SendResult {
+        val timestamp = nowSeconds()
+        val signature = hmacSigner.sign(timestamp, payload)
+        var connection: HttpURLConnection? = null
+        return try {
+            val opened = URL(config.endpoint).openConnection()
+            val http =
+                opened as? HttpURLConnection
+                    ?: return SendResult(success = false, errorMessage = UNSUPPORTED_TRANSPORT_MESSAGE)
+            connection = http
+            http.requestMethod = config.method.takeIf { it.isNotBlank() } ?: HTTP_POST
+            http.doOutput = true
+            http.instanceFollowRedirects = false
+            http.connectTimeout = connectTimeoutMillis
+            http.readTimeout = readTimeoutMillis
+            http.setRequestProperty(HEADER_CONTENT_TYPE, CONTENT_TYPE_JSON)
+            http.setRequestProperty(HEADER_TIMESTAMP, timestamp.toString())
+            http.setRequestProperty(HEADER_SIGNATURE, signature)
+            http.setRequestProperty(HEADER_RIDE_ID, rideId)
+            http.outputStream.use { it.write(payload) }
+            val responseCode = http.responseCode
+            drainAndClose(http, responseCode)
+            SendResult(
+                success = responseCode in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX,
+                statusCode = responseCode,
+            )
+        } catch (ignored: IllegalArgumentException) {
+            SendResult(success = false, errorMessage = INVALID_ENDPOINT_MESSAGE)
+        } catch (ignored: IOException) {
+            SendResult(success = false, errorMessage = NETWORK_ERROR_MESSAGE)
+        } catch (ignored: SecurityException) {
+            SendResult(success = false, errorMessage = SECURITY_ERROR_MESSAGE)
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /**
+     * Reads and closes the response body so [HttpURLConnection] can release
+     * the underlying socket. Error responses expose the body through
+     * [HttpURLConnection.errorStream]; reading `inputStream` there would throw.
+     *
+     * Best-effort: a failure while draining must not turn a known HTTP status
+     * into an exception, so it is ignored.
+     */
+    private fun drainAndClose(
+        connection: HttpURLConnection,
+        responseCode: Int,
+    ) {
+        val stream =
+            if (responseCode >= CLIENT_ERROR_MIN) {
+                connection.errorStream
+            } else {
+                connection.inputStream
+            }
+        try {
+            stream?.use { input ->
+                val buffer = ByteArray(DRAIN_BUFFER_SIZE)
+                while (input.read(buffer) != END_OF_STREAM) {
+                    // Discard: the receiver's body is not part of the contract.
+                }
+            }
+        } catch (ignored: IOException) {
+            // The status code is already known; draining is only cleanup.
+        }
+    }
+
+    private companion object {
+        const val HTTP_POST = "POST"
+        const val HEADER_CONTENT_TYPE = "Content-Type"
+        const val HEADER_TIMESTAMP = "X-Webhook-Timestamp"
+        const val HEADER_SIGNATURE = "X-Webhook-Signature-V2"
+        const val HEADER_RIDE_ID = "X-Ride-Id"
+        const val CONTENT_TYPE_JSON = "application/json; charset=utf-8"
+        const val HTTP_SUCCESS_MIN = 200
+        const val HTTP_SUCCESS_MAX = 299
+        const val CLIENT_ERROR_MIN = 400
+        const val END_OF_STREAM = -1
+        const val DRAIN_BUFFER_SIZE = 4_096
+        const val MILLIS_PER_SECOND = 1_000L
+        const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 10_000
+        const val DEFAULT_READ_TIMEOUT_MILLIS = 20_000
+        const val UNSUPPORTED_TRANSPORT_MESSAGE = "endpoint does not support HTTP"
+        const val INVALID_ENDPOINT_MESSAGE = "endpoint is not a valid URL"
+        const val NETWORK_ERROR_MESSAGE = "network error while sending ride"
+        const val SECURITY_ERROR_MESSAGE = "security error while sending ride"
+    }
+}
