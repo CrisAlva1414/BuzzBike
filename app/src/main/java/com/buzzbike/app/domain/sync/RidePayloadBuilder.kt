@@ -36,7 +36,7 @@ object RidePayloadBuilder {
             stoppedTimeSeconds = input.descriptors.stoppedSeconds.coerceAtLeast(0L),
             elevationGainM = finiteOrZero(input.elevationGainM),
             elevationLossM = finiteOrZero(input.elevationLossM),
-            caloriesKcal = input.caloriesKcal?.takeIf { it.isFinite() },
+            calories = buildCalories(input),
             avgSpeedMps = finiteOrZero(input.descriptors.avgSpeedMps),
             maxSpeedMps = finiteOrZero(input.maxSpeedMps),
             waypoints =
@@ -154,3 +154,36 @@ object RidePayloadBuilder {
     private const val MIN_LON = -180.0
     private const val MAX_LON = 180.0
 }
+
+/**
+ * Builds the nested calorie band only when all four components are valid.
+ *
+ * A missing model or interval means the caller cannot express the uncertainty
+ * (ADR-001), so the whole object is dropped instead of forwarding a bare point
+ * estimate. Non-finite doubles are sanitized to "absent", and an inverted band
+ * is rejected.
+ */
+private fun buildCalories(input: RideSyncInput): CaloriesPayload? {
+    val estimate = input.caloriesKcal?.takeIf(::isFiniteNonNegative)
+    val low = input.caloriesLowKcal?.takeIf(::isFiniteNonNegative)
+    val high = input.caloriesHighKcal?.takeIf(::isFiniteNonNegative)
+    val model = input.calorieModel?.takeIf { it.isNotBlank() }
+    val band =
+        if (estimate == null || low == null || high == null) {
+            null
+        } else if (model == null) {
+            null
+        } else {
+            CaloriesPayload(
+                estimateKcal = estimate,
+                lowKcal = low,
+                highKcal = high,
+                model = model,
+            )
+        }
+    return band?.takeIf { it.lowKcal <= it.estimateKcal && it.estimateKcal <= it.highKcal }
+}
+
+private fun isFiniteNonNegative(value: Double): Boolean = value.isFinite() && value >= MIN_CALORIES_KCAL
+
+private const val MIN_CALORIES_KCAL = 0.0

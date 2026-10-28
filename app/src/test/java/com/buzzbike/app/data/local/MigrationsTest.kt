@@ -18,7 +18,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Verifies [MIGRATION_1_2] and [MIGRATION_2_3] against a real file-backed database.
+ * Verifies [MIGRATION_1_2], [MIGRATION_2_3] and [MIGRATION_3_4] against a real
+ * file-backed database.
  *
  * `room-testing` is not a project dependency, so the source databases are
  * created with the exact SQL Room generated for their entities (rides +
@@ -36,12 +37,14 @@ class MigrationsTest {
     fun setUp() {
         context.deleteDatabase(DATABASE_NAME)
         context.deleteDatabase(DATABASE_V2_NAME)
+        context.deleteDatabase(DATABASE_V3_NAME)
     }
 
     @After
     fun tearDown() {
         context.deleteDatabase(DATABASE_NAME)
         context.deleteDatabase(DATABASE_V2_NAME)
+        context.deleteDatabase(DATABASE_V3_NAME)
     }
 
     @Test
@@ -52,7 +55,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .allowMainThreadQueries()
                     .build()
 
@@ -97,7 +100,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_V2_NAME)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .allowMainThreadQueries()
                     .build()
 
@@ -123,6 +126,35 @@ class MigrationsTest {
                             "('dup-newer', 'ride-dup', X'00', 'PENDING', 0, 5, NULL, 4000, 4000, 4000)",
                     )
                 }
+            } finally {
+                database.close()
+            }
+        }
+
+    @Test
+    fun given_v3Database_when_migratedToV4_thenCalorieColumnsAreAddedAndRowsSurvive() =
+        runTest {
+            createVersion3Database()
+
+            val database =
+                Room
+                    .databaseBuilder(context, AppDatabase::class.java, DATABASE_V3_NAME)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .allowMainThreadQueries()
+                    .build()
+
+            try {
+                database.openHelper.writableDatabase
+
+                val columns = readColumn(database, "PRAGMA table_info(`rides`)", COLUMN_NAME_INDEX)
+                assertTrue("caloriesLowKcal column missing after migration", "caloriesLowKcal" in columns)
+                assertTrue("caloriesHighKcal column missing after migration", "caloriesHighKcal" in columns)
+                assertTrue("calorieModel column missing after migration", "calorieModel" in columns)
+                assertEquals(
+                    "existing rides must survive the migration",
+                    listOf("ride-legacy"),
+                    readStrings(database, "SELECT id FROM rides"),
+                )
             } finally {
                 database.close()
             }
@@ -172,6 +204,31 @@ class MigrationsTest {
         }
     }
 
+    private fun createVersion3Database() {
+        val path = context.getDatabasePath(DATABASE_V3_NAME)
+        path.parentFile?.mkdirs()
+        val database = SQLiteDatabase.openOrCreateDatabase(path, null)
+        try {
+            database.execSQL(V1_RIDES)
+            database.execSQL(V1_TRACK_POINTS)
+            database.execSQL(V1_TRACK_POINTS_RIDE_ID_INDEX)
+            database.execSQL(V1_TRACK_POINTS_TIMESTAMP_INDEX)
+            database.execSQL(V2_OUTBOX)
+            database.execSQL(V2_OUTBOX_STATUS_INDEX)
+            database.execSQL(V2_OUTBOX_CREATED_AT_INDEX)
+            database.execSQL(V3_OUTBOX_RIDE_ID_INDEX)
+            database.execSQL(
+                "INSERT INTO rides (id, startTimeMillis, distanceM, movingTimeSeconds, " +
+                    "stoppedTimeSeconds, elevationGainM, elevationLossM, avgSpeedMps, " +
+                    "maxSpeedMps, isActive) VALUES ('ride-legacy', 1000, 10.0, 60, 0, 1.0, 0.5, 2.0, 3.0, 0)",
+            )
+
+            database.version = 3
+        } finally {
+            database.close()
+        }
+    }
+
     private fun outboxInsert(
         id: String,
         rideId: String,
@@ -202,13 +259,19 @@ class MigrationsTest {
     private fun readStrings(
         database: AppDatabase,
         sql: String,
+    ): List<String> = readColumn(database, sql, 0)
+
+    private fun readColumn(
+        database: AppDatabase,
+        sql: String,
+        columnIndex: Int,
     ): List<String> =
         database
             .query(sql, null)
             .use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) {
-                        add(cursor.getString(0))
+                        add(cursor.getString(columnIndex))
                     }
                 }
             }
@@ -216,6 +279,8 @@ class MigrationsTest {
     private companion object {
         const val DATABASE_NAME = "migration-1-2.db"
         const val DATABASE_V2_NAME = "migration-2-3.db"
+        const val DATABASE_V3_NAME = "migration-3-4.db"
+        const val COLUMN_NAME_INDEX = 1
         const val NOW = 1_000L
         const val V1_RIDES =
             "CREATE TABLE IF NOT EXISTS `rides` (`id` TEXT NOT NULL, `startTimeMillis` INTEGER NOT NULL, " +
@@ -243,5 +308,7 @@ class MigrationsTest {
             "CREATE INDEX IF NOT EXISTS `index_outbox_createdAt` ON `outbox` (`createdAt`)"
         const val V2_OUTBOX_RIDE_ID_INDEX =
             "CREATE INDEX IF NOT EXISTS `index_outbox_rideId` ON `outbox` (`rideId`)"
+        const val V3_OUTBOX_RIDE_ID_INDEX =
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_outbox_rideId` ON `outbox` (`rideId`)"
     }
 }

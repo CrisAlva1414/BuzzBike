@@ -1080,3 +1080,35 @@ Drenar el outbox completo (no solo 10), purgar SENT y FAILED viejos, worker peri
 
 ### Próximo paso
 R5: payload calórico con modelo e intervalo; luego R7/R8 (scheme/credenciales), R9-R12.
+
+---
+
+## Iteration 25 — 2026-10-28 — R5: calorías con modelo e intervalo (COMPLETADO)
+
+### Tarea
+Persistir y transportar calorías como banda de producto + modelo, nunca como número exacto; UI con rango.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (219 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `CalorieSummary` + `CalorieResult.toSummary()` (banda simétrica con el mayor %; low ≥ 0; no finitos → null).
+- `RideEntity`: `caloriesLowKcal`, `caloriesHighKcal`, `calorieModel`; `MIGRATION_3_4`; DB v4.
+- `RideSessionWriter`/`RideRepository`/`RideSessionManager`/`RideSessionUiState`: propagan estimate/low/high/model.
+- `RideSyncPayload.calories: CaloriesPayload?` (objeto anidado) y JSON con `calories` o null.
+- `RidePayloadBuilder`/`RideSyncDataSourceImpl`: solo emiten calorías si hay estimate+low+high+model.
+- `RideScreen`: “≈X kcal (rango L–H; modelo M)” o “--”.
+- Tests: 219 total (+13), incluida migración 3→4.
+
+### Notas
+- La banda usa el mayor porcentaje (30/40 sin perfil; 20/30 con perfil) en ambos lados; es banda de producto, no IC.
+- Rides previos sin modelo → `calories = null` en el payload (no se inventa).
+
+### Próximo paso
+R7/R8: endurecer scheme del checker y sacar credenciales del inputData; luego R9-R12.

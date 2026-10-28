@@ -21,10 +21,25 @@ data class RideSyncPayload(
     val stoppedTimeSeconds: Long,
     val elevationGainM: Double,
     val elevationLossM: Double,
-    val caloriesKcal: Double?,
+    val calories: CaloriesPayload?,
     val avgSpeedMps: Double,
     val maxSpeedMps: Double,
     val waypoints: List<Waypoint>,
+)
+
+/**
+ * Calorie estimate as a product band (ADR-001).
+ *
+ * The receiver must not treat [estimateKcal] as exact: [lowKcal] and
+ * [highKcal] carry the uncertainty band and [model] identifies which cascade
+ * level produced it. The payload deliberately omits calories entirely when any
+ * of these four values is missing.
+ */
+data class CaloriesPayload(
+    val estimateKcal: Double,
+    val lowKcal: Double,
+    val highKcal: Double,
+    val model: String,
 )
 
 /**

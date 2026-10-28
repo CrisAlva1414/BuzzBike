@@ -18,10 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.buzzbike.app.domain.ride.session.RideSessionUiState
 import java.util.Locale
 
 private const val METERS_PER_KILOMETER = 1000.0
 private const val MPS_TO_KPH = 3.6
+private const val WHOLE_KCAL_FORMAT = "%.0f"
+private const val UNKNOWN_CALORIES = "Calories: --"
 
 @Composable
 fun RideScreen(viewModel: RideViewModel = hiltViewModel()) {
@@ -58,11 +61,7 @@ fun RideScreen(viewModel: RideViewModel = hiltViewModel()) {
                 Text(
                     "Elevation Gain: ${String.format(Locale.getDefault(), "%.0f", uiState.elevationGainM)} m",
                 )
-                Text(
-                    "Calories: ${
-                        uiState.caloriesKcal?.let { String.format(Locale.getDefault(), "%.0f", it) } ?: "--"
-                    } kcal",
-                )
+                Text(caloriesLabel(uiState))
                 Text(
                     "Avg Speed: ${String.format(Locale.getDefault(), "%.1f", uiState.avgSpeedMps * MPS_TO_KPH)} km/h",
                 )
@@ -85,3 +84,33 @@ fun RideScreen(viewModel: RideViewModel = hiltViewModel()) {
         }
     }
 }
+
+/**
+ * Renders calories as a product band, never as a single exact number.
+ *
+ * ADR-001/AGENTS.md §6.4: the estimate is only the band centre, so the range
+ * and the model are always shown together. Missing or non-finite data degrades
+ * to `--` instead of inventing a value.
+ */
+private fun caloriesLabel(state: RideSessionUiState): String {
+    val estimate = state.caloriesKcal
+    val low = state.caloriesLowKcal
+    val high = state.caloriesHighKcal
+    val model = state.calorieModel
+    return if (estimate == null || low == null || high == null) {
+        UNKNOWN_CALORIES
+    } else if (model == null) {
+        UNKNOWN_CALORIES
+    } else if (!estimate.isFinite() || !low.isFinite() || !high.isFinite()) {
+        UNKNOWN_CALORIES
+    } else {
+        val locale = Locale.getDefault()
+        "Calories: ≈${formatKcal(estimate, locale)} kcal " +
+            "(rango ${formatKcal(low, locale)}–${formatKcal(high, locale)}; modelo $model)"
+    }
+}
+
+private fun formatKcal(
+    value: Double,
+    locale: Locale,
+): String = String.format(locale, WHOLE_KCAL_FORMAT, value)

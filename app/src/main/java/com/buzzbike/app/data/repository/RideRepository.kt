@@ -18,7 +18,7 @@ import javax.inject.Singleton
 // This is the single façade for ride persistence; the outbox method pushes
 // it to 11 functions (detekt threshold: 11). Splitting the class is a larger
 // refactor deferred to the sync slice.
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 @Singleton
 class RideRepository
     @Inject
@@ -69,6 +69,9 @@ class RideRepository
             elevationGainM: Double,
             elevationLossM: Double,
             caloriesKcal: Double?,
+            caloriesLowKcal: Double?,
+            caloriesHighKcal: Double?,
+            calorieModel: String?,
         ) {
             val ride = rideDao.getRideById(rideId) ?: return
             rideDao.updateRide(
@@ -78,6 +81,9 @@ class RideRepository
                     elevationGainM = elevationGainM,
                     elevationLossM = elevationLossM,
                     caloriesKcal = caloriesKcal,
+                    caloriesLowKcal = caloriesLowKcal,
+                    caloriesHighKcal = caloriesHighKcal,
+                    calorieModel = calorieModel,
                     avgSpeedMps = descriptors.avgSpeedMps,
                     maxSpeedMps = descriptors.maxSpeedMps,
                 ),

@@ -54,3 +54,21 @@ val MIGRATION_2_3 =
             db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_outbox_rideId` ON `outbox` (`rideId`)")
         }
     }
+
+/**
+ * Persists the calorie product band introduced in schema version 4.
+ *
+ * Before this version only the point estimate (`caloriesKcal`) was stored,
+ * which made it impossible for the UI and the sync payload to show the model
+ * and the uncertainty range (ADR-001, AGENTS.md §6.4). The new columns are
+ * nullable: rides recorded by older versions keep `NULL` and are treated as
+ * "no reliable calorie data" instead of inventing a range.
+ */
+val MIGRATION_3_4 =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `caloriesLowKcal` REAL")
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `caloriesHighKcal` REAL")
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `calorieModel` TEXT")
+        }
+    }

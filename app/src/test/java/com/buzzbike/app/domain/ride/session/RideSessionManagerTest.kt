@@ -74,6 +74,9 @@ class RideSessionManagerTest {
             assertEquals(120L, state.movingTimeSeconds)
             assertEquals(12.5, state.avgSpeedMps, TOLERANCE)
             assertEquals(210.0, state.caloriesKcal ?: Double.NaN, TOLERANCE)
+            assertEquals(147.0, state.caloriesLowKcal ?: Double.NaN, TOLERANCE)
+            assertEquals(273.0, state.caloriesHighKcal ?: Double.NaN, TOLERANCE)
+            assertEquals("COMPENDIUM_VELOCITY", state.calorieModel)
             assertEquals(2, engine.received.last().size)
         }
 
@@ -123,6 +126,9 @@ class RideSessionManagerTest {
             assertEquals(30.0, saved.elevationGainM, TOLERANCE)
             assertEquals(20.0, saved.elevationLossM, TOLERANCE)
             assertEquals(99.0, saved.caloriesKcal ?: Double.NaN, TOLERANCE)
+            assertEquals(69.3, saved.caloriesLowKcal ?: Double.NaN, TOLERANCE)
+            assertEquals(128.7, saved.caloriesHighKcal ?: Double.NaN, TOLERANCE)
+            assertEquals("COMPENDIUM_VELOCITY", saved.calorieModel)
             val state = manager.uiState.first()
             assertFalse(state.isTracking)
             assertNull(state.activeRideId)
@@ -161,6 +167,9 @@ class RideSessionManagerTest {
             assertEquals(75.0, saved.elevationGainM, TOLERANCE)
             assertEquals(40.0, saved.elevationLossM, TOLERANCE)
             assertEquals(250.0, saved.caloriesKcal ?: Double.NaN, TOLERANCE)
+            assertEquals(175.0, saved.caloriesLowKcal ?: Double.NaN, TOLERANCE)
+            assertEquals(325.0, saved.caloriesHighKcal ?: Double.NaN, TOLERANCE)
+            assertEquals("COMPENDIUM_VELOCITY", saved.calorieModel)
         }
 
     private fun TestScope.manager(
@@ -245,6 +254,9 @@ class RideSessionManagerTest {
         val elevationGainM: Double,
         val elevationLossM: Double,
         val caloriesKcal: Double?,
+        val caloriesLowKcal: Double?,
+        val caloriesHighKcal: Double?,
+        val calorieModel: String?,
     )
 
     private class FakeRideSessionWriter : RideSessionWriter {
@@ -265,8 +277,21 @@ class RideSessionManagerTest {
             elevationGainM: Double,
             elevationLossM: Double,
             caloriesKcal: Double?,
+            caloriesLowKcal: Double?,
+            caloriesHighKcal: Double?,
+            calorieModel: String?,
         ) {
-            saved += SavedDescriptors(rideId, descriptors, elevationGainM, elevationLossM, caloriesKcal)
+            saved +=
+                SavedDescriptors(
+                    rideId,
+                    descriptors,
+                    elevationGainM,
+                    elevationLossM,
+                    caloriesKcal,
+                    caloriesLowKcal,
+                    caloriesHighKcal,
+                    calorieModel,
+                )
         }
     }
 

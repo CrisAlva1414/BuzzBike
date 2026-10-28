@@ -75,6 +75,59 @@ class CalorieCalculatorTest {
     }
 
     @Test
+    fun given_profile_when_toSummary_thenUsesWidestBandForBothSides() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(weightKg = 75.0, heightCm = 180.0, ageYears = 30, isMale = true),
+            )
+
+        val summary = requireNotNull(result.toSummary())
+        val estimate = requireNotNull(result.totalKcal)
+
+        assertEquals(20, result.uncertaintyMinPercent)
+        assertEquals(30, result.uncertaintyMaxPercent)
+        assertEquals(estimate, summary.estimateKcal, 0.0)
+        assertEquals(estimate * 0.7, summary.lowKcal, 0.001)
+        assertEquals(estimate * 1.3, summary.highKcal, 0.001)
+        assertEquals("COMPENDIUM_VELOCITY", summary.model)
+    }
+
+    @Test
+    fun given_noProfile_when_toSummary_thenUsesThirtyToFortyPercentBand() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(),
+            )
+
+        val summary = requireNotNull(result.toSummary())
+        val estimate = requireNotNull(result.totalKcal)
+
+        assertEquals(30, result.uncertaintyMinPercent)
+        assertEquals(40, result.uncertaintyMaxPercent)
+        assertEquals(estimate * 0.6, summary.lowKcal, 0.001)
+        assertEquals(estimate * 1.4, summary.highKcal, 0.001)
+    }
+
+    @Test
+    fun given_noEstimate_when_toSummary_thenNull() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = emptyList(),
+                durationsSeconds = emptyList(),
+                isMoving = emptyList(),
+            )
+
+        assertNull(result.totalKcal)
+        assertNull(result.toSummary())
+    }
+
+    @Test
     fun given_speedInGap_thenTreatedAsStop() {
         val calculator = CalorieCalculator()
         val result =

@@ -18,6 +18,9 @@ data class RideSyncInput(
     val elevationGainM: Double,
     val elevationLossM: Double,
     val caloriesKcal: Double?,
+    val caloriesLowKcal: Double?,
+    val caloriesHighKcal: Double?,
+    val calorieModel: String?,
     val maxSpeedMps: Double,
     val points: List<TrackPoint>,
 )

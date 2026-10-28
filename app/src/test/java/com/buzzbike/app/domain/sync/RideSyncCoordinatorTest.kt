@@ -130,6 +130,9 @@ class RideSyncCoordinatorTest {
             elevationGainM = 10.0,
             elevationLossM = 5.0,
             caloriesKcal = 200.0,
+            caloriesLowKcal = 140.0,
+            caloriesHighKcal = 260.0,
+            calorieModel = "COMPENDIUM_VELOCITY",
             maxSpeedMps = 9.0,
             points = listOf(TrackPoint(timestampMonotonicNanos = START_NANOS, lat = -33.4, lon = -70.6)),
         )

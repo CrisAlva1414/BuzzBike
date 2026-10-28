@@ -4,6 +4,7 @@ import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
+import com.buzzbike.app.domain.sync.RidePayloadBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
@@ -45,6 +46,9 @@ class RideSyncDataSourceImplTest {
             assertEquals(12.5, input.elevationGainM, DELTA)
             assertEquals(4.5, input.elevationLossM, DELTA)
             assertEquals(320.0, input.caloriesKcal)
+            assertEquals(224.0, input.caloriesLowKcal)
+            assertEquals(416.0, input.caloriesHighKcal)
+            assertEquals("COMPENDIUM_VELOCITY", input.calorieModel)
             assertEquals(2, input.points.size)
 
             val point = input.points.first()
@@ -70,6 +74,21 @@ class RideSyncDataSourceImplTest {
 
             assertNull(input)
             assertEquals(0, trackPointDao.syncCalls)
+        }
+
+    @Test
+    fun given_rideWithoutCalorieModel_when_built_thenCaloriesAreNull() =
+        runTest {
+            val dataSource =
+                RideSyncDataSourceImpl(
+                    FakeRideDao(RIDE.copy(calorieModel = null)),
+                    FakeTrackPointDao(emptyList()),
+                )
+
+            val input = requireNotNull(dataSource.load(RIDE_ID))
+
+            assertNull(input.calorieModel)
+            assertNull(RidePayloadBuilder.build(input).calories)
         }
 
     @Test
@@ -149,6 +168,9 @@ class RideSyncDataSourceImplTest {
                 elevationGainM = 12.5,
                 elevationLossM = 4.5,
                 caloriesKcal = 320.0,
+                caloriesLowKcal = 224.0,
+                caloriesHighKcal = 416.0,
+                calorieModel = "COMPENDIUM_VELOCITY",
                 avgSpeedMps = 6.5,
                 maxSpeedMps = 9.5,
             )

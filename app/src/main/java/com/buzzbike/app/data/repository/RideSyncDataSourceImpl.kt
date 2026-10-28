@@ -62,6 +62,9 @@ class RideSyncDataSourceImpl
                 elevationGainM = ride.elevationGainM,
                 elevationLossM = ride.elevationLossM,
                 caloriesKcal = ride.caloriesKcal,
+                caloriesLowKcal = ride.caloriesLowKcal,
+                caloriesHighKcal = ride.caloriesHighKcal,
+                calorieModel = ride.calorieModel,
                 maxSpeedMps = ride.maxSpeedMps,
                 points = points.map(TrackPointEntity::toTrackPoint),
             )

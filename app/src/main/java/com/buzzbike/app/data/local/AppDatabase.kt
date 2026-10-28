@@ -11,7 +11,7 @@ import com.buzzbike.app.data.local.entity.TrackPointEntity
 
 @Database(
     entities = [RideEntity::class, TrackPointEntity::class, OutboxEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

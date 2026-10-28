@@ -136,6 +136,9 @@ class RideViewModelTest {
             elevationGainM: Double,
             elevationLossM: Double,
             caloriesKcal: Double?,
+            caloriesLowKcal: Double?,
+            caloriesHighKcal: Double?,
+            calorieModel: String?,
         ) {
             savedDescriptors = true
         }

@@ -15,7 +15,7 @@ object RidePayloadJson {
     fun encode(payload: RideSyncPayload): ByteArray =
         buildString {
             append('{')
-            appendIntField("version", payload.version)
+            appendLongField("version", payload.version.toLong())
             append(',')
             appendStringField("rideId", payload.rideId)
             append(',')
@@ -34,7 +34,7 @@ object RidePayloadJson {
             append(',')
             appendDoubleField("elevationLossM", payload.elevationLossM)
             append(',')
-            appendNullableDoubleField("caloriesKcal", payload.caloriesKcal)
+            appendCalories(payload.calories)
             append(',')
             appendDoubleField("avgSpeedMps", payload.avgSpeedMps)
             append(',')
@@ -48,13 +48,6 @@ object RidePayloadJson {
             append(']')
             append('}')
         }.toByteArray(Charsets.UTF_8)
-
-    private fun StringBuilder.appendIntField(
-        name: String,
-        value: Int,
-    ) {
-        append('"').append(name).append("\":").append(value)
-    }
 
     private fun StringBuilder.appendLongField(
         name: String,
@@ -115,6 +108,29 @@ object RidePayloadJson {
         append("\\u00")
         append(HEX_DIGITS[highNibble])
         append(HEX_DIGITS[code and NIBBLE_MASK])
+    }
+
+    /**
+     * Encodes the calorie band as a nested object or `null`.
+     *
+     * The receiver must see the model and both bounds together; emitting only
+     * a point estimate would present calories as exact (ADR-001).
+     */
+    private fun StringBuilder.appendCalories(calories: CaloriesPayload?) {
+        append("\"calories\":")
+        if (calories == null) {
+            append("null")
+            return
+        }
+        append('{')
+        appendDoubleField("estimateKcal", calories.estimateKcal)
+        append(',')
+        appendDoubleField("lowKcal", calories.lowKcal)
+        append(',')
+        appendDoubleField("highKcal", calories.highKcal)
+        append(',')
+        appendStringField("model", calories.model)
+        append('}')
     }
 
     private fun StringBuilder.appendWaypoint(waypoint: Waypoint) {

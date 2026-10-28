@@ -1,5 +1,6 @@
 package com.buzzbike.app.domain.ride.session
 
+import com.buzzbike.app.domain.calories.toSummary
 import com.buzzbike.app.domain.elevation.ElevationDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
 import com.buzzbike.app.domain.ride.engine.RideEngine
@@ -17,9 +18,10 @@ import kotlinx.coroutines.launch
 /**
  * Real-time projection of the active ride session.
  *
- * [caloriesKcal] stays nullable on purpose: it is only present once the engine
- * produced a calorie result. The UI must still present it as an interval using
- * the engine's uncertainty model (ADR-001, AGENTS.md §6).
+ * The calorie fields stay nullable on purpose: they are only present once the
+ * engine produced a calorie result. [caloriesKcal] is the point estimate, and
+ * the UI must always render it together with [caloriesLowKcal],
+ * [caloriesHighKcal] and [calorieModel] (ADR-001, AGENTS.md §6).
  */
 data class RideSessionUiState(
     val isTracking: Boolean = false,
@@ -28,6 +30,9 @@ data class RideSessionUiState(
     val movingTimeSeconds: Long = 0L,
     val elevationGainM: Double = 0.0,
     val caloriesKcal: Double? = null,
+    val caloriesLowKcal: Double? = null,
+    val caloriesHighKcal: Double? = null,
+    val calorieModel: String? = null,
     val avgSpeedMps: Double = 0.0,
 )
 
@@ -115,13 +120,17 @@ class RideSessionManager(
                     finalResult to (latestElevation ?: finalResult.elevationDescriptors)
                 }
 
+            val summary = result.calorieResult?.toSummary()
             rideSessionWriter.stopRide(rideId)
             rideSessionWriter.saveRideDescriptors(
                 rideId = rideId,
                 descriptors = result.rideDescriptors,
                 elevationGainM = elevation.gainM,
                 elevationLossM = elevation.lossM,
-                caloriesKcal = result.calorieResult?.totalKcal,
+                caloriesKcal = summary?.estimateKcal,
+                caloriesLowKcal = summary?.lowKcal,
+                caloriesHighKcal = summary?.highKcal,
+                calorieModel = summary?.model,
             )
         }
 
@@ -163,12 +172,16 @@ class RideSessionManager(
     private fun publishLocked() {
         val result = latestRideResult
         val elevation = latestElevation ?: result?.elevationDescriptors
+        val summary = result?.calorieResult?.toSummary()
         _uiState.update { current ->
             current.copy(
                 distanceM = result?.rideDescriptors?.distanceM ?: current.distanceM,
                 movingTimeSeconds = result?.rideDescriptors?.movingSeconds ?: current.movingTimeSeconds,
                 elevationGainM = elevation?.gainM ?: current.elevationGainM,
-                caloriesKcal = result?.calorieResult?.totalKcal,
+                caloriesKcal = summary?.estimateKcal,
+                caloriesLowKcal = summary?.lowKcal,
+                caloriesHighKcal = summary?.highKcal,
+                calorieModel = summary?.model,
                 avgSpeedMps = result?.rideDescriptors?.avgSpeedMps ?: current.avgSpeedMps,
             )
         }

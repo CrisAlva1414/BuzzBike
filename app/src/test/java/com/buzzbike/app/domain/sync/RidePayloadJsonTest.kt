@@ -25,7 +25,13 @@ class RidePayloadJsonTest {
             stoppedTimeSeconds = 60L,
             elevationGainM = 12.5,
             elevationLossM = 4.25,
-            caloriesKcal = 320.0,
+            calories =
+                CaloriesPayload(
+                    estimateKcal = 320.0,
+                    lowKcal = 224.0,
+                    highKcal = 416.0,
+                    model = "COMPENDIUM_VELOCITY",
+                ),
             avgSpeedMps = 6.5,
             maxSpeedMps = 9.5,
             waypoints = waypoints,
@@ -49,7 +55,8 @@ class RidePayloadJsonTest {
                 "\"stoppedTimeSeconds\":60",
                 "\"elevationGainM\":12.5",
                 "\"elevationLossM\":4.25",
-                "\"caloriesKcal\":320.0",
+                "\"calories\":{\"estimateKcal\":320.0,\"lowKcal\":224.0," +
+                    "\"highKcal\":416.0,\"model\":\"COMPENDIUM_VELOCITY\"}",
                 "\"avgSpeedMps\":6.5",
                 "\"maxSpeedMps\":9.5",
                 "\"waypoints\":[{\"timestampMillis\":$START_MILLIS," +
@@ -78,16 +85,58 @@ class RidePayloadJsonTest {
             encodeToString(
                 payload().copy(
                     distanceM = Double.NaN,
-                    caloriesKcal = Double.NaN,
                     avgSpeedMps = Double.POSITIVE_INFINITY,
                     maxSpeedMps = Double.NEGATIVE_INFINITY,
                 ),
             )
 
         assertTrue(json.contains("\"distanceM\":null"))
-        assertTrue(json.contains("\"caloriesKcal\":null"))
         assertTrue(json.contains("\"avgSpeedMps\":null"))
         assertTrue(json.contains("\"maxSpeedMps\":null"))
+        assertFalse(json.contains("NaN"))
+        assertFalse(json.contains("Infinity"))
+    }
+
+    @Test
+    fun given_calorieBand_when_encoded_thenNestedObjectHasEstimateLowHighAndModel() {
+        val json = encodeToString(payload())
+
+        assertTrue(
+            json.contains(
+                "\"calories\":{\"estimateKcal\":320.0,\"lowKcal\":224.0," +
+                    "\"highKcal\":416.0,\"model\":\"COMPENDIUM_VELOCITY\"}",
+            ),
+        )
+    }
+
+    @Test
+    fun given_noCalories_when_encoded_thenCaloriesIsNull() {
+        val json = encodeToString(payload().copy(calories = null))
+
+        assertTrue(json.contains("\"calories\":null"))
+    }
+
+    @Test
+    fun given_nonFiniteCalories_when_encoded_thenTheyBecomeNull() {
+        val json =
+            encodeToString(
+                payload().copy(
+                    calories =
+                        CaloriesPayload(
+                            estimateKcal = Double.NaN,
+                            lowKcal = Double.POSITIVE_INFINITY,
+                            highKcal = Double.NEGATIVE_INFINITY,
+                            model = "M",
+                        ),
+                ),
+            )
+
+        assertTrue(
+            json.contains(
+                "\"calories\":{\"estimateKcal\":null,\"lowKcal\":null," +
+                    "\"highKcal\":null,\"model\":\"M\"}",
+            ),
+        )
         assertFalse(json.contains("NaN"))
         assertFalse(json.contains("Infinity"))
     }

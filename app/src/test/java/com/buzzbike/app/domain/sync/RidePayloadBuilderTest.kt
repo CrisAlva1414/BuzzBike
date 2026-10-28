@@ -38,6 +38,9 @@ class RidePayloadBuilderTest {
             elevationGainM = 12.5,
             elevationLossM = 4.0,
             caloriesKcal = 250.0,
+            caloriesLowKcal = 175.0,
+            caloriesHighKcal = 325.0,
+            calorieModel = "COMPENDIUM_VELOCITY",
             maxSpeedMps = 9.5,
             points = points,
         )
@@ -162,6 +165,61 @@ class RidePayloadBuilderTest {
         val waypoint = payload.waypoints.single()
         assertEquals(12.345678, waypoint.lat, 0.0)
         assertEquals(-45.123457, waypoint.lon, 0.0)
+    }
+
+    @Test
+    fun given_completeCalorieBand_when_built_thenPayloadCarriesRangeAndModel() {
+        val payload = RidePayloadBuilder.build(input(emptyList()))
+
+        val calories = requireNotNull(payload.calories)
+        assertEquals(250.0, calories.estimateKcal, 0.0)
+        assertEquals(175.0, calories.lowKcal, 0.0)
+        assertEquals(325.0, calories.highKcal, 0.0)
+        assertEquals("COMPENDIUM_VELOCITY", calories.model)
+    }
+
+    @Test
+    fun given_missingCalorieModel_when_built_thenCaloriesAreOmitted() {
+        val payload =
+            RidePayloadBuilder.build(
+                input(emptyList()).copy(calorieModel = null),
+            )
+
+        assertEquals(null, payload.calories)
+    }
+
+    @Test
+    fun given_missingCalorieInterval_when_built_thenCaloriesAreOmitted() {
+        val payload =
+            RidePayloadBuilder.build(
+                input(emptyList()).copy(caloriesLowKcal = null, caloriesHighKcal = null),
+            )
+
+        assertEquals(null, payload.calories)
+    }
+
+    @Test
+    fun given_nonFiniteCalories_when_built_thenCaloriesAreOmitted() {
+        val payload =
+            RidePayloadBuilder.build(
+                input(emptyList()).copy(
+                    caloriesKcal = Double.NaN,
+                    caloriesLowKcal = Double.NEGATIVE_INFINITY,
+                    caloriesHighKcal = Double.POSITIVE_INFINITY,
+                ),
+            )
+
+        assertEquals(null, payload.calories)
+    }
+
+    @Test
+    fun given_invertedCalorieBand_when_built_thenCaloriesAreOmitted() {
+        val payload =
+            RidePayloadBuilder.build(
+                input(emptyList()).copy(caloriesLowKcal = 400.0, caloriesHighKcal = 100.0),
+            )
+
+        assertEquals(null, payload.calories)
     }
 
     private companion object {

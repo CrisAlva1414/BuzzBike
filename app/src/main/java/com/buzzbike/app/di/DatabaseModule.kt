@@ -7,6 +7,7 @@ import com.buzzbike.app.data.local.DatabasePassphraseProvider
 import com.buzzbike.app.data.local.LegacyDatabaseCleaner
 import com.buzzbike.app.data.local.MIGRATION_1_2
 import com.buzzbike.app.data.local.MIGRATION_2_3
+import com.buzzbike.app.data.local.MIGRATION_3_4
 import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
@@ -36,7 +37,7 @@ object DatabaseModule {
                 AppDatabase::class.java,
                 "buzzbike-encrypted.db",
             ).openHelperFactory(SupportOpenHelperFactory(passphraseProvider.getPassphrase()))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
     }
 
