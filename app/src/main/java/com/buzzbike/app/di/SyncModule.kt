@@ -12,7 +12,6 @@ import com.buzzbike.app.domain.sync.OutboxStore
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
 import com.buzzbike.app.domain.sync.RideSyncDataSource
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
-import com.buzzbike.app.sync.AndroidKeystoreHmacKeyProvider
 import com.buzzbike.app.sync.HmacSha256Signer
 import com.buzzbike.app.sync.HttpConnectivityChecker
 import com.buzzbike.app.sync.WorkManagerSyncScheduler
@@ -23,19 +22,16 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * Hilt bindings for the sync stack (ADR-003).
+ * Hilt bindings for the outbox/transport side of the sync stack (ADR-003).
  *
- * The cryptographic bindings and the outbox/connectivity adapters are
- * singletons: the key provider owns the keystore entry, while the signer,
- * connectivity checker and Room-backed store are stateless wrappers.
+ * HMAC secret provisioning lives in [SecretModule]; this module consumes the
+ * resulting [HmacKeyProvider]. The signer, connectivity checker and
+ * Room-backed store are stateless wrappers, so they are singletons only to
+ * avoid rebuilding them per injection.
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object SyncModule {
-    @Provides
-    @Singleton
-    fun provideHmacKeyProvider(): HmacKeyProvider = AndroidKeystoreHmacKeyProvider()
-
     @Provides
     @Singleton
     fun provideHmacSigner(keyProvider: HmacKeyProvider): HmacSigner = HmacSha256Signer(keyProvider)

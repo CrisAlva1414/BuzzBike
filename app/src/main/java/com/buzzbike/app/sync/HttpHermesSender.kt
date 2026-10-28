@@ -2,6 +2,7 @@ package com.buzzbike.app.sync
 
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.HermesSender
+import com.buzzbike.app.domain.sync.HmacSecretMissingException
 import com.buzzbike.app.domain.sync.HmacSigner
 import com.buzzbike.app.domain.sync.SendResult
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +54,22 @@ class HttpHermesSender(
         payload: ByteArray,
     ): SendResult {
         val timestamp = nowSeconds()
-        val signature = hmacSigner.sign(timestamp, payload)
+        return try {
+            deliverSigned(rideId, payload, timestamp, hmacSigner.sign(timestamp, payload))
+        } catch (expected: HmacSecretMissingException) {
+            // Sync is opt-in and the secret is user-provisioned; a missing
+            // secret is a configuration state, not a transport failure. It is
+            // reported without leaking any secret material.
+            SendResult(success = false, errorMessage = HMAC_SECRET_MISSING_MESSAGE)
+        }
+    }
+
+    private fun deliverSigned(
+        rideId: String,
+        payload: ByteArray,
+        timestamp: Long,
+        signature: String,
+    ): SendResult {
         var connection: HttpURLConnection? = null
         return try {
             val opened = URL(config.endpoint).openConnection()
@@ -137,5 +153,6 @@ class HttpHermesSender(
         const val INVALID_ENDPOINT_MESSAGE = "endpoint is not a valid URL"
         const val NETWORK_ERROR_MESSAGE = "network error while sending ride"
         const val SECURITY_ERROR_MESSAGE = "security error while sending ride"
+        const val HMAC_SECRET_MISSING_MESSAGE = "HMAC secret is not configured"
     }
 }

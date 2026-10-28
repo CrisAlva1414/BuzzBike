@@ -946,3 +946,37 @@ R10 pin BouncyCastle + lockfile; R11 lint; R12 deuda de test de Keystore.
 
 ### Plan de remediación
 S1 secreto (A) → S2 SQLCipher → S3 health check autenticado + contrato → R1..R12.
+
+---
+
+## Iteration 21 — 2026-10-28 — S1: Aprovisionamiento secreto HMAC (COMPLETADO)
+
+### Tarea
+Opción A: secreto definido en el NAS, pegado en la app, sellado con AES-GCM de Android Keystore.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (165 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/SecretSealer.kt`, `SecretStorage.kt`, `HmacSecretManager.kt`, `HmacSecretMissingException.kt`.
+- `sync/AndroidKeystoreSecretSealer.kt` — AES-256-GCM, alias `buzzbike_secret_sealer_v1`.
+- `sync/SharedPrefsSecretStorage.kt` — solo blob sellado Base64, commit verificado.
+- `sync/StoredHmacKeyProvider.kt` — unseal → SecretKeySpec HmacSHA256; sin secreto lanza excepción.
+- `di/SecretModule.kt` — bindings; `AndroidKeystoreHmacKeyProvider` eliminado.
+- `sync/HttpHermesSender.kt` — secreto ausente → SendResult(false) sin lanzar.
+- Tests: HmacSecretManagerTest (5), StoredHmacKeyProviderTest (3).
+
+### Decisiones
+- Secreto mínimo 32 bytes; array de entrada se limpia tras importar.
+- Persistencia: solo AES-GCM(secreto) en SharedPreferences privadas; la clave AES no sale del Keystore.
+- DI separada en SecretModule por límite TooManyFunctions de detekt.
+- Base64 corrupto se trata como “sin secreto” para no bloquear el worker.
+
+### Próximo paso
+S2: SQLCipher (DB cifrada, passphrase sellada por Keystore, limpieza de DB plana legacy).
