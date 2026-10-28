@@ -18,14 +18,16 @@ enum class SyncAction {
 /**
  * Maps a domain [ProcessOutcome] to the worker's next action.
  *
- * `Partial` and `BackendUnavailable` both retry: failed rows stay in the
- * outbox with their own backoff deadline, and an unavailable backend leaves
- * every row pending. `ConfigurationError` is terminal — retrying cannot fix a
- * missing endpoint, so it must not burn WorkManager attempts.
+ * `Partial`, `MorePending` and `BackendUnavailable` all retry: failed rows
+ * stay in the outbox with their own backoff deadline, a capped drain still has
+ * eligible rows, and an unavailable backend leaves every row pending.
+ * `ConfigurationError` is terminal — retrying cannot fix a missing endpoint,
+ * so it must not burn WorkManager attempts.
  */
 fun ProcessOutcome.toSyncAction(): SyncAction =
     when (this) {
         is ProcessOutcome.Sent, ProcessOutcome.NoPending -> SyncAction.SUCCESS
-        is ProcessOutcome.Partial, ProcessOutcome.BackendUnavailable -> SyncAction.RETRY
+        is ProcessOutcome.Partial, ProcessOutcome.MorePending, ProcessOutcome.BackendUnavailable ->
+            SyncAction.RETRY
         ProcessOutcome.ConfigurationError -> SyncAction.FAILURE
     }

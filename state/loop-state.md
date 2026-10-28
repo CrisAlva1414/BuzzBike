@@ -1047,3 +1047,36 @@ Health check dedicado y autenticado con HMAC (auth en API y webhook), sin fallba
 
 ### Próximo paso
 R1/R3: drenaje completo del outbox, purga de SENT, worker periódico. Luego R5, R7-R12.
+
+---
+
+## Iteration 24 — 2026-10-28 — R1/R3: drenaje, purga y periódico (COMPLETADO)
+
+### Tarea
+Drenar el outbox completo (no solo 10), purgar SENT y FAILED viejos, worker periódico, y sacar X-Ride-Id del wire.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (206 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `OutboxProcessor` drena por batches hasta vaciar; `maxBatches=100`, guarda de no-progreso, `now` por batch; `MorePending` si queda elegible.
+- Purga: `deleteSent()` + `deleteFailedOlderThan(now - 7 días)` en cada run.
+- `OutboxProcessorConfig(batchSize, maxBatches, failedRetentionMillis)`.
+- `OutboxStore`/`RoomOutboxStore`/`OutboxDao`: deleteSent y deleteFailedOlderThan.
+- `SyncAction`: MorePending → RETRY.
+- `HermesSyncScheduler.schedulePeriodic` (15 min, UPDATE) y `WorkManagerSyncScheduler.schedule` asegura el periódico.
+- `HttpHermesSender`: eliminado header X-Ride-Id (el rideId va en el body firmado); docs actualizados.
+- Tests: 206 total (+8), incluidos 11/25 items, purga, maxBatches y no-progreso.
+
+### Notas
+- La purga no corre en los retornos tempranos ConfigurationError/BackendUnavailable (no hay drenaje).
+- Worker periódico no testeable en JVM; documentado.
+
+### Próximo paso
+R5: payload calórico con modelo e intervalo; luego R7/R8 (scheme/credenciales), R9-R12.

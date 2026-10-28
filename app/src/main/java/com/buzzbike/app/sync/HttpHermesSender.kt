@@ -24,9 +24,10 @@ import java.net.URL
  * Every request is signed with HMAC-SHA256 over `"<timestamp>." + payload`
  * (ADR-003 §"Firma HMAC V2"). The signature travels in
  * `X-Webhook-Signature-V2` as lowercase hex, next to the matching
- * `X-Webhook-Timestamp` (Unix epoch seconds) and the ride identifier. The
- * receiver can therefore reject replayed or tampered payloads without
- * trusting the body itself.
+ * `X-Webhook-Timestamp` (Unix epoch seconds). The ride identifier travels
+ * only inside the signed body, so the receiver deduplicates by the body's
+ * `rideId` and never trusts an unsigned header. The receiver can therefore
+ * reject replayed or tampered payloads without trusting the body itself.
  *
  * **Success rule:** delivery succeeds on **any 2xx** status (`200..299`). This
  * differs from [HttpConnectivityChecker], which requires **exactly 200**:
@@ -52,22 +53,22 @@ class HttpHermesSender(
 ) : HermesSender {
     private val timeoutMillis: Int = resolveTimeoutMillis(config.timeoutSeconds)
 
+    // The ride id is already part of the signed payload, so the header was
+    // removed (docs/sync-contract.md §3). The parameter stays for the port.
+    @Suppress("UNUSED_PARAMETER")
     override suspend fun sendRide(
         rideId: String,
         payload: ByteArray,
-    ): SendResult = withContext(Dispatchers.IO) { deliver(rideId, payload) }
+    ): SendResult = withContext(Dispatchers.IO) { deliver(payload) }
 
     /** Performs the blocking request; extracted so [sendRide] only switches context. */
-    private fun deliver(
-        rideId: String,
-        payload: ByteArray,
-    ): SendResult {
+    private fun deliver(payload: ByteArray): SendResult {
         if (endpointValidationError(config.endpoint) != null) {
             return SendResult(success = false, errorMessage = INVALID_CONFIGURATION_MESSAGE)
         }
         val timestamp = nowSeconds()
         return try {
-            deliverSigned(rideId, payload, timestamp, hmacSigner.sign(timestamp, payload))
+            deliverSigned(payload, timestamp, hmacSigner.sign(timestamp, payload))
         } catch (expected: HmacSecretMissingException) {
             // Sync is opt-in and the secret is user-provisioned; a missing
             // secret is a configuration state, not a transport failure. It is
@@ -77,7 +78,6 @@ class HttpHermesSender(
     }
 
     private fun deliverSigned(
-        rideId: String,
         payload: ByteArray,
         timestamp: Long,
         signature: String,
@@ -97,7 +97,6 @@ class HttpHermesSender(
             http.setRequestProperty(HEADER_CONTENT_TYPE, CONTENT_TYPE_JSON)
             http.setRequestProperty(HEADER_TIMESTAMP, timestamp.toString())
             http.setRequestProperty(HEADER_SIGNATURE, signature)
-            http.setRequestProperty(HEADER_RIDE_ID, rideId)
             http.outputStream.use { it.write(payload) }
             val responseCode = http.responseCode
             drainAndClose(http, responseCode)
@@ -151,7 +150,6 @@ class HttpHermesSender(
         const val HEADER_CONTENT_TYPE = "Content-Type"
         const val HEADER_TIMESTAMP = "X-Webhook-Timestamp"
         const val HEADER_SIGNATURE = "X-Webhook-Signature-V2"
-        const val HEADER_RIDE_ID = "X-Ride-Id"
         const val CONTENT_TYPE_JSON = "application/json; charset=utf-8"
         const val HTTP_SUCCESS_MIN = 200
         const val HTTP_SUCCESS_MAX = 299

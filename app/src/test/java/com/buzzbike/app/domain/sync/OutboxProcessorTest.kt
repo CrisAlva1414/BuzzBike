@@ -158,16 +158,117 @@ class OutboxProcessorTest {
             assertTrue(sender.rideIds.isEmpty())
         }
 
+    @Test
+    fun given_elevenRows_when_process_then_drainsAllBatchesAndSendsEachOnce() =
+        runTest {
+            val items = (1..11).map { item("id-$it") }
+            val store = FakeOutboxStore(items = items)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, sender = sender, batchSize = 10)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.Sent(11), outcome)
+            assertEquals(11, sender.rideIds.size)
+            assertEquals(11, store.sentIds.size)
+            assertEquals(3, store.getPendingCalls)
+        }
+
+    @Test
+    fun given_twentyFiveRows_when_process_then_allAreSent() =
+        runTest {
+            val items = (1..25).map { item("id-$it") }
+            val store = FakeOutboxStore(items = items)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, sender = sender, batchSize = 10)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.Sent(25), outcome)
+            assertEquals(25, sender.rideIds.size)
+            assertEquals(25, store.sentIds.size)
+        }
+
+    @Test
+    fun given_oneFailure_when_process_then_partialAndFailedRowNotRetriedInSameRun() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B), item(ID_C)))
+            val sender =
+                FakeHermesSender { rideId ->
+                    if (rideId == rideIdOf(ID_B)) {
+                        SendResult(success = false, errorMessage = HTTP_ERROR)
+                    } else {
+                        SendResult(success = true)
+                    }
+                }
+            val processor = processor(store = store, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.Partial(sent = 2, failed = 1), outcome)
+            assertEquals(listOf(rideIdOf(ID_A), rideIdOf(ID_B), rideIdOf(ID_C)), sender.rideIds)
+            val failed = store.failedMarks.single()
+            assertEquals(ID_B, failed.id)
+            assertTrue(failed.nextAttemptAtMillis > NOW_MILLIS)
+        }
+
+    @Test
+    fun given_drainFinishes_when_process_then_purgesSentAndStaleFailures() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A)))
+            val processor = processor(store = store)
+
+            processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(1, store.deleteSentCalls)
+            assertEquals(listOf(NOW_MILLIS - SEVEN_DAYS_MILLIS), store.deleteFailedCutoffs)
+        }
+
+    @Test
+    fun given_maxBatchesReachedWithRowsLeft_when_process_then_morePending() =
+        runTest {
+            val items = (1..15).map { item("id-$it") }
+            val store = FakeOutboxStore(items = items)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, sender = sender, batchSize = 10, maxBatches = 1)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.MorePending, outcome)
+            assertEquals(10, sender.rideIds.size)
+        }
+
+    @Test
+    fun given_storeReturnsSameBatchWithoutProgress_when_process_then_stopsInsteadOfLooping() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)), repeatBatch = true)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.Sent(2), outcome)
+            assertEquals(2, sender.rideIds.size)
+            assertEquals(2, store.getPendingCalls)
+        }
+
     private fun processor(
         store: OutboxStore,
         connectivity: ConnectivityChecker = FakeConnectivityChecker(Reachability.Available),
         sender: HermesSender = FakeHermesSender(),
+        batchSize: Int = DEFAULT_BATCH_SIZE,
+        maxBatches: Int = DEFAULT_MAX_BATCHES,
     ): OutboxProcessor =
         OutboxProcessor(
             store = store,
             connectivity = connectivity,
             sender = sender,
             clock = { NOW_MILLIS },
+            config =
+                OutboxProcessorConfig(
+                    batchSize = batchSize,
+                    maxBatches = maxBatches,
+                ),
         )
 
     private fun item(
@@ -189,28 +290,49 @@ class OutboxProcessorTest {
         const val NOW_MILLIS = 1_000_000L
         const val ID_A = "a"
         const val ID_B = "b"
+        const val ID_C = "c"
         const val MAX_ATTEMPTS = 5
+        const val DEFAULT_BATCH_SIZE = 10
+        const val DEFAULT_MAX_BATCHES = 100
         const val SECOND_ATTEMPT_DELAY_MILLIS = 120_000L
+        const val SEVEN_DAYS_MILLIS = 7L * 24 * 60 * 60 * 1000
         const val HTTP_ERROR = "HTTP 503"
         const val SENDER_ERROR = "boom"
     }
 }
 
-/** In-memory [OutboxStore] that records every state transition. */
+/**
+ * In-memory [OutboxStore] that records every state transition.
+ *
+ * [repeatBatch] models a misbehaving store that never applies progress, so
+ * tests can prove the processor's no-progress guard. Otherwise sent rows are
+ * removed and failed rows honor their backoff deadline.
+ */
 private class FakeOutboxStore(
-    private val items: List<OutboxItem>,
+    items: List<OutboxItem>,
+    private val repeatBatch: Boolean = false,
 ) : OutboxStore {
+    private val initialItems = items
+    private val remaining = items.associateByTo(LinkedHashMap(), OutboxItem::id)
+    private val nextAttemptAt = items.associate { it.id to Long.MIN_VALUE }.toMutableMap()
+
     var getPendingCalls: Int = 0
+        private set
+    var deleteSentCalls: Int = 0
         private set
     val sentIds: MutableList<String> = mutableListOf()
     val failedMarks: MutableList<FailedMark> = mutableListOf()
+    val deleteFailedCutoffs: MutableList<Long> = mutableListOf()
 
     override suspend fun getPending(
         nowMillis: Long,
         limit: Int,
     ): List<OutboxItem> {
         getPendingCalls++
-        return items.take(limit)
+        if (repeatBatch) return initialItems.take(limit)
+        return remaining.values
+            .filter { nextAttemptAt[it.id] ?: Long.MIN_VALUE <= nowMillis }
+            .take(limit)
     }
 
     override suspend fun markSent(
@@ -218,6 +340,7 @@ private class FakeOutboxStore(
         nowMillis: Long,
     ) {
         sentIds += id
+        remaining.remove(id)
     }
 
     override suspend fun markFailed(
@@ -227,6 +350,18 @@ private class FakeOutboxStore(
         nextAttemptAtMillis: Long,
     ) {
         failedMarks += FailedMark(id, error, nowMillis, nextAttemptAtMillis)
+        nextAttemptAt[id] = nextAttemptAtMillis
+    }
+
+    override suspend fun deleteSent() {
+        deleteSentCalls++
+        if (!repeatBatch) {
+            sentIds.forEach { remaining.remove(it) }
+        }
+    }
+
+    override suspend fun deleteFailedOlderThan(cutoffMillis: Long) {
+        deleteFailedCutoffs += cutoffMillis
     }
 }
 

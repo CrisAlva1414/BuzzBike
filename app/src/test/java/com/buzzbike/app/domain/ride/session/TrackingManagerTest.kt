@@ -240,6 +240,8 @@ class TrackingManagerTest {
 
         override suspend fun deleteSent() = Unit
 
+        override suspend fun deleteFailedOlderThan(cutoff: Long) = Unit
+
         override suspend fun countPending(): Int = 0
     }
 

@@ -74,7 +74,9 @@ Toda petición autenticada (health check y envío de ride) lleva:
 | `X-Webhook-Timestamp` | Epoch Unix en **segundos** (decimal, sin milisegundos) |
 | `X-Webhook-Signature-V2` | HMAC-SHA256 en **hex minúsculas** sobre `"<timestamp>.<body>"` |
 | `Content-Type` | `application/json` en el envío de ride (el health check no envía body) |
-| `X-Ride-Id` | Identificador del ride en el envío (ayuda a deduplicar en el receptor) |
+
+El `rideId` **no viaja en un header**: va dentro del body firmado (§5). El
+receptor debe deduplicar por `rideId` del body, no por un header no firmado.
 
 Detalle de la firma:
 
@@ -195,9 +197,11 @@ Ejemplo mínimo:
   lote continúa.
 - El health check no disponible deja las filas intactas: no cuenta como
   intento de entrega, solo pospone el drenaje.
-- **Dedupe por `rideId`:** un mismo ride no genera dos filas pendientes
-  simultáneas. Reintentos manuales reutilizan la fila existente o crean una
-  nueva solo si la anterior falló de forma permanente.
+- **Dedupe por `rideId` del body firmado:** un mismo ride no genera dos filas
+  pendientes simultáneas. El receptor también idempotencia por el `rideId` que
+  viene dentro del body firmado, nunca por un header. Reintentos manuales
+  reutilizan la fila existente o crean una nueva solo si la anterior falló de
+  forma permanente.
 - Errores de configuración (falta de secreto, URL inválida) son terminales:
   no se reintentan hasta que el usuario corrija la configuración.
 
@@ -276,7 +280,7 @@ def ride(request):
     if not verify(request, SECRET, body):
         return Response(status=401)
     payload = json.loads(body)
-    save_once(payload["rideId"], payload)  # idempotencia por rideId
+    save_once(payload["rideId"], payload)  # idempotencia por rideId del body firmado
     return Response(status=204)
 ```
 

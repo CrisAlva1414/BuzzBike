@@ -228,6 +228,38 @@ class OutboxDaoTest {
         }
 
     @Test
+    fun given_oldAndRecentFailures_when_deleteFailedOlderThan_then_onlyOldFailedAreDeleted() =
+        runTest {
+            dao.insert(
+                outbox(
+                    id = "old-failed",
+                    status = OutboxEntity.STATUS_FAILED,
+                    createdAt = NOW,
+                    nextAttemptAt = NOW,
+                ).copy(updatedAt = NOW - 1),
+            )
+            dao.insert(
+                outbox(
+                    id = "recent-failed",
+                    status = OutboxEntity.STATUS_FAILED,
+                    createdAt = NOW,
+                    nextAttemptAt = NOW,
+                ).copy(updatedAt = NOW),
+            )
+            dao.insert(
+                outbox(id = "pending", createdAt = NOW, nextAttemptAt = NOW)
+                    .copy(updatedAt = NOW - 1),
+            )
+
+            dao.deleteFailedOlderThan(cutoff = NOW)
+
+            assertEquals(2, countAllRows())
+            assertEquals(null, readColumn("old-failed", "status"))
+            assertEquals(OutboxEntity.STATUS_FAILED, readColumn("recent-failed", "status"))
+            assertEquals(OutboxEntity.STATUS_PENDING, readColumn("pending", "status"))
+        }
+
+    @Test
     fun given_mixedRows_when_countPending_then_countsOnlyPending() =
         runTest {
             dao.insert(outbox(id = "pending-1", createdAt = NOW, nextAttemptAt = NOW))

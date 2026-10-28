@@ -70,6 +70,14 @@ interface OutboxDao {
     suspend fun deleteSent()
 
     /**
+     * Deletes exhausted failures whose last update is strictly before
+     * [cutoff]. Pending rows are deliberately excluded: an old `updatedAt`
+     * there only means a long backoff, not garbage to collect.
+     */
+    @Query("DELETE FROM outbox WHERE status = 'FAILED' AND updatedAt < :cutoff")
+    suspend fun deleteFailedOlderThan(cutoff: Long)
+
+    /**
      * Counts every row still scheduled for delivery, including rows waiting
      * out a backoff window. Exhausted `FAILED` rows are deliberately excluded:
      * this is a "pending workload" gauge, not an "immediately eligible" one

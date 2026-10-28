@@ -40,6 +40,14 @@ class RoomOutboxStore
         ) {
             outboxDao.markFailed(id, error, nowMillis, nextAttemptAtMillis)
         }
+
+        override suspend fun deleteSent() {
+            outboxDao.deleteSent()
+        }
+
+        override suspend fun deleteFailedOlderThan(cutoffMillis: Long) {
+            outboxDao.deleteFailedOlderThan(cutoffMillis)
+        }
     }
 
 private fun OutboxEntity.toOutboxItem(): OutboxItem =

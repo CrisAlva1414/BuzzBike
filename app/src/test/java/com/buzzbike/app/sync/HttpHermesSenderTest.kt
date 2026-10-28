@@ -45,12 +45,13 @@ import javax.net.ssl.TrustManagerFactory
  *
  * HTTPS is mandatory now, so the tests use a throwaway self-signed test
  * keystore (no production material) and trust it only for the duration of each
- * test. They pin ADR-003's wire contract: the request carries
+ * test. They pin the wire contract: the request carries
  * `X-Webhook-Signature-V2` = hex HMAC-SHA256 over `"<timestamp>." + body`,
- * plus the matching `X-Webhook-Timestamp` and `X-Ride-Id`. The expected
- * signature is computed independently with [Mac], never by the signer under
- * test. They also pin the delivery success rule (any 2xx), the refusal to
- * follow redirects, endpoint validation before connecting, config-driven
+ * plus the matching `X-Webhook-Timestamp`. The ride id is not a header — it
+ * travels inside the signed body. The expected signature is computed
+ * independently with [Mac], never by the signer under test. They also pin the
+ * delivery success rule (any 2xx), the refusal to follow redirects, endpoint
+ * validation before connecting, config-driven
  * timeouts with a 1 s floor, and the promise that network failures return a
  * [com.buzzbike.app.domain.sync.SendResult] instead of throwing.
  */
@@ -73,7 +74,7 @@ class HttpHermesSenderTest {
     }
 
     @Test
-    fun given_serverReturns200_when_sendRide_then_successAndSignedRequest() =
+    fun given_serverReturns200_when_sendRide_then_successAndSignedRequestWithoutRideIdHeader() =
         runTest {
             val captured = AtomicReference<CapturedRequest>()
             val server =
@@ -99,7 +100,7 @@ class HttpHermesSenderTest {
             assertEquals(CONTENT_TYPE_JSON, request.contentType)
             assertEquals(TIMESTAMP.toString(), request.timestamp)
             assertEquals(expectedSignature(TIMESTAMP, PAYLOAD), request.signature)
-            assertEquals(RIDE_ID, request.rideId)
+            assertNull(request.rideId)
             assertArrayEquals(PAYLOAD, request.body)
         }
 

@@ -4,12 +4,12 @@ import kotlinx.coroutines.CancellationException
 
 /** Result of one [OutboxProcessor.process] run. */
 sealed interface ProcessOutcome {
-    /** Every pending row in the batch was delivered. */
+    /** Every eligible row was delivered across all drained batches. */
     data class Sent(
         val count: Int,
     ) : ProcessOutcome
 
-    /** The batch mixed successful and failed deliveries. */
+    /** The run mixed successful and failed deliveries. */
     data class Partial(
         val sent: Int,
         val failed: Int,
@@ -23,21 +23,60 @@ sealed interface ProcessOutcome {
 
     /** The health check URL is missing; rows are untouched. */
     data object ConfigurationError : ProcessOutcome
+
+    /**
+     * The drain reached [OutboxProcessorConfig.maxBatches] and at least one row
+     * is still eligible. The caller should schedule another pass instead of
+     * treating the run as finished.
+     */
+    data object MorePending : ProcessOutcome
 }
 
+private const val DEFAULT_BATCH_SIZE = 10
+private const val MAX_BATCHES = 100
+
+/** Exhausted failures are kept for 7 days before being purged. */
+private const val FAILED_RETENTION_MILLIS = 7L * 24 * 60 * 60 * 1000
+
 /**
- * Processes one batch of the sync outbox.
+ * Tuning knobs for [OutboxProcessor]. Defaults preserve the original behavior.
+ *
+ * @property batchSize Maximum rows read from the store per batch.
+ * @property maxBatches Maximum number of batches drained in one run before
+ * reporting [ProcessOutcome.MorePending].
+ * @property failedRetentionMillis How long exhausted failures are kept before
+ * being purged.
+ */
+data class OutboxProcessorConfig(
+    val batchSize: Int = DEFAULT_BATCH_SIZE,
+    val maxBatches: Int = MAX_BATCHES,
+    val failedRetentionMillis: Long = FAILED_RETENTION_MILLIS,
+)
+
+/**
+ * Drains the sync outbox batch after batch until nothing eligible remains.
  *
  * Order is deliberate and fail-closed:
  * 1. A blank [process] URL is a configuration error — nothing is touched.
  * 2. The backend must answer the authenticated health check with HTTP 200
  *    exactly. [Reachability.Misconfigured] (missing secret or malformed URL)
  *    is terminal; [Reachability.Unavailable] leaves rows pending for a retry.
- * 3. Only then are due rows read and delivered.
+ * 3. Only then are due rows read and delivered, repeating until the eligible
+ *    queue is empty.
  *
- * Delivery failures never abort the batch: each row is marked failed (with
- * its own backoff deadline) or sent, and processing continues with the rest.
+ * Delivery failures never abort a batch: each row is marked failed (with its
+ * own backoff deadline) or sent, and processing continues with the rest.
  * [CancellationException] is the only exception allowed to escape.
+ *
+ * Two loop guards keep a misbehaving store from spinning forever: the run
+ * stops after [OutboxProcessorConfig.maxBatches] batches, and it stops as soon
+ * as a batch repeats the exact same ids as the previous one (no progress). A
+ * new `now` is read before every batch so a row scheduled with a fresh backoff
+ * deadline is not immediately retried in the same run.
+ *
+ * After the drain (with or without failures) delivered rows and exhausted
+ * failures older than [OutboxProcessorConfig.failedRetentionMillis] are purged.
+ * `PENDING` rows are never purged.
  */
 class OutboxProcessor(
     private val store: OutboxStore,
@@ -45,10 +84,10 @@ class OutboxProcessor(
     private val sender: HermesSender,
     private val backoff: BackoffPolicy = ExponentialBackoff(),
     private val clock: () -> Long = System::currentTimeMillis,
-    private val batchSize: Int = DEFAULT_BATCH_SIZE,
+    private val config: OutboxProcessorConfig = OutboxProcessorConfig(),
 ) {
     /**
-     * Runs one outbox pass.
+     * Drains every eligible outbox row.
      *
      * [hmacKeyConfigured] is forwarded to the connectivity port: the health
      * check is authenticated, so a missing secret is a configuration error
@@ -62,25 +101,64 @@ class OutboxProcessor(
         return when (connectivity.check(healthCheckUrl, hmacKeyConfigured)) {
             Reachability.Misconfigured -> ProcessOutcome.ConfigurationError
             Reachability.Unavailable -> ProcessOutcome.BackendUnavailable
-            Reachability.Available -> processPending()
+            Reachability.Available -> drain()
         }
     }
 
-    private suspend fun processPending(): ProcessOutcome {
-        val now = clock()
-        val pending = store.getPending(now, batchSize)
-        if (pending.isEmpty()) return ProcessOutcome.NoPending
+    private suspend fun drain(): ProcessOutcome {
+        var totalSent = 0
+        var totalFailed = 0
+        var batches = 0
+        var previousIds: List<String>? = null
+        var drained = false
 
-        var sent = 0
-        var failed = 0
-        for (item in pending) {
-            if (deliver(item, now)) {
-                sent++
-            } else {
-                failed++
+        while (batches < config.maxBatches) {
+            val now = clock()
+            val pending = store.getPending(now, config.batchSize)
+            val ids = pending.map(OutboxItem::id)
+            // Either the queue is empty, or the same rows came back without
+            // any state change: more iterations would spin forever.
+            if (pending.isEmpty() || ids == previousIds) {
+                purge(now)
+                drained = true
+                break
             }
+            previousIds = ids
+
+            for (item in pending) {
+                if (deliver(item, now)) {
+                    totalSent++
+                } else {
+                    totalFailed++
+                }
+            }
+            batches++
         }
-        return if (failed == 0) ProcessOutcome.Sent(sent) else ProcessOutcome.Partial(sent, failed)
+
+        return if (drained) {
+            outcome(totalSent, totalFailed)
+        } else {
+            val now = clock()
+            purge(now)
+            val stillEligible = store.getPending(now, ELIGIBILITY_PROBE_LIMIT).isNotEmpty()
+            if (stillEligible) ProcessOutcome.MorePending else outcome(totalSent, totalFailed)
+        }
+    }
+
+    private fun outcome(
+        sent: Int,
+        failed: Int,
+    ): ProcessOutcome =
+        when {
+            failed > 0 -> ProcessOutcome.Partial(sent = sent, failed = failed)
+            sent > 0 -> ProcessOutcome.Sent(count = sent)
+            else -> ProcessOutcome.NoPending
+        }
+
+    /** Removes delivered rows and stale exhausted failures; never pending rows. */
+    private suspend fun purge(nowMillis: Long) {
+        store.deleteSent()
+        store.deleteFailedOlderThan(nowMillis - config.failedRetentionMillis)
     }
 
     private suspend fun deliver(
@@ -117,7 +195,7 @@ class OutboxProcessor(
     }
 
     private companion object {
-        const val DEFAULT_BATCH_SIZE = 10
+        const val ELIGIBILITY_PROBE_LIMIT = 1
         const val SEND_FAILED_MESSAGE = "send failed"
     }
 }

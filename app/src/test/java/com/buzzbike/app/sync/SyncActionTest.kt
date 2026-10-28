@@ -32,6 +32,11 @@ class SyncActionTest {
     }
 
     @Test
+    fun given_morePendingOutcome_when_toSyncAction_then_retry() {
+        assertEquals(SyncAction.RETRY, ProcessOutcome.MorePending.toSyncAction())
+    }
+
+    @Test
     fun given_backendUnavailableOutcome_when_toSyncAction_then_retry() {
         assertEquals(SyncAction.RETRY, ProcessOutcome.BackendUnavailable.toSyncAction())
     }

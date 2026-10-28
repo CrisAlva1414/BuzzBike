@@ -49,4 +49,18 @@ interface OutboxStore {
         nowMillis: Long,
         nextAttemptAtMillis: Long,
     )
+
+    /**
+     * Deletes every row that reached `SENT`.
+     *
+     * Called after a drain so delivered payloads (including waypoints) do not
+     * stay on disk forever.
+     */
+    suspend fun deleteSent()
+
+    /**
+     * Deletes exhausted `FAILED` rows whose last update is strictly older than
+     * [cutoffMillis]. `PENDING` rows are never touched.
+     */
+    suspend fun deleteFailedOlderThan(cutoffMillis: Long)
 }
