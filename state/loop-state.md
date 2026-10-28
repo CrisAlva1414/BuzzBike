@@ -328,3 +328,37 @@ Implementar ADR-006: fusión barómetro + GPS/DEM, histéresis, guardia de ascen
 
 ### Próximo
 Slice C: energía (ADR-001) — MET sample-a-sample, perfil opcional, bandas de incertidumbre.
+
+---
+
+## Iteration 4 — 2026-10-27 — Domain slice C: calorías
+
+### Tarea
+Implementar ADR-001: cascada MET sample-a-sample, perfil opcional, incertidumbre.
+
+### Resultado
+| Comando | Exit |
+|---|---|
+| test | 0 (49 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Archivos
+- `domain/calories/CalorieModels.kt`, `MetTable.kt`, `CalorieCalculator.kt`
+- `test/domain/calories/CalorieCalculatorTest.kt` (5 tests)
+
+### Decisiones
+- MET bruto sample-a-sample; paradas a 1.0 MET.
+- Sin perfil: 70 kg asumido, incertidumbre ±30–40%.
+- Con perfil: ±20–30%.
+- Hueco 19–20 mph sin banda → tratado como parada.
+- 01050 marcado como ESTIMADO.
+
+### Pendiente
+- Suavizado de velocidad 10–30s antes de clasificar banda.
+- Keytel/ACSM para sensores futuros.
+- UI para mostrar rango/modelo/inputs.
+
+### Próximo
+Integración con sensores/UI o tests de integración.
