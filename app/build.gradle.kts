@@ -137,6 +137,9 @@ dependencies {
 
     implementation(libs.coroutines.android)
 
+    // WorkManager — background outbox sync gated on network availability.
+    implementation(libs.androidx.work.runtime.ktx)
+
     // MapLibre — declared for slice 3+ (maps); not referenced in code yet.
     implementation(libs.maplibre.android.sdk)
 

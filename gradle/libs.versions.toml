@@ -38,6 +38,7 @@ playServicesLocation = "21.3.0"
 hiltNavigationCompose = "1.4.0"
 robolectric = "4.16.1"        # JVM Room/DAO tests without a device
 androidxTestCore = "1.7.0"    # ApplicationProvider for Robolectric
+workManager = "2.10.5"        # background outbox sync with network constraint
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -63,6 +64,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

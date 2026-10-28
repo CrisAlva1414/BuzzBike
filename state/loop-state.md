@@ -792,3 +792,37 @@ Transporte HTTP real del puerto HermesSender con headers HMAC ADR-003.
 
 ### Próximo paso
 Slice 3.2.4c: HermesWorker (WorkManager) + scheduler con constraints de red.
+
+---
+
+## Iteration 17 — 2026-10-27 — Slice 3.2.4c: HermesWorker + Scheduler (COMPLETADO)
+
+### Tarea
+Worker de WorkManager que ejecuta OutboxProcessor con constraint de red y scheduler para encolarlo.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (136 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- WorkManager 2.10.5 (`work-runtime-ktx`) en catálogo y build.
+- `sync/HermesConfigCodec.kt` — encode/decode puro a Map.
+- `sync/SyncAction.kt` — mapeo ProcessOutcome → SUCCESS/RETRY/FAILURE.
+- `sync/HermesWorkerEntryPoint.kt` — accessors Hilt para worker.
+- `sync/HermesWorker.kt` — CoroutineWorker: decode config → sender real → OutboxProcessor → Result.
+- `sync/HermesSyncScheduler.kt` — unique work KEEP, CONNECTED, backoff exponencial 30 s.
+- `di/SyncModule.kt` — providers ConnectivityChecker y OutboxStore.
+- Tests: HermesConfigCodecTest (7), SyncActionTest (5).
+
+### Decisiones
+- Worker no loguea payloads ni URLs.
+- `healthCheckUrl` null se codifica "" y vuelve a null (round-trip).
+- Worker/scheduler no se testean en JVM (requieren Android); documentado.
+
+### Próximo paso
+Slice 3.2.5: integración con RideSessionManager (al detener ride, serializar y encolar en outbox si sync habilitado).
