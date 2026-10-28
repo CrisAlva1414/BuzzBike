@@ -11,6 +11,13 @@ import java.net.URL
  * considered misconfigured until the user provides a dedicated health endpoint
  * (there is no fallback to [endpoint]). The domain validates format only and
  * never opens a connection.
+ *
+ * @property retryCount Number of delivery attempts granted to each outbox row
+ *   (`maxAttempts`). Values below 1 are coerced to 1 by the enqueue path so a
+ *   ride always gets at least one attempt.
+ * @property senderType Semantic receiver contract ([SenderType]), not a
+ *   transport switch: both modes use `POST` over HTTPS with the same HMAC
+ *   headers (see `docs/sync-contract.md` §1).
  */
 data class HermesConfig(
     val endpoint: String,
@@ -47,7 +54,15 @@ data class HermesConfig(
     }
 }
 
-/** Transport used to reach the Hermes Agent. */
+/**
+ * Semantic receiver contract, **not** a transport difference.
+ *
+ * Both values produce the same wire behaviour: `POST` over HTTPS with the
+ * `X-Webhook-Timestamp` / `X-Webhook-Signature-V2` HMAC headers. The value only
+ * tells the receiver which route/contract to expect, so it never changes the
+ * headers or the signing input. Kept as an enum so the intent stays explicit
+ * and future receiver contracts (if any) have a place to live.
+ */
 enum class SenderType {
     WEBHOOK,
     REST,
@@ -61,7 +76,10 @@ private const val HTTPS_SCHEME = "https"
  * Rules (same for the send endpoint and the dedicated health-check URL):
  * - scheme must be `https`; cleartext `http` is rejected (AGENTS.md §7);
  * - a host must be present;
- * - userinfo (`user:pass@`) is rejected so credentials never hide in a URL.
+ * - userinfo (`user:pass@`) is rejected so credentials never hide in a URL;
+ * - query strings (`?token=...`) and fragments (`#...`) are rejected: the
+ *   sync endpoints do not need them, and keeping the URL clean prevents a
+ *   token from being persisted in `WorkManager` input data.
  *
  * Private ranges and CGNAT are deliberately **not** rejected: the supported
  * deployment reaches the NAS over Tailscale, which uses `100.64.0.0/10`
@@ -91,6 +109,8 @@ private fun urlValidationError(
                 "$label protocol must be https"
             url.host.isNullOrBlank() -> "$label must include a host"
             !url.userInfo.isNullOrBlank() -> "$label must not include user info"
+            url.query != null -> "$label must not include a query string"
+            url.ref != null -> "$label must not include a fragment"
             else -> null
         }
     } catch (ignored: MalformedURLException) {

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    BuzzBike — AndroidManifest (slice 1: build scaffold)
+    BuzzBike — AndroidManifest
 
-    Permisos declarativos para slices futuros (3+). NINGÚN servicio,
-    receiver ni provider está implementado todavía — solo la declaración
-    para que el scaffold compile y el runtime esté listo.
+    Solo se declaran los permisos que la app usa hoy. Los permisos de
+    features futuras (background location, activity recognition, BLE,
+    health FGS, sensores de alta frecuencia) se agregan recién cuando la
+    feature exista, para no ampliar la superficie de permisos sin código
+    que los justifique.
 
     PRIVACY (AGENTS.md §7): local-first, nada sale del dispositivo sin
     acción explícita del usuario. No hay analytics, ni cuentas, ni
@@ -14,30 +16,14 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Location — trackeo de rides (slice 3+).
-        FINE + COARSE: GPS del teléfono. BACKGROUND: necesario para
-        trackear con la app en background / pantalla apagada.
+        Location — trackeo de rides.
+        FINE + COARSE: GPS del teléfono. El trackeo continuo se hace con
+        un foreground service type=location; ACCESS_BACKGROUND_LOCATION se
+        agregará recién si se implementa trackeo con la app realmente en
+        background.
     -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!--
-        ACCESS_BACKGROUND_LOCATION:
-        - API 29+ (Android 10): permiso separado, el usuario lo concede
-          desde Settings > Location > App permissions > "Allow all the time".
-        - API 26–28 (minSdk): el background location estaba implícito en
-          ACCESS_FINE_LOCATION + foreground service; no había permiso
-          dedicado. Declararlo igual no rompe nada en API < 29 (se ignora).
-        - NO lleva maxSdkVersion: lo necesitamos en todos los niveles donde
-          exista el permiso dedicado (29+). Un maxSdkVersion artificial
-          rompería el trackeo en background en Android 10+.
-    -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-
-    <!--
-        Activity recognition — detección de movimiento/cadencia (slice futuro).
-        API 29+. En API < 29 el sensor de actividad no existe como permiso.
-    -->
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
     <!--
         Notifications — notificación del foreground service + alertas de
@@ -49,13 +35,12 @@
     <!--
         Foreground service — Android 14+ (API 34) exige un type explícito
         por permiso. FOREGROUND_SERVICE_LOCATION: tracking GPS continuo.
-        FOREGROUND_SERVICE_HEALTH: el proyecto se declara como app de
-        fitness/health tracking (AGENTS.md §1).
+        FOREGROUND_SERVICE_HEALTH se agregará si aparece una feature que
+        realmente use el type=health.
         En API < 34 estos permisos no existen; declararlos es inofensivo.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
 
     <!--
         Sync opcional a Hermes Agent (ADR-003) vía webhook sobre Tailscale.
@@ -67,26 +52,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
-        BLE — HR strap / CSC / potenciómetro (futuro, AGENTS.md §2).
-        API 31+ (Android 12): BLUETOOTH_SCAN + BLUETOOTH_CONNECT son los
-        permisos de runtime; BLUETOOTH/BLUETOOTH_ADMIN legacy se declaran
-        con maxSdkVersion=30 cuando se implemente el scan real.
-        neverForLocation: los resultados de scan NO se usan para derivar
-        ubicación — solo para descubrir periféricos BLE. Esto es una
-        declaración de intención de privacidad, no un placebo: la app no
-        va a llamar a APIs de location con datos de scan.
-    -->
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="s" />
-    <uses-permission
-        android:name="android.permission.BLUETOOTH_CONNECT"
-        tools:targetApi="s" />
-
-    <!--
         HARDWARE — la app es inútil sin GPS y no tiene sentido en tablets
-        sin sensores de ubicación. bluetooth.le es opcional (futuro).
+        sin sensores de ubicación. bluetooth.le queda opcional para el
+        futuro HR strap / CSC, pero sin permisos BLE hasta implementarlo.
     -->
     <uses-feature
         android:name="android.hardware.location.gps"

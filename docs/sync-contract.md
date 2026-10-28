@@ -13,7 +13,10 @@ actualizar ambos.
 
 ## 1. Modos de transporte
 
-BuzzBike soporta dos modos, seleccionados por `senderType`:
+`senderType` es **semántico**, no un cambio de transporte. Ambos valores usan
+el mismo wire format: `POST` sobre HTTPS con los headers HMAC de §3. El valor
+solo le indica al receptor qué ruta/contrato esperar; no cambia headers, firma
+ni body.
 
 | Modo | Uso | Endpoint |
 |---|---|---|
@@ -27,7 +30,11 @@ ejecuta y el worker termina con error de configuración.
 Requisitos comunes:
 
 - El endpoint y el health check deben ser **HTTPS**. Se rechaza `http://`
-  (tráfico en claro) y cualquier URL con `user:pass@` (userinfo).
+  (tráfico en claro).
+- La URL no puede llevar **credenciales** (`user:pass@`), **query** (`?`) ni
+  **fragment** (`#`). Los endpoints de sync no los necesitan y así se evita
+  persistir tokens en `WorkManager` inputData. La autenticación va **solo** por
+  HMAC en los headers (§3); nunca como query param ni en el path.
 - No se rechazan rangos privados ni CGNAT. Tailscale usa `100.64.0.0/10` y
   MagicDNS (`*.ts.net`); bloquearlos rompería el único despliegue soportado.
 - Sin red, los rides quedan en la outbox y se reintentan después. No se pierde
@@ -190,7 +197,8 @@ Ejemplo mínimo:
 
 ## 6. Reintentos y deduplicación
 
-- `maxAttempts` limita los intentos por fila de la outbox.
+- `retryCount` de `HermesConfig` define el `maxAttempts` de cada fila de la
+  outbox (mínimo 1). `maxAttempts` limita los intentos por fila.
 - Backoff **exponencial**: base 30 s, multiplicador 2, tope 1 h
   (`30 s → 60 s → 120 s → ... → 3600 s`).
 - Cada falla de envío actualiza `nextAttemptAtMillis` de esa fila; el resto del

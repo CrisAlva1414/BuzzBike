@@ -86,6 +86,22 @@ class RideViewModelTest {
             assertTrue(writer.savedDescriptors)
         }
 
+    @Test
+    fun given_activeSession_when_stopRideTwice_thenStopsOnlyOnce() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer)
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            viewModel.stopRide()
+            viewModel.stopRide()
+            advanceUntilIdle()
+
+            assertEquals(1, writer.stopCalls)
+            assertFalse(viewModel.uiState.value.isTracking)
+        }
+
     private fun TestScope.viewModel(writer: RecordingRideSessionWriter): RideViewModel {
         val trackingManager =
             TrackingManager(
@@ -118,6 +134,9 @@ class RideViewModelTest {
         var stoppedRideId: String? = null
             private set
 
+        var stopCalls: Int = 0
+            private set
+
         var savedDescriptors: Boolean = false
             private set
 
@@ -127,6 +146,7 @@ class RideViewModelTest {
         }
 
         override suspend fun stopRide(rideId: String) {
+            stopCalls += 1
             stoppedRideId = rideId
         }
 
@@ -165,6 +185,7 @@ class RideViewModelTest {
         override suspend fun enqueue(
             rideId: String,
             payload: ByteArray,
+            maxAttempts: Int,
         ) = Unit
     }
 

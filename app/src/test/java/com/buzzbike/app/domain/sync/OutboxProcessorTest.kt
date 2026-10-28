@@ -33,6 +33,37 @@ class OutboxProcessorTest {
         }
 
     @Test
+    fun given_httpUrl_when_process_then_configurationErrorWithoutNetwork() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A)))
+            val connectivity = FakeConnectivityChecker(Reachability.Available)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+
+            val outcome = processor.process("http://hermes.example/health", hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConfigurationError, outcome)
+            assertEquals(0, connectivity.calls)
+            assertEquals(0, store.getPendingCalls)
+            assertTrue(sender.rideIds.isEmpty())
+        }
+
+    @Test
+    fun given_httpsUrl_when_process_then_checksReachabilityAndDrains() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A)))
+            val connectivity = FakeConnectivityChecker(Reachability.Available)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.Sent(1), outcome)
+            assertEquals(1, connectivity.calls)
+            assertEquals(listOf(ID_A), store.sentIds)
+        }
+
+    @Test
     fun given_misconfiguredBackend_when_process_then_configurationErrorAndRowsPending() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))

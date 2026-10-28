@@ -10,7 +10,7 @@ import org.junit.Test
  *
  * They pin two security-sensitive decisions: there is **no** fallback from the
  * dedicated health-check URL to the send endpoint, and both URLs must be
- * HTTPS with a host and without userinfo. Tailscale CGNAT addresses and
+ * HTTPS with a host and without userinfo, query or fragment. Tailscale CGNAT addresses and
  * MagicDNS names are explicitly accepted because they are the intended
  * deployment topology (ADR-003), not because validation is lenient.
  */
@@ -49,6 +49,43 @@ class HermesConfigTest {
     @Test
     fun given_userInfoInEndpoint_when_endpointValidationError_then_error() {
         assertNotNull(endpointValidationError("https://user:pass@hermes.example/sync"))
+    }
+
+    @Test
+    fun given_queryInEndpoint_when_endpointValidationError_then_error() {
+        assertNotNull(endpointValidationError("https://hermes.example/sync?token=secret"))
+    }
+
+    @Test
+    fun given_fragmentInEndpoint_when_endpointValidationError_then_error() {
+        assertNotNull(endpointValidationError("https://hermes.example/sync#frag"))
+    }
+
+    @Test
+    fun given_cleanPathEndpoint_when_endpointValidationError_then_null() {
+        assertNull(endpointValidationError("https://hermes.example/sync"))
+    }
+
+    @Test
+    fun given_queryInHealthCheckUrl_when_healthCheckValidationError_then_error() {
+        val config =
+            HermesConfig(
+                endpoint = HTTPS_ENDPOINT,
+                healthCheckUrl = "https://hermes.example/health?token=secret",
+            )
+
+        assertNotNull(config.healthCheckValidationError())
+    }
+
+    @Test
+    fun given_fragmentInHealthCheckUrl_when_healthCheckValidationError_then_error() {
+        val config =
+            HermesConfig(
+                endpoint = HTTPS_ENDPOINT,
+                healthCheckUrl = "https://hermes.example/health#frag",
+            )
+
+        assertNotNull(config.healthCheckValidationError())
     }
 
     @Test

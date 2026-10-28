@@ -8,8 +8,17 @@ package com.buzzbike.app.domain.sync
  * persist it before returning so a worker can retry delivery later.
  */
 interface OutboxEnqueuer {
+    /**
+     * Persists [payload] for [rideId] with at most [maxAttempts] delivery
+     * attempts.
+     *
+     * Implementations must coerce [maxAttempts] to at least 1 so a ride is
+     * never enqueued with zero attempts. The default keeps callers that do not
+     * care about [HermesConfig.retryCount] working unchanged.
+     */
     suspend fun enqueue(
         rideId: String,
         payload: ByteArray,
+        maxAttempts: Int = 5,
     )
 }

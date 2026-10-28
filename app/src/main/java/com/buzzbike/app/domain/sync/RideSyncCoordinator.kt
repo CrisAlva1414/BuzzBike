@@ -28,6 +28,10 @@ sealed interface RideSyncOutcome {
  * delivered by the next worker pass — enqueue is deliberately done before
  * scheduling so a scheduling error never drops the payload.
  *
+ * [HermesConfig.retryCount] is forwarded to [OutboxEnqueuer.enqueue] as the
+ * row's `maxAttempts` (coerced to at least 1), so the user-facing retry count
+ * actually bounds delivery attempts.
+ *
  * No payload content is logged here.
  */
 class RideSyncCoordinator(
@@ -63,7 +67,11 @@ class RideSyncCoordinator(
                 RideSyncOutcome.NoData
             } else {
                 val payload = RidePayloadJson.encode(RidePayloadBuilder.build(input))
-                enqueuer.enqueue(rideId, payload)
+                enqueuer.enqueue(
+                    rideId = rideId,
+                    payload = payload,
+                    maxAttempts = config.retryCount.coerceAtLeast(1),
+                )
                 scheduler.schedule(config)
                 RideSyncOutcome.Enqueued
             }

@@ -26,8 +26,7 @@ import dagger.hilt.android.EntryPointAccessors
  * [SyncAction.RETRY] and every row stays in the outbox for a later attempt —
  * nothing is dropped.
  *
- * No payload, endpoint or signature is ever logged: the endpoint may carry
- * credentials in its query string (AGENTS.md §7).
+ * No payload, endpoint or signature is ever logged (AGENTS.md §7).
  *
  * Not unit-tested on the JVM: it needs an Android [Context] plus a real
  * WorkManager runtime. The pure pieces it delegates to ([HermesConfigCodec],

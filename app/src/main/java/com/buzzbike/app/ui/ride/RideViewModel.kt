@@ -39,6 +39,13 @@ class RideViewModel
 
         private var syncConfig: HermesConfig? = null
 
+        /**
+         * Synchronous guard against a double stop: the first tap flips it
+         * before the coroutine is launched, so a second tap in the same frame
+         * cannot stop the session (or enqueue the ride) twice.
+         */
+        private var stopInFlight = false
+
         /** Enables or disables sync for subsequent rides; `null` means off. */
         fun configureSync(config: HermesConfig?) {
             syncConfig = config
@@ -51,13 +58,19 @@ class RideViewModel
         }
 
         fun stopRide() {
+            if (!uiState.value.isTracking || stopInFlight) return
+            stopInFlight = true
             viewModelScope.launch {
-                // Capture the id before the manager clears the active state.
-                val rideId = uiState.value.activeRideId
-                rideSessionManager.stopRide()
-                val config = syncConfig
-                if (rideId != null && config != null) {
-                    rideSyncCoordinator.onRideFinished(rideId, config)
+                try {
+                    // Capture the id before the manager clears the active state.
+                    val rideId = uiState.value.activeRideId
+                    rideSessionManager.stopRide()
+                    val config = syncConfig
+                    if (rideId != null && config != null) {
+                        rideSyncCoordinator.onRideFinished(rideId, config)
+                    }
+                } finally {
+                    stopInFlight = false
                 }
             }
         }

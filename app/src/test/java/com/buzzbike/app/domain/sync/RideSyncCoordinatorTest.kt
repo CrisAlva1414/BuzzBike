@@ -71,6 +71,26 @@ class RideSyncCoordinatorTest {
         }
 
     @Test
+    fun given_retryCountInConfig_when_onRideFinished_thenEnqueuerReceivesItAsMaxAttempts() =
+        runTest {
+            val config = CONFIG.copy(retryCount = 7)
+
+            coordinator.onRideFinished(RIDE_ID, config)
+
+            assertEquals(listOf(7), enqueuer.maxAttemptsRequested)
+        }
+
+    @Test
+    fun given_zeroRetryCount_when_onRideFinished_thenCoercedToAtLeastOneAttempt() =
+        runTest {
+            val config = CONFIG.copy(retryCount = 0)
+
+            coordinator.onRideFinished(RIDE_ID, config)
+
+            assertEquals(listOf(1), enqueuer.maxAttemptsRequested)
+        }
+
+    @Test
     fun given_enqueuerFailure_when_onRideFinished_thenFailedAndNotScheduled() =
         runTest {
             val failingEnqueuer = RecordingOutboxEnqueuer(failure = IllegalStateException("outbox down"))
@@ -153,12 +173,15 @@ class RideSyncCoordinatorTest {
         private val failure: Exception? = null,
     ) : OutboxEnqueuer {
         val enqueued: MutableList<Pair<String, ByteArray>> = mutableListOf()
+        val maxAttemptsRequested: MutableList<Int> = mutableListOf()
 
         override suspend fun enqueue(
             rideId: String,
             payload: ByteArray,
+            maxAttempts: Int,
         ) {
             failure?.let { throw it }
+            maxAttemptsRequested += maxAttempts
             enqueued += rideId to payload
         }
     }

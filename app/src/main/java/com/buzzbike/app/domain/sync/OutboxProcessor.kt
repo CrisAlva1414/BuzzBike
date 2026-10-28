@@ -58,7 +58,12 @@ data class OutboxProcessorConfig(
  *
  * Order is deliberate and fail-closed:
  * 1. A blank [process] URL is a configuration error — nothing is touched.
- * 2. The backend must answer the authenticated health check with HTTP 200
+ * 2. A non-HTTPS URL is also a configuration error before any network call.
+ *    This is defence in depth: [ConnectivityChecker] implementations are
+ *    scheme-agnostic so tests can use local servers, but production sync must
+ *    never reach a cleartext endpoint (AGENTS.md §7). The URL is still
+ *    validated by [HermesConfig] at the worker boundary.
+ * 3. The backend must answer the authenticated health check with HTTP 200
  *    exactly. [Reachability.Misconfigured] (missing secret or malformed URL)
  *    is terminal; [Reachability.Unavailable] leaves rows pending for a retry.
  * 3. Only then are due rows read and delivered, repeating until the eligible
@@ -97,7 +102,9 @@ class OutboxProcessor(
         healthCheckUrl: String,
         hmacKeyConfigured: Boolean,
     ): ProcessOutcome {
-        if (healthCheckUrl.isBlank()) return ProcessOutcome.ConfigurationError
+        if (healthCheckUrl.isBlank() || !healthCheckUrl.startsWith(HTTPS_SCHEME, ignoreCase = true)) {
+            return ProcessOutcome.ConfigurationError
+        }
         return when (connectivity.check(healthCheckUrl, hmacKeyConfigured)) {
             Reachability.Misconfigured -> ProcessOutcome.ConfigurationError
             Reachability.Unavailable -> ProcessOutcome.BackendUnavailable
@@ -195,6 +202,7 @@ class OutboxProcessor(
     }
 
     private companion object {
+        const val HTTPS_SCHEME = "https://"
         const val ELIGIBILITY_PROBE_LIMIT = 1
         const val SEND_FAILED_MESSAGE = "send failed"
     }

@@ -25,6 +25,7 @@ class RoomOutboxEnqueuer
         override suspend fun enqueue(
             rideId: String,
             payload: ByteArray,
+            maxAttempts: Int,
         ) {
             val now = System.currentTimeMillis()
             outboxDao.insertIfAbsent(
@@ -33,6 +34,8 @@ class RoomOutboxEnqueuer
                     rideId = rideId,
                     payload = payload,
                     status = OutboxEntity.STATUS_PENDING,
+                    // At least one attempt, even if the config says 0.
+                    maxAttempts = maxAttempts.coerceAtLeast(1),
                     createdAt = now,
                     updatedAt = now,
                     nextAttemptAt = now,

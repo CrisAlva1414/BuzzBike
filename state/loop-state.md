@@ -1112,3 +1112,33 @@ Persistir y transportar calorías como banda de producto + modelo, nunca como n�
 
 ### Próximo paso
 R7/R8: endurecer scheme del checker y sacar credenciales del inputData; luego R9-R12.
+
+---
+
+## Iteration 26 — 2026-10-28 — H1: endurecimiento (COMPLETADO)
+
+### Tarea
+HTTPS obligatorio, URLs sin credenciales/query, permisos mínimos, stopRide idempotente, retryCount aplicado, senderType documentado, lint verde.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (232 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+
+### Cambios
+- `OutboxProcessor`: exige `https://` (defensa en profundidad) y mantiene blank → ConfigurationError.
+- `HermesConfig`: rechaza userinfo, query y fragment en endpoint/healthCheckUrl.
+- Manifest: removidos background location, activity recognition, FGS health, BLE y high sampling; quedan FINE/COARSE, FGS, FGS_LOCATION, POST_NOTIFICATIONS, INTERNET/NETWORK_STATE.
+- `RideViewModel.stopRide`: guard `stopInFlight` + test de doble stop.
+- `OutboxEnqueuer.enqueue(..., maxAttempts)`; coordinator pasa `retryCount` (coerce ≥1); test de persistencia 7/1 y dedupe.
+- `senderType` documentado como semántico.
+- `RideScreen`: locale observable (`LocalConfiguration`), lint verde.
+- Tests: 232 total (+13).
+
+### Próximo paso
+H2: BouncyCastle 1.84 (test), lockfile si es viable, limpieza de código muerto y deuda de test de Keystore; luego gate final tester+security.
