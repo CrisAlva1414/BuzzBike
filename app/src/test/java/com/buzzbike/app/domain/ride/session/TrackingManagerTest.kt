@@ -1,7 +1,9 @@
 package com.buzzbike.app.domain.ride.session
 
+import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
+import com.buzzbike.app.data.local.entity.OutboxEntity
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
 import com.buzzbike.app.data.repository.RideRepository
@@ -141,7 +143,7 @@ class TrackingManagerTest {
     ): TrackingManager =
         TrackingManager(
             locationSensor = sensor,
-            trackPointWriter = RideRepository(FakeRideDao(), dao),
+            trackPointWriter = RideRepository(FakeRideDao(), dao, FakeOutboxDao()),
             permissionChecker = permission,
             scope = backgroundScope,
         )
@@ -212,6 +214,31 @@ class TrackingManagerTest {
         override suspend fun deletePointsForRide(rideId: String) {
             inserted.removeAll { it.rideId == rideId }
         }
+    }
+
+    private class FakeOutboxDao : OutboxDao {
+        override suspend fun insert(outbox: OutboxEntity) = Unit
+
+        override suspend fun getPendingOutbox(
+            now: Long,
+            limit: Int,
+        ): List<OutboxEntity> = emptyList()
+
+        override suspend fun markSent(
+            id: String,
+            now: Long,
+        ) = Unit
+
+        override suspend fun markFailed(
+            id: String,
+            error: String,
+            now: Long,
+            nextAttempt: Long,
+        ) = Unit
+
+        override suspend fun deleteSent() = Unit
+
+        override suspend fun countPending(): Int = 0
     }
 
     private companion object {

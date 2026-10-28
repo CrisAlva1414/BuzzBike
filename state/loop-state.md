@@ -607,3 +607,38 @@ Crear interfaz HermesSender configurable con implementaciones WebhookHermesSende
 
 ### Próximo paso opcional
 Slice 3.2: WorkManager + outbox en Room + firma HMAC (pendiente aprobación humana para secretos).
+
+---
+
+## Iteration 11 — 2026-10-27 — Slice 3.2.1: OutboxEntity + OutboxDao (COMPLETADO)
+
+### Tarea
+Crear entidad OutboxEntity y DAO en Room para rides pendientes de enviar a Hermes. Base del sistema de reintento.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (88 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK generado) |
+
+### Archivos nuevos
+- `data/local/entity/OutboxEntity.kt` — entidad Room `outbox`, índices en status/createdAt/rideId
+- `data/local/dao/OutboxDao.kt` — insert, getPendingOutbox, markSent, markFailed, deleteSent, countPending
+- `test/data/local/dao/OutboxDaoTest.kt` — 9 tests Robolectric con Room in-memory
+
+### Archivos modificados
+- `data/local/AppDatabase.kt` — OutboxEntity agregada, version = 2, outboxDao()
+- `data/repository/RideRepository.kt` — OutboxDao inyectado, enqueueOutbox(rideId, payload)
+- `di/DatabaseModule.kt` — provideOutboxDao
+- `gradle/libs.versions.toml` + `app/build.gradle.kts` — Robolectric + AndroidX Test Core (test-only)
+- `test/domain/ride/session/TrackingManagerTest.kt` — FakeOutboxDao agregado (constructor de RideRepository cambió)
+
+### Observaciones (pendientes)
+- **Sin migración Room 1→2**: version bump sin Migration(1,2) crashea en dispositivos con DB v1 existente. Seguir en 3.2.2 o slice dedicado.
+- **Retry semantics gap**: markFailed pone status='FAILED', pero getPendingOutbox solo selecciona PENDING. Los fallidos nunca se reintentan. Corregir en slice siguiente (markFailed debe mantener PENDING hasta agotar maxAttempts, o getPendingOutbox debe incluir FAILED elegibles).
+
+### Próximo paso
+Slice 3.2.2: ConnectivityChecker (health check que devuelve 200 cerrado).

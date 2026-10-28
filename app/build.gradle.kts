@@ -96,6 +96,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged manifest/resources to build the
+            // in-memory Room database in JVM tests (no device required).
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
@@ -141,6 +149,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
+    // Room DAO tests run on the JVM against an in-memory database.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }
 
 detekt {

@@ -36,6 +36,8 @@ junit = "4.13.2"
 turbine = "1.2.1"
 playServicesLocation = "21.3.0"
 hiltNavigationCompose = "1.4.0"
+robolectric = "4.16.1"        # JVM Room/DAO tests without a device
+androidxTestCore = "1.7.0"    # ApplicationProvider for Robolectric
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -59,6 +61,8 @@ maplibre-android-sdk = { group = "org.maplibre.gl", name = "android-sdk", versio
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

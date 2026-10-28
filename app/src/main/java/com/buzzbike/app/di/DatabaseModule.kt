@@ -3,6 +3,7 @@ package com.buzzbike.app.di
 import android.content.Context
 import androidx.room.Room
 import com.buzzbike.app.data.local.AppDatabase
+import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
 import dagger.Module
@@ -32,4 +33,7 @@ object DatabaseModule {
 
     @Provides
     fun provideTrackPointDao(database: AppDatabase): TrackPointDao = database.trackPointDao()
+
+    @Provides
+    fun provideOutboxDao(database: AppDatabase): OutboxDao = database.outboxDao()
 }
