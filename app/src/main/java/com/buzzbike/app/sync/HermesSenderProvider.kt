@@ -8,9 +8,9 @@ import javax.inject.Inject
 /**
  * Builds the real HTTP [HermesSender] for a given [HermesConfig].
  *
- * Lives in `sync/` so the outbox worker (slice 3.2.4c) can obtain a live
- * transport without depending on [com.buzzbike.app.domain.sync.HermesSenderFactory],
- * which still returns the network-free stubs for slice 3.1.
+ * Lives in `sync/` so the outbox worker can obtain a live transport without
+ * the domain layer depending on the HTTP implementation. The former
+ * network-free stub factory was removed once the real transport shipped.
  *
  * The signer is injected once and shared: [HmacSha256Signer] is stateless and
  * fetches the key from [com.buzzbike.app.domain.sync.HmacKeyProvider] on every

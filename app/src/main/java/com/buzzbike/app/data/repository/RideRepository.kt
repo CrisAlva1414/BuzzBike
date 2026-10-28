@@ -1,9 +1,7 @@
 package com.buzzbike.app.data.repository
 
-import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
-import com.buzzbike.app.data.local.entity.OutboxEntity
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
 import com.buzzbike.app.domain.model.RideDescriptors
@@ -15,17 +13,15 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// This is the single façade for ride persistence; the outbox method pushes
-// it to 11 functions (detekt threshold: 11). Splitting the class is a larger
-// refactor deferred to the sync slice.
-@Suppress("TooManyFunctions", "LongParameterList")
+// Single façade for ride persistence. Outbox writes live in
+// RoomOutboxEnqueuer so this class stays focused on ride/track-point storage.
+@Suppress("LongParameterList")
 @Singleton
 class RideRepository
     @Inject
     constructor(
         private val rideDao: RideDao,
         private val trackPointDao: TrackPointDao,
-        private val outboxDao: OutboxDao,
     ) : TrackPointWriter,
         RideSessionWriter {
         fun getAllRides(): Flow<List<RideEntity>> = rideDao.getAllRides()
@@ -117,30 +113,5 @@ class RideRepository
         suspend fun deleteRide(rideId: String) {
             trackPointDao.deletePointsForRide(rideId)
             rideDao.deleteRide(rideId)
-        }
-
-        /**
-         * Queues a serialized ride for later delivery to Hermes.
-         *
-         * The row starts as [OutboxEntity.STATUS_PENDING] and immediately
-         * eligible for the next retry pass. The caller owns the payload
-         * format; this layer treats it as an opaque blob.
-         */
-        suspend fun enqueueOutbox(
-            rideId: String,
-            payload: ByteArray,
-        ) {
-            val now = System.currentTimeMillis()
-            outboxDao.insert(
-                OutboxEntity(
-                    id = UUID.randomUUID().toString(),
-                    rideId = rideId,
-                    payload = payload,
-                    status = OutboxEntity.STATUS_PENDING,
-                    createdAt = now,
-                    updatedAt = now,
-                    nextAttemptAt = now,
-                ),
-            )
         }
     }

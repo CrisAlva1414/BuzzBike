@@ -13,6 +13,22 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------
+// Transitive dependency pins.
+//
+// BouncyCastle 1.81 (pulled in by Robolectric's test runtime) is affected by
+// CVE-2026-5598. Force the patched 1.84 release across every configuration;
+// this is test-only surface (bcprov is not on the app classpath).
+// ---------------------------------------------------------------------------
+configurations.configureEach {
+    resolutionStrategy.force("org.bouncycastle:bcprov-jdk18on:1.84")
+}
+
+// Dependency locking — reproduce dependency graphs across machines.
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+// ---------------------------------------------------------------------------
 // Release signing — read keystore.properties ONLY if the file exists.
 // The keystore itself is gitignored (*.keystore / *.jks); never commit secrets.
 // ---------------------------------------------------------------------------

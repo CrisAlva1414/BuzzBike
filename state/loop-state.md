@@ -1142,3 +1142,36 @@ HTTPS obligatorio, URLs sin credenciales/query, permisos mínimos, stopRide idem
 
 ### Próximo paso
 H2: BouncyCastle 1.84 (test), lockfile si es viable, limpieza de código muerto y deuda de test de Keystore; luego gate final tester+security.
+
+---
+
+## Iteration 27 — 2026-10-28 — H2: cadena de suministro y limpieza (COMPLETADO)
+
+### Tarea
+BouncyCastle 1.84, eliminación de código muerto, lockfiles y documentación de deuda de instrumentación.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (221 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+
+### Cambios
+- `configurations.configureEach { resolutionStrategy.force("org.bouncycastle:bcprov-jdk18on:1.84") }` (CVE-2026-5598 test-only).
+- Eliminados `HermesSenderFactory`, `WebhookHermesSender`, `RestHermesSender` y sus 11 tests (código muerto; el real es HttpHermesSender).
+- Eliminado `RideRepository.enqueueOutbox` y su `OutboxDao` (duplicaba RoomOutboxEnqueuer).
+- KDoc de capas actualizado (DataLayer/SensorLayer/SyncLayer).
+- `docs/testing.md` con deuda de instrumentación (SQLCipher real, Keystore, Worker, FGS/permisos, Tailscale).
+- Dependency locking: `app/gradle.lockfile` + `settings-gradle.lockfile`.
+- Tests: 221 (232 − 11 de código muerto).
+
+### Notas
+- El lockfile fija bcprov 1.84; bcpkix/bcutil 1.80.2 quedan para androidLintTool (no es bcprov).
+- Lockfiles verificados con build limpio.
+
+### Próximo paso
+Gate final tester + security-reviewer sobre el diff de remediación (d4494d2..HEAD + S1-S3).
