@@ -701,3 +701,35 @@ Health check previo al envío: solo HTTP 200 exacto cuenta como backend disponib
 
 ### Próximo paso
 Slice 3.2.3: HmacSigner con Android Keystore (aprobación humana ya otorgada para el bloque 3.2).
+
+---
+
+## Iteration 14 — 2026-10-27 — Slice 3.2.3: HmacSigner + Android Keystore (COMPLETADO)
+
+### Tarea
+Firma HMAC-SHA256 de payloads de sync con secreto en Android Keystore, formato ADR-003 (`X-Webhook-Signature-V2`, hex de `<timestamp>.<body>`).
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (107 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/HmacSigner.kt` — port sign/verify (KDoc cita ADR-003).
+- `domain/sync/HmacKeyProvider.kt` — port de clave (SecretKey JDK).
+- `sync/HmacSha256Signer.kt` — HMAC-SHA256, **hex minúsculas**, verify en tiempo constante, hex inválido → false.
+- `sync/AndroidKeystoreHmacKeyProvider.kt` — AndroidKeyStore, alias `buzzbike_hmac_v1`, HMAC_SHA256, SIGN|VERIFY, sin auth de usuario (sync en background), lock de generación.
+- `di/SyncModule.kt` — providers Hilt.
+- `test/sync/HmacSha256SignerTest.kt` — 8 tests; vector RFC 4231 TC2 confirmado (`5bdcc146...c3843`).
+
+### Decisiones
+- Se corrigió Base64 → hex para compatibilidad real con Hermes/ADR-003.
+- El secreto nunca se exporta ni se loguea; `getEncoded()` no se usa sobre la clave de Keystore.
+- `sign` emite minúsculas; `verify` tolera mayúsculas.
+
+### Próximo paso
+Slice 3.2.4: HermesWorker (WorkManager) con health check 200, envío firmado, y reintento/outbox.
