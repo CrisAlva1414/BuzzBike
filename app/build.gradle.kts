@@ -132,6 +132,9 @@ dependencies {
     // MapLibre — declared for slice 3+ (maps); not referenced in code yet.
     implementation(libs.maplibre.android.sdk)
 
+    // Play Services Location
+    implementation(libs.play.services.location)
+
     // Nordic BLE (no.nordicsemi.android:ble) intentionally NOT added yet:
     // it would be a dead dependency until the wearable/sensor slice.
 
