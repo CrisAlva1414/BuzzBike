@@ -733,3 +733,34 @@ Firma HMAC-SHA256 de payloads de sync con secreto en Android Keystore, formato A
 
 ### Próximo paso
 Slice 3.2.4: HermesWorker (WorkManager) con health check 200, envío firmado, y reintento/outbox.
+
+---
+
+## Iteration 15 — 2026-10-27 — Slice 3.2.4a: OutboxProcessor (COMPLETADO)
+
+### Tarea
+Lógica pura del outbox: health check 200 → enviar pendientes → marcar enviado o reprogramar con backoff.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (118 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/OutboxStore.kt` — puerto + OutboxItem.
+- `domain/sync/BackoffPolicy.kt` — ExponentialBackoff (base 30 s, max 1 h, clamp exponente 20).
+- `domain/sync/OutboxProcessor.kt` — ProcessOutcome + flujo: ConfigurationError / BackendUnavailable / NoPending / Sent / Partial. Excepciones por ítem capturadas (CancellationException re-lanzada).
+- `data/local/RoomOutboxStore.kt` — adaptador del DAO al puerto.
+- Tests: OutboxProcessorTest (6) + ExponentialBackoffTest (5).
+
+### Decisiones
+- Si el health check no da 200, NO se toca el outbox: las filas quedan pendientes para el próximo intento.
+- Backoff exponencial con cap; no es constante fisiológica (no requiere ADR).
+- Binding Hilt OutboxStore→RoomOutboxStore pendiente hasta que exista consumidor (Worker).
+
+### Próximo paso
+Slice 3.2.4b: transporte HTTP real (HttpHermesSender con headers HMAC) y luego 3.2.4c: Worker + WorkManager.
