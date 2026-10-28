@@ -857,3 +857,36 @@ Payload de sync con data minimization (ADR-003): métricas agregadas + waypoints
 
 ### Próximo paso
 Slice 3.2.5b: coordinador + integración con RideSessionManager/ViewModel y scheduler.
+
+---
+
+## Iteration 19 — 2026-10-27 — Slice 3.2.5b: Integración sync (COMPLETADO)
+
+### Tarea
+Al detener un ride, si el sync está configurado: serializar payload, encolar en outbox y programar worker.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (157 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/RideSyncDataSource.kt`, `OutboxEnqueuer.kt`, `SyncWorkScheduler.kt` — puertos.
+- `domain/sync/RideSyncCoordinator.kt` — Disabled/NoData/Enqueued/Failed; config null no toca datos.
+- `data/repository/RideSyncDataSourceImpl.kt` — RideDao + TrackPointDao → RideSyncInput.
+- `data/local/RoomOutboxEnqueuer.kt` — inserta OutboxEntity PENDING.
+- `sync/WorkManagerSyncScheduler.kt` — delega en HermesSyncScheduler.
+- `di/SyncModule.kt` — providers de puertos + coordinador.
+- `ui/ride/RideViewModel.kt` — configureSync + envío al detener (off por defecto).
+- Tests: RideSyncCoordinatorTest (7), RideSyncDataSourceImplTest (3).
+
+### Notas
+- `stopCount`/`gapCount`/`rejectedPoints` no están en RideEntity: se envían 0 (documentado).
+- Duplicación menor: RideRepository.enqueueOutbox y RoomOutboxEnqueuer insertan lo mismo; unificar en slice posterior.
+
+### Próximo paso
+Gate final tester + security-reviewer sobre el diff de sync (9d608bb..HEAD).

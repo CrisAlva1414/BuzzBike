@@ -10,6 +10,12 @@ import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionWriter
 import com.buzzbike.app.domain.ride.session.TrackPointWriter
 import com.buzzbike.app.domain.ride.session.TrackingManager
+import com.buzzbike.app.domain.sync.HermesConfig
+import com.buzzbike.app.domain.sync.OutboxEnqueuer
+import com.buzzbike.app.domain.sync.RideSyncCoordinator
+import com.buzzbike.app.domain.sync.RideSyncDataSource
+import com.buzzbike.app.domain.sync.RideSyncInput
+import com.buzzbike.app.domain.sync.SyncWorkScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -94,7 +100,13 @@ class RideViewModelTest {
                 rideSessionWriter = writer,
                 scope = backgroundScope,
             )
-        return RideViewModel(manager)
+        val coordinator =
+            RideSyncCoordinator(
+                dataSource = UnusedRideSyncDataSource,
+                enqueuer = UnusedOutboxEnqueuer,
+                scheduler = UnusedSyncWorkScheduler,
+            )
+        return RideViewModel(manager, coordinator)
     }
 
     private class RecordingRideSessionWriter :
@@ -140,6 +152,21 @@ class RideViewModelTest {
 
     private object GrantedPermissionChecker : LocationPermissionChecker {
         override fun hasFineLocationPermission(): Boolean = true
+    }
+
+    private object UnusedRideSyncDataSource : RideSyncDataSource {
+        override suspend fun load(rideId: String): RideSyncInput? = null
+    }
+
+    private object UnusedOutboxEnqueuer : OutboxEnqueuer {
+        override suspend fun enqueue(
+            rideId: String,
+            payload: ByteArray,
+        ) = Unit
+    }
+
+    private object UnusedSyncWorkScheduler : SyncWorkScheduler {
+        override fun schedule(config: HermesConfig) = Unit
     }
 
     private companion object {
