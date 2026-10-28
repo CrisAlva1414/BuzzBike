@@ -47,7 +47,7 @@ import kotlin.math.abs
  *   simple use and is never cancelled automatically.
  */
 @Suppress("LongParameterList")
-class TrackingManager(
+open class TrackingManager(
     private val locationSensor: LocationSensorPort,
     private val trackPointWriter: TrackPointWriter,
     private val permissionChecker: LocationPermissionChecker,
@@ -59,12 +59,12 @@ class TrackingManager(
     private val _trackPoints = MutableStateFlow<List<TrackPoint>>(emptyList())
 
     /** Points accumulated during the current/last session, in arrival order. */
-    val trackPoints: Flow<List<TrackPoint>> = _trackPoints.asStateFlow()
+    open val trackPoints: Flow<List<TrackPoint>> = _trackPoints.asStateFlow()
 
     private val _elevationDescriptors = MutableStateFlow(EMPTY_ELEVATION_DESCRIPTORS)
 
     /** Latest elevation descriptors for the active elevation session. */
-    val elevationDescriptors: Flow<ElevationDescriptors> = _elevationDescriptors.asStateFlow()
+    open val elevationDescriptors: Flow<ElevationDescriptors> = _elevationDescriptors.asStateFlow()
 
     private var trackingJob: Job? = null
     private var elevationJob: Job? = null
@@ -77,7 +77,7 @@ class TrackingManager(
      * tracking is a no-op that returns `true`.
      */
     @Synchronized
-    fun startTracking(rideId: String): Boolean {
+    open fun startTracking(rideId: String): Boolean {
         if (rideId.isBlank() || !permissionChecker.hasFineLocationPermission()) {
             return false
         }
@@ -88,7 +88,7 @@ class TrackingManager(
 
     /** Stops the sensor subscription. Accumulated points are kept. */
     @Synchronized
-    fun stopTracking() {
+    open fun stopTracking() {
         trackingJob?.cancel()
         trackingJob = null
     }
@@ -102,7 +102,7 @@ class TrackingManager(
      * tracking elevation is a no-op that returns `true`.
      */
     @Synchronized
-    fun startElevationTracking(rideId: String): Boolean {
+    open fun startElevationTracking(rideId: String): Boolean {
         if (rideId.isBlank()) return false
 
         startElevationCollectionIfIdle()
@@ -111,7 +111,7 @@ class TrackingManager(
 
     /** Stops the elevation subscription. The last descriptors are kept. */
     @Synchronized
-    fun stopElevationTracking() {
+    open fun stopElevationTracking() {
         elevationJob?.cancel()
         elevationJob = null
     }

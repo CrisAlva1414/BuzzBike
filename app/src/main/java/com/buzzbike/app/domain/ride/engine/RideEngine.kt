@@ -21,13 +21,13 @@ private const val MOVING_SPEED_THRESHOLD_MPS = 0.4
  * Orchestrates domain processing: cleaning, segmentation, elevation, calories.
  */
 @Singleton
-class RideEngine
+open class RideEngine
     @Inject
     constructor() {
         private val elevationProcessor = ElevationProcessor()
         private val calorieCalculator = CalorieCalculator()
 
-        fun processRide(
+        open fun processRide(
             rawPoints: List<TrackPoint>,
             elevationSamples: List<ElevationSample> = emptyList(),
             profile: UserProfile = UserProfile(),

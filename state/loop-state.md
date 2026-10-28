@@ -498,3 +498,38 @@ Integrar PressureSensor y MotionSensor al TrackingManager para capturar lecturas
 
 ### Próximo paso
 Slice 2.1: RideSessionManager (start/stop de ride, estado en tiempo real).
+
+---
+
+## Iteration 8 — 2026-10-27 — Slice 2.1: RideSessionManager (COMPLETADO)
+
+### Tarea
+Crear RideSessionManager que coordine el ciclo de vida de un ride: iniciar sesión, recibir puntos del sensor vía TrackingManager, procesar con RideEngine, y exponer estado en tiempo real.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (65 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK generado) |
+
+### Archivos nuevos
+- `domain/ride/session/RideSessionWriter.kt` — puerto de dominio (startRide, stopRide, saveRideDescriptors)
+- `domain/ride/session/RideSessionManager.kt` — orquestador + RideSessionUiState
+- `test/domain/ride/session/RideSessionManagerTest.kt` — 4 tests JVM
+
+### Archivos modificados
+- `data/repository/RideRepository.kt` — implementa RideSessionWriter; nuevo saveRideDescriptors
+- `domain/ride/engine/RideEngine.kt` — open class / open fun processRide (para fake en tests)
+- `domain/ride/session/TrackingManager.kt` — open class, open en miembros (para fake en tests)
+
+### Decisiones
+- startRide()/stopRide() son suspend (necesario por RideSessionWriter)
+- saveRideDescriptors recibe elevación y calorías como parámetros opcionales
+- RideSessionManager recibe CoroutineScope opcional para colectar flows
+- RideEngine y TrackingManager se abrieron para permitir fakes (mismo precedente que slice 1.2)
+
+### Próximo paso
+Slice 2.2: Persistencia de descriptores finales al detener ride (ya parcialmente cubierto por saveRideDescriptors, pero necesita integración completa con RideViewModel y UI).
