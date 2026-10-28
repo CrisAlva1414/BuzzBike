@@ -10,7 +10,10 @@ import javax.inject.Singleton
 /**
  * Room-backed [OutboxEnqueuer].
  *
- * Inserts one immediately-eligible `PENDING` row. The payload stays opaque:
+ * Inserts one immediately-eligible `PENDING` row. The insert is idempotent per
+ * ride: if the ride is already in the outbox (including a row that was already
+ * sent), the insert is ignored instead of replacing it, so a duplicated
+ * `onRideFinished` cannot trigger a second delivery. The payload stays opaque:
  * this adapter never parses or logs it.
  */
 @Singleton
@@ -24,7 +27,7 @@ class RoomOutboxEnqueuer
             payload: ByteArray,
         ) {
             val now = System.currentTimeMillis()
-            outboxDao.insert(
+            outboxDao.insertIfAbsent(
                 OutboxEntity(
                     id = UUID.randomUUID().toString(),
                     rideId = rideId,

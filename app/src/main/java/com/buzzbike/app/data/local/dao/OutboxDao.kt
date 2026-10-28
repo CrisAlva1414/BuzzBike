@@ -17,6 +17,17 @@ interface OutboxDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(outbox: OutboxEntity)
 
+    /**
+     * Inserts an outbox row unless one with the same unique `rideId` already
+     * exists.
+     *
+     * Returns the new row's id, or `-1` when the insert was ignored because the
+     * ride was already enqueued. Callers use this for idempotent enqueues: an
+     * ignored insert means the ride is already queued, not a failure.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(outbox: OutboxEntity): Long
+
     @Query(
         "SELECT * FROM outbox WHERE status = 'PENDING' AND attemptCount < maxAttempts " +
             "AND nextAttemptAt <= :now ORDER BY createdAt ASC LIMIT :limit",

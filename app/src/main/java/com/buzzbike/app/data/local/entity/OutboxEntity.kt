@@ -14,10 +14,13 @@ import androidx.room.PrimaryKey
  *
  * The [payload] is an opaque serialized blob (JSON) — `data/` never
  * interprets it, it only persists and hands it to `sync/`.
+ *
+ * `rideId` is unique: a ride has at most one pending delivery, so retries must
+ * update that row instead of piling up duplicates (schema version 3).
  */
 @Entity(
     tableName = "outbox",
-    indices = [Index("status"), Index("createdAt"), Index("rideId")],
+    indices = [Index("status"), Index("createdAt"), Index(value = ["rideId"], unique = true)],
 )
 data class OutboxEntity(
     @PrimaryKey val id: String,

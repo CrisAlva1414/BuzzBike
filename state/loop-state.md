@@ -980,3 +980,36 @@ Opción A: secreto definido en el NAS, pegado en la app, sellado con AES-GCM de 
 
 ### Próximo paso
 S2: SQLCipher (DB cifrada, passphrase sellada por Keystore, limpieza de DB plana legacy).
+
+---
+
+## Iteration 22 — 2026-10-28 — S2: SQLCipher + dedupe + limpieza legacy (COMPLETADO)
+
+### Tarea
+Cifrar Room con SQLCipher 4.9.0; passphrase aleatoria sellada por Keystore; borrar DB plana legacy; dedupe por rideId.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (174 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK con libsqlcipher.so en 4 ABI) |
+
+### Cambios
+- SQLCipher 4.9.0 (`net.zetetic:sqlcipher-android`) + `System.loadLibrary("sqlcipher")` en Application.
+- `DatabasePassphraseProvider` — 32 bytes SecureRandom, sellada con SecretSealer, solo blob en SharedPreferences; corrupta → fail-closed.
+- `LegacyDatabaseCleaner` — borra `buzzbike.db` siempre que exista (aunque exista la cifrada).
+- DB `buzzbike-encrypted.db` con `SupportOpenHelperFactory`; sin destructive fallback.
+- `MIGRATION_2_3` + índice único `rideId`; dedupe conserva la fila más antigua.
+- `OutboxDao.insertIfAbsent` (IGNORE) y `RoomOutboxEnqueuer` lo usa.
+- Tests: DatabasePassphraseProviderTest, MigrationsTest v2→v3, OutboxDaoTest dedupe, cleaner.
+
+### Notas
+- La passphrase no se zeroiza: SQLCipher la retiene para reabrir la DB (documentado).
+- Pérdida de datos de la DB plana legacy aceptada por ser pre-release; documentado que una release real requiere export/import.
+- SQLCipher nativo no se testea en JVM; requiere instrumentación.
+
+### Próximo paso
+S3: health check autenticado + URL dedicada + contrato documentado (API y webhook), luego R1..R12.

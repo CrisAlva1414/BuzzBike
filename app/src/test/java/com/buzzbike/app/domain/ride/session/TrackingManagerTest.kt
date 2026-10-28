@@ -219,6 +219,8 @@ class TrackingManagerTest {
     private class FakeOutboxDao : OutboxDao {
         override suspend fun insert(outbox: OutboxEntity) = Unit
 
+        override suspend fun insertIfAbsent(outbox: OutboxEntity): Long = 1L
+
         override suspend fun getPendingOutbox(
             now: Long,
             limit: Int,

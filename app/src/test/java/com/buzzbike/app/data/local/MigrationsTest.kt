@@ -1,6 +1,7 @@
 package com.buzzbike.app.data.local
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -8,6 +9,7 @@ import com.buzzbike.app.data.local.entity.OutboxEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -16,13 +18,14 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Verifies [MIGRATION_1_2] against a real file-backed database.
+ * Verifies [MIGRATION_1_2] and [MIGRATION_2_3] against a real file-backed database.
  *
- * `room-testing` is not a project dependency, so the v1 database is created
- * with the exact SQL Room generated for the v1 entities (rides + track_points)
- * and then opened through [AppDatabase] to force the 1 -> 2 migration. Room
- * validates the resulting schema during `onUpgrade`, so a wrong migration SQL
- * fails this test with a `Migration didn't properly handle` error.
+ * `room-testing` is not a project dependency, so the source databases are
+ * created with the exact SQL Room generated for their entities (rides +
+ * track_points for v1, outbox for v2) and then opened through [AppDatabase] to
+ * force the migrations. Room validates the resulting schema during `onUpgrade`,
+ * so a wrong migration SQL fails these tests with a
+ * `Migration didn't properly handle` error.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -32,11 +35,13 @@ class MigrationsTest {
     @Before
     fun setUp() {
         context.deleteDatabase(DATABASE_NAME)
+        context.deleteDatabase(DATABASE_V2_NAME)
     }
 
     @After
     fun tearDown() {
         context.deleteDatabase(DATABASE_NAME)
+        context.deleteDatabase(DATABASE_V2_NAME)
     }
 
     @Test
@@ -47,7 +52,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .allowMainThreadQueries()
                     .build()
 
@@ -84,6 +89,45 @@ class MigrationsTest {
             }
         }
 
+    @Test
+    fun given_v2OutboxWithDuplicates_when_migratedToV3_then_keepsOldestAndEnforcesUniqueRideId() =
+        runTest {
+            createVersion2DatabaseWithDuplicateOutboxRows()
+
+            val database =
+                Room
+                    .databaseBuilder(context, AppDatabase::class.java, DATABASE_V2_NAME)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .allowMainThreadQueries()
+                    .build()
+
+            try {
+                database.openHelper.writableDatabase
+
+                val remainingIds = readStrings(database, "SELECT id FROM outbox")
+                assertEquals(3, remainingIds.size)
+                assertEquals(
+                    setOf("dup-old", "tie-first", "other"),
+                    remainingIds.toSet(),
+                )
+                assertTrue(
+                    "rideId index must be unique after migration",
+                    isUniqueIndex(database, "index_outbox_rideId"),
+                )
+
+                // The unique index must reject a second row for the same ride.
+                assertThrows(SQLiteConstraintException::class.java) {
+                    database.openHelper.writableDatabase.execSQL(
+                        "INSERT INTO outbox (id, rideId, payload, status, attemptCount, maxAttempts, " +
+                            "lastError, createdAt, updatedAt, nextAttemptAt) VALUES " +
+                            "('dup-newer', 'ride-dup', X'00', 'PENDING', 0, 5, NULL, 4000, 4000, 4000)",
+                    )
+                }
+            } finally {
+                database.close()
+            }
+        }
+
     private fun createVersion1Database() {
         val path = context.getDatabasePath(DATABASE_NAME)
         path.parentFile?.mkdirs()
@@ -98,6 +142,62 @@ class MigrationsTest {
             database.close()
         }
     }
+
+    private fun createVersion2DatabaseWithDuplicateOutboxRows() {
+        val path = context.getDatabasePath(DATABASE_V2_NAME)
+        path.parentFile?.mkdirs()
+        val database = SQLiteDatabase.openOrCreateDatabase(path, null)
+        try {
+            database.execSQL(V1_RIDES)
+            database.execSQL(V1_TRACK_POINTS)
+            database.execSQL(V1_TRACK_POINTS_RIDE_ID_INDEX)
+            database.execSQL(V1_TRACK_POINTS_TIMESTAMP_INDEX)
+            database.execSQL(V2_OUTBOX)
+            database.execSQL(V2_OUTBOX_STATUS_INDEX)
+            database.execSQL(V2_OUTBOX_CREATED_AT_INDEX)
+            database.execSQL(V2_OUTBOX_RIDE_ID_INDEX)
+
+            // Two rows with the same rideId, ordered by createdAt...
+            database.execSQL(outboxInsert(id = "dup-old", rideId = "ride-dup", createdAt = 1_000L))
+            database.execSQL(outboxInsert(id = "dup-new", rideId = "ride-dup", createdAt = 2_000L))
+            // ...and two with identical createdAt: the earlier rowid must win.
+            database.execSQL(outboxInsert(id = "tie-first", rideId = "ride-tie", createdAt = 3_000L))
+            database.execSQL(outboxInsert(id = "tie-second", rideId = "ride-tie", createdAt = 3_000L))
+            // A ride with a single row must survive untouched.
+            database.execSQL(outboxInsert(id = "other", rideId = "ride-other", createdAt = 4_000L))
+
+            database.version = 2
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun outboxInsert(
+        id: String,
+        rideId: String,
+        createdAt: Long,
+    ): String =
+        "INSERT INTO outbox (id, rideId, payload, status, attemptCount, maxAttempts, lastError, " +
+            "createdAt, updatedAt, nextAttemptAt) VALUES " +
+            "('$id', '$rideId', X'01', 'PENDING', 0, 5, NULL, $createdAt, $createdAt, $createdAt)"
+
+    private fun isUniqueIndex(
+        database: AppDatabase,
+        name: String,
+    ): Boolean =
+        database
+            .query("PRAGMA index_list(`outbox`)", null)
+            .use { cursor ->
+                val nameColumn = cursor.getColumnIndexOrThrow("name")
+                val uniqueColumn = cursor.getColumnIndexOrThrow("unique")
+                var found = false
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(nameColumn) == name) {
+                        found = cursor.getInt(uniqueColumn) == 1
+                    }
+                }
+                found
+            }
 
     private fun readStrings(
         database: AppDatabase,
@@ -115,6 +215,7 @@ class MigrationsTest {
 
     private companion object {
         const val DATABASE_NAME = "migration-1-2.db"
+        const val DATABASE_V2_NAME = "migration-2-3.db"
         const val NOW = 1_000L
         const val V1_RIDES =
             "CREATE TABLE IF NOT EXISTS `rides` (`id` TEXT NOT NULL, `startTimeMillis` INTEGER NOT NULL, " +
@@ -131,5 +232,16 @@ class MigrationsTest {
             "CREATE INDEX IF NOT EXISTS `index_track_points_rideId` ON `track_points` (`rideId`)"
         const val V1_TRACK_POINTS_TIMESTAMP_INDEX =
             "CREATE INDEX IF NOT EXISTS `index_track_points_timestampNanos` ON `track_points` (`timestampNanos`)"
+        const val V2_OUTBOX =
+            "CREATE TABLE IF NOT EXISTS `outbox` (`id` TEXT NOT NULL, `rideId` TEXT NOT NULL, " +
+                "`payload` BLOB NOT NULL, `status` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, " +
+                "`maxAttempts` INTEGER NOT NULL, `lastError` TEXT, `createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+        const val V2_OUTBOX_STATUS_INDEX =
+            "CREATE INDEX IF NOT EXISTS `index_outbox_status` ON `outbox` (`status`)"
+        const val V2_OUTBOX_CREATED_AT_INDEX =
+            "CREATE INDEX IF NOT EXISTS `index_outbox_createdAt` ON `outbox` (`createdAt`)"
+        const val V2_OUTBOX_RIDE_ID_INDEX =
+            "CREATE INDEX IF NOT EXISTS `index_outbox_rideId` ON `outbox` (`rideId`)"
     }
 }

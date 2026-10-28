@@ -135,6 +135,9 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // SQLCipher — encrypts the whole Room database at rest (S2).
+    implementation(libs.sqlcipher.android)
+
     implementation(libs.coroutines.android)
 
     // WorkManager — background outbox sync gated on network availability.

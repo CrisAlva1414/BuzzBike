@@ -269,6 +269,25 @@ class OutboxDaoTest {
             assertEquals(OutboxEntity.STATUS_SENT, readColumn("ob-1", "status"))
         }
 
+    @Test
+    fun given_sameRideId_when_insertIfAbsent_then_secondIsIgnored() =
+        runTest {
+            val first =
+                outbox(id = "ob-1", createdAt = NOW, nextAttemptAt = NOW)
+                    .copy(rideId = SHARED_RIDE_ID)
+            val second =
+                outbox(id = "ob-2", createdAt = NOW, nextAttemptAt = NOW)
+                    .copy(rideId = SHARED_RIDE_ID)
+
+            val firstRowId = dao.insertIfAbsent(first)
+            val secondRowId = dao.insertIfAbsent(second)
+
+            assertEquals(1, countAllRows())
+            assertTrue("first insert must not be ignored", firstRowId != -1L)
+            assertEquals(-1L, secondRowId)
+            assertEquals("ob-1", dao.getPendingOutbox(now = NOW, limit = 10).single().id)
+        }
+
     private fun outbox(
         id: String,
         status: String = OutboxEntity.STATUS_PENDING,
@@ -327,6 +346,7 @@ class OutboxDaoTest {
         const val UPDATED_MS = 500L
         const val BACKOFF_MS = 60_000L
         const val DEFAULT_MAX_ATTEMPTS = 5
+        const val SHARED_RIDE_ID = "ride-shared"
         val PAYLOAD = byteArrayOf(1, 2, 3)
     }
 }
