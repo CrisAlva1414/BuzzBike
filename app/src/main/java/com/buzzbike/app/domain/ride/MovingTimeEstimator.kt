@@ -29,8 +29,6 @@ private enum class MotionState { MOVING, STOPPED }
 private const val NANOS_PER_SECOND_LONG = 1_000_000_000L
 private const val T_STOP_NANOS = RideParameters.T_STOP_SECONDS * NANOS_PER_SECOND_LONG
 private const val T_GO_NANOS = RideParameters.T_GO_SECONDS * NANOS_PER_SECOND_LONG
-private const val ACCEL_WINDOW_NANOS =
-    RideParameters.ACCEL_STILLNESS_WINDOW_SECONDS * NANOS_PER_SECOND_LONG
 private const val STOP_DISPLACEMENT_WINDOW_NANOS =
     RideParameters.STOP_DISPLACEMENT_WINDOW_SECONDS * NANOS_PER_SECOND_LONG
 private const val RESUME_OVERRIDE_WINDOW_NANOS =
@@ -44,8 +42,12 @@ private const val GAP_CUT_NANOS = RideParameters.GAP_CUT_SECONDS * NANOS_PER_SEC
  *
  * Starts `STOPPED`, applies hysteresis (`V_GO > V_STOP`), confirms transitions
  * after `T_STOP` / `T_GO` seconds, backdates them to the first sample of the
- * candidate window, and applies the displacement and accelerometer vetoes plus
- * the resume displacement override. State is kept in monotonic time only.
+ * candidate window, and applies the displacement veto plus the resume
+ * displacement override. State is kept in monotonic time only.
+ *
+ * The accelerometer veto from ADR-005 §4 is not applied because
+ * [TrackPoint] carries no accelerometer aggregate; the displacement veto and
+ * the resume override are the available signals.
  *
  * Gaps > 5 s do not drive state transitions; state is held and pending
  * candidates are cleared. Missing or unusable speed is treated the same way
@@ -124,6 +126,8 @@ private class MovingTimeAccumulator(
         points: List<TrackPoint>,
         index: Int,
     ) {
+        // A gap is always relative to a previous point; index 0 has none.
+        if (index <= 0) return
         stopCandidateStartNanos = null
         resumeCandidateStartNanos = null
         if (state == MotionState.MOVING) {
@@ -184,8 +188,7 @@ private class MovingTimeAccumulator(
         val nowNanos = points[index].timestampMonotonicNanos
         when {
             candidateStart == null -> stopCandidateStartNanos = nowNanos
-            isDisplacementVetoed(points, index, candidateStart) ||
-                isAccelVetoed(points, index) -> stopCandidateStartNanos = null
+            isDisplacementVetoed(points, index, candidateStart) -> stopCandidateStartNanos = null
             nowNanos - candidateStart >= T_STOP_NANOS -> {
                 if (candidateStart > movingStartNanos) {
                     intervals.add(TimeInterval(movingStartNanos, candidateStart))
@@ -234,26 +237,13 @@ private class MovingTimeAccumulator(
         }
         val reference = points[referenceIndex]
         val current = points[index]
-        return reference.accuracyH <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
-            current.accuracyH <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
+        val referenceAccuracy = reference.accuracyH
+        val currentAccuracy = current.accuracyH
+        return referenceAccuracy != null &&
+            currentAccuracy != null &&
+            referenceAccuracy <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
+            currentAccuracy <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
             distance.meters(reference, current) >= RideParameters.STOP_DISPLACEMENT_VETO_M
-    }
-
-    private fun isAccelVetoed(
-        points: List<TrackPoint>,
-        index: Int,
-    ): Boolean {
-        val cutoff = points[index].timestampMonotonicNanos - ACCEL_WINDOW_NANOS
-        var maxSigma = 0.0
-        var cursor = index
-        while (cursor >= 0 && points[cursor].timestampMonotonicNanos >= cutoff) {
-            val sigma = points[cursor].accelNormStd
-            if (sigma != null && sigma > maxSigma) {
-                maxSigma = sigma
-            }
-            cursor--
-        }
-        return maxSigma > RideParameters.ACCEL_STILLNESS_SIGMA_MPS2
     }
 
     private fun overrideStartNanos(
@@ -275,9 +265,13 @@ private class MovingTimeAccumulator(
             return null
         }
         val current = points[index]
+        val referenceAccuracy = reference.accuracyH
+        val currentAccuracy = current.accuracyH
         val moved =
-            reference.accuracyH <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
-                current.accuracyH <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
+            referenceAccuracy != null &&
+                currentAccuracy != null &&
+                referenceAccuracy <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
+                currentAccuracy <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
                 distance.meters(reference, current) >= RideParameters.RESUME_DISPLACEMENT_OVERRIDE_M
         return if (moved) reference.timestampMonotonicNanos else null
     }

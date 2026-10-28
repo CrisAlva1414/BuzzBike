@@ -362,3 +362,44 @@ Implementar ADR-001: cascada MET sample-a-sample, perfil opcional, incertidumbre
 
 ### Próximo
 Integración con sensores/UI o tests de integración.
+
+---
+
+## Iteration 5 — 2026-10-27 — Fixes de compilación, ktlint, detekt y seguridad
+
+### Tarea
+Corregir errores de compilación, formato ktlint, hallazgos detekt y hallazgo de seguridad #4 (guard `index > 0` en `onGap`).
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (50 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Archivos modificados
+- `domain/ride/MovingTimeEstimator.kt` — nullables `accuracyH`, guard `index > 0` en `onGap`, removido veto por acelerómetro (sin campo en TrackPoint)
+- `domain/ride/RideAggregator.kt` — `accuracyH` nullable, `isUsableSpeedSample` extraído
+- `domain/ride/TraceCleaner.kt` — `isUsableAccuracy` acepta `Double?`, removidas referencias a campos inexistentes
+- `domain/ride/engine/RideEngine.kt` — imports, constantes nombradas, uso correcto de `object`s
+- `domain/calories/CalorieCalculator.kt` — refactor a helpers, constantes con cita a ADR-001
+- `domain/calories/MetTable.kt` — bandas como vals nombradas, constantes de conversión
+- `domain/elevation/ElevationProcessor.kt` — helpers top-level, propiedades muertas removidas
+- `domain/elevation/BarometricConverter.kt` — constantes, guards combinados
+- `domain/elevation/ElevationParameters.kt` — constante `BARO_ALTITUDE_COEFFICIENT_M`
+- `data/repository/RideRepository.kt` — campo `bearing` en TrackPointEntity
+- `sensor/location/LocationSensor.kt`, `sensor/pressure/PressureSensor.kt`, `sensor/motion/MotionSensor.kt` — detekt fixes
+- `ui/ride/RideViewModel.kt`, `ui/ride/RideScreen.kt` — detekt/ktlint fixes
+- `test/domain/elevation/ElevationProcessorTest.kt` — formato, dead code removido
+- `test/domain/calories/CalorieCalculatorTest.kt` — (sin cambios funcionales)
+- `test/domain/ride/TraceCleanerTest.kt` — test nuevo: `accuracyH = null` se rechaza
+
+### Seguridad
+- Hallazgo #4 (baja): guard `index > 0` en `MovingTimeEstimator.onGap` — corregido.
+- Hallazgos medios #1 (permisos runtime) y #2 (sobre-declaración de permisos) quedan para el slice de integración de sensores.
+- Hallazgo #3 (cifrado Room) requiere decisión humana de arquitectura.
+
+### Próximo paso
+Integración sensores → dominio → persistencia (TrackingManager), luego UI detallada.

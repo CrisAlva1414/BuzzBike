@@ -115,8 +115,9 @@ object TraceCleaner {
 
     private fun isValidLongitude(lon: Double): Boolean = lon.isFinite() && lon in longitudeRange
 
-    private fun isUsableAccuracy(accuracyH: Double): Boolean =
-        accuracyH.isFinite() &&
+    private fun isUsableAccuracy(accuracyH: Double?): Boolean =
+        accuracyH != null &&
+            accuracyH.isFinite() &&
             accuracyH > 0.0 &&
             accuracyH <= RideParameters.MAX_ACCURACY_H_M
 
@@ -137,9 +138,7 @@ object TraceCleaner {
             altitudeMslM = point.altitudeMslM.finiteOrNull(),
             accuracyV = point.accuracyV.finiteOrNull(),
             speedMps = point.speedMps?.takeIf { it.isFinite() && it >= 0.0 },
-            speedAccuracyMps = point.speedAccuracyMps.finiteOrNull(),
             pressureHpa = point.pressureHpa.finiteOrNull(),
-            accelNormStd = point.accelNormStd.finiteOrNull(),
         )
 
     private fun Double?.finiteOrNull(): Double? = this?.takeIf { it.isFinite() }

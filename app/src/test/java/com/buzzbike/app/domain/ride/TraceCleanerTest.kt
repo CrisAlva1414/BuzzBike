@@ -139,6 +139,22 @@ class TraceCleanerTest {
     }
 
     @Test
+    fun given_nullHorizontalAccuracy_when_cleaned_then_rejected() {
+        val cleaned =
+            TraceCleaner.clean(
+                listOf(
+                    point(seconds = 0, latOffsetSteps = 0),
+                    point(seconds = 1, latOffsetSteps = 1).copy(accuracyH = null),
+                ),
+            )
+
+        assertEquals(1, cleaned.rejectedCount)
+        assertEquals(1, cleaned.points.size)
+        assertEquals(0L, cleaned.points.single().timestampMonotonicNanos / NANOS_PER_SECOND)
+        assertTrue(cleaned.distanceIsLowerBound)
+    }
+
+    @Test
     fun given_nonFiniteAccuracyV_when_cleaned_thenSanitizedToNull() {
         val cleaned =
             TraceCleaner.clean(

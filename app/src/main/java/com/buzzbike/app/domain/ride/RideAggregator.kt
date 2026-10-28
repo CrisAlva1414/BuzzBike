@@ -151,10 +151,7 @@ object RideAggregator {
         val samples =
             points.mapNotNull { point ->
                 val speed = SpeedResolver.resolve(point)
-                if (speed != null &&
-                    point.accuracyH <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
-                    isMovingAt(point.timestampMonotonicNanos, intervals)
-                ) {
+                if (speed != null && isUsableSpeedSample(point, intervals)) {
                     SpeedSample(point.timestampMonotonicNanos, speed)
                 } else {
                     null
@@ -164,6 +161,16 @@ object RideAggregator {
             return 0.0
         }
         return percentile95(centeredMedians(samples))
+    }
+
+    private fun isUsableSpeedSample(
+        point: TrackPoint,
+        intervals: List<TimeInterval>,
+    ): Boolean {
+        val accuracy = point.accuracyH
+        return accuracy != null &&
+            accuracy <= RideParameters.LOW_QUALITY_ACCURACY_H_M &&
+            isMovingAt(point.timestampMonotonicNanos, intervals)
     }
 
     private fun centeredMedians(samples: List<SpeedSample>): List<Double> {
