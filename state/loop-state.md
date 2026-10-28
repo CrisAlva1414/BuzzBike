@@ -826,3 +826,34 @@ Worker de WorkManager que ejecuta OutboxProcessor con constraint de red y schedu
 
 ### Próximo paso
 Slice 3.2.5: integración con RideSessionManager (al detener ride, serializar y encolar en outbox si sync habilitado).
+
+---
+
+## Iteration 18 — 2026-10-27 — Slice 3.2.5a: Ride sync payload (COMPLETADO)
+
+### Tarea
+Payload de sync con data minimization (ADR-003): métricas agregadas + waypoints decimados, serializer JSON puro sin dependencias.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (147 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/RideSyncPayload.kt` — modelo versionado + Waypoint.
+- `domain/sync/RideSyncInput.kt` — entrada desacoplada de data/android.
+- `domain/sync/RidePayloadBuilder.kt` — orden, decimación por intervalo (10 s), cap 2000 conservando extremos, validación de coordenadas, fallback MSL→elipsoidal, redondeo 6 decimales.
+- `domain/sync/RidePayloadJson.kt` — encoder JSON compacto UTF-8 con escaping manual; NaN/Inf → null.
+- Tests: RidePayloadBuilderTest (6), RidePayloadJsonTest (5).
+
+### Decisiones
+- Sin kotlinx.serialization ni org.json: encoder manual testeado (evita plugin/dependencia nueva).
+- timestampMillis se reconstruye relativo a startTimeMillis (TrackPoint no tiene epoch); documentado.
+- No se envía track crudo: solo waypoints decimados.
+
+### Próximo paso
+Slice 3.2.5b: coordinador + integración con RideSessionManager/ViewModel y scheduler.
