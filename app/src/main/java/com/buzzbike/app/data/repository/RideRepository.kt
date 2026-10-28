@@ -5,6 +5,7 @@ import com.buzzbike.app.data.local.dao.TrackPointDao
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
 import com.buzzbike.app.domain.model.TrackPoint
+import com.buzzbike.app.domain.ride.session.TrackPointWriter
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 import javax.inject.Inject
@@ -16,7 +17,7 @@ class RideRepository
     constructor(
         private val rideDao: RideDao,
         private val trackPointDao: TrackPointDao,
-    ) {
+    ) : TrackPointWriter {
         fun getAllRides(): Flow<List<RideEntity>> = rideDao.getAllRides()
 
         fun getActiveRide(): Flow<RideEntity?> = rideDao.getActiveRide()
@@ -46,7 +47,7 @@ class RideRepository
             )
         }
 
-        suspend fun saveTrackPoint(
+        override suspend fun saveTrackPoint(
             rideId: String,
             point: TrackPoint,
         ) {

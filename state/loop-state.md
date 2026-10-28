@@ -403,3 +403,61 @@ Corregir errores de compilación, formato ktlint, hallazgos detekt y hallazgo de
 
 ### Próximo paso
 Integración sensores → dominio → persistencia (TrackingManager), luego UI detallada.
+
+---
+
+## Iteration 6 — 2026-10-27 — Slice 1.1: TrackingManager + permisos (EN CURSO)
+
+### Tarea
+Crear TrackingManager que suscriba a LocationSensor, convierta a TrackPoint, persista vía RideRepository, y verifique permisos de ubicación en runtime.
+
+### Estado
+- Código implementado por builder, compileDebugKotlin OK, ktlintCheck OK, detekt OK.
+- test: 58 tests, 3 fallos en TrackingManagerTest (corrutinas con advanceUntilIdle no avanzan backgroundScope).
+- assembleDebug: no ejecutado.
+- Decisión de arquitectura pendiente: TrackingManager (domain) importa RideRepository (data), viola AGENTS.md §3. Solución: crear puerto TrackPointWriter en domain, RideRepository lo implementa.
+
+### Próximo paso
+Arreglar tests, ejecutar assembleDebug, resolver arquitectura domain→data.
+
+---
+
+## Iteration 6 — 2026-10-27 — Slice 1.1: TrackingManager + permisos (COMPLETADO)
+
+### Tarea
+Crear TrackingManager que suscriba a LocationSensor, convierta a TrackPoint, persista vía puerto TrackPointWriter, y verifique permisos de ubicación en runtime.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (58 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK 64 MB) |
+
+### Archivos nuevos
+- `domain/ride/session/LocationSensorPort.kt` — interfaz para lecturas de ubicación
+- `domain/ride/session/LocationPermissionChecker.kt` — interfaz para verificación de permisos (JVM-testable)
+- `domain/ride/session/TrackPointWriter.kt` — puerto de persistencia de track points (AGENTS.md §3)
+- `domain/ride/session/TrackingManager.kt` — use case de tracking (start/stop, validación, persistencia)
+- `sensor/location/AndroidLocationPermissionChecker.kt` — implementación Android del permiso checker
+- `test/domain/ride/session/TrackingManagerTest.kt` — 6 tests con fakes
+- `test/sensor/location/AndroidLocationPermissionCheckerTest.kt` — 2 tests del seam puro
+
+### Archivos modificados
+- `sensor/location/LocationSensor.kt` — implementa LocationSensorPort, mapea Location → LocationReading puro
+- `data/repository/RideRepository.kt` — implementa TrackPointWriter
+- `state/loop-state.md` — registro de iteración
+
+### Decisiones de arquitectura
+- `TrackingManager` depende de `TrackPointWriter` (domain port), no de `RideRepository` (data) → respeta AGENTS.md §3 (`ui → domain ← data`).
+- `LocationPermissionChecker` vive en domain; la implementación Android vive en sensor/.
+- `LocationReading` se movió a domain (sin `android.location.Location`) para permitir tests JVM puros.
+
+### Tests
+- 58 tests totales, 0 fallos.
+- Cubre: sin permiso (startTracking=false), con permiso + persistencia, rideId blank, coordenadas inválidas, doble start, stop tracking.
+
+### Próximo paso
+Slice 1.2: agregar PressureSensor y MotionSensor a TrackingManager.
