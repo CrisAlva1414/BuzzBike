@@ -7,6 +7,7 @@ import androidx.work.ListenableWorker.Result
 import androidx.work.WorkerParameters
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.OutboxProcessor
+import com.buzzbike.app.domain.sync.endpointValidationError
 import dagger.hilt.android.EntryPointAccessors
 
 /**
@@ -15,7 +16,13 @@ import dagger.hilt.android.EntryPointAccessors
  * The worker is a thin adapter: [HermesSyncScheduler] supplies the
  * [HermesConfig] as input data, the domain processor owns the health-check and
  * retry rules, and [toSyncAction] translates the outcome into WorkManager's
- * result. If the health check is not exactly HTTP 200, the outcome becomes
+ * result. The dedicated health-check URL is mandatory (there is no fallback to
+ * the send endpoint) and both URLs are validated before any network work. The
+ * HMAC secret presence is read from [com.buzzbike.app.domain.sync.HmacSecretManager]
+ * and forwarded to [OutboxProcessor], so a missing secret is a terminal
+ * configuration error rather than an endless retry.
+ *
+ * If the health check is not exactly HTTP 200, the outcome becomes
  * [SyncAction.RETRY] and every row stays in the outbox for a later attempt —
  * nothing is dropped.
  *
@@ -33,12 +40,17 @@ class HermesWorker(
     override suspend fun doWork(): Result {
         val config = inputData.toHermesConfig()
         val healthCheckUrl = config?.effectiveHealthCheckUrl()
-        return if (config == null || healthCheckUrl == null) {
+        return if (config == null || healthCheckUrl == null || isInvalid(config)) {
             Result.failure()
         } else {
             process(config, healthCheckUrl)
         }
     }
+
+    /** Both URLs must be valid HTTPS endpoints; otherwise retrying is futile. */
+    private fun isInvalid(config: HermesConfig): Boolean =
+        config.healthCheckValidationError() != null ||
+            endpointValidationError(config.endpoint) != null
 
     private suspend fun process(
         config: HermesConfig,
@@ -56,7 +68,11 @@ class HermesWorker(
                 connectivity = entryPoint.connectivityChecker(),
                 sender = sender,
             )
-        return processor.process(healthCheckUrl).toSyncAction().toWorkerResult()
+        val hmacKeyConfigured = entryPoint.hmacSecretManager().hasSecret()
+        return processor
+            .process(healthCheckUrl, hmacKeyConfigured)
+            .toSyncAction()
+            .toWorkerResult()
     }
 }
 

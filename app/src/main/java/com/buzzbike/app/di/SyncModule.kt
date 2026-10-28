@@ -38,7 +38,7 @@ object SyncModule {
 
     @Provides
     @Singleton
-    fun provideConnectivityChecker(): ConnectivityChecker = HttpConnectivityChecker()
+    fun provideConnectivityChecker(hmacSigner: HmacSigner): ConnectivityChecker = HttpConnectivityChecker(hmacSigner)
 
     @Provides
     @Singleton

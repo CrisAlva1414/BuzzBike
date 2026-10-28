@@ -1013,3 +1013,37 @@ Cifrar Room con SQLCipher 4.9.0; passphrase aleatoria sellada por Keystore; borr
 
 ### Próximo paso
 S3: health check autenticado + URL dedicada + contrato documentado (API y webhook), luego R1..R12.
+
+---
+
+## Iteration 23 — 2026-10-28 — S3: Health check autenticado + contrato (COMPLETADO)
+
+### Tarea
+Health check dedicado y autenticado con HMAC (auth en API y webhook), sin fallback al endpoint, y contrato de sync documentado.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (198 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `ConnectivityChecker` con `Reachability` (Available/Unavailable/Misconfigured).
+- `HttpConnectivityChecker`: GET firmado (HMAC body vacío), 200 estricto, redirects off; sin secreto/URL inválida → Misconfigured.
+- `HermesConfig`: healthCheckUrl dedicado (sin fallback), HTTPS obligatorio, sin userinfo; CGNAT/MagicDNS permitidos.
+- `OutboxProcessor.process(url, hmacKeyConfigured)`; Misconfigured → ConfigurationError.
+- `HermesWorker`: exige health URL, valida URLs, consulta hasSecret.
+- `HttpHermesSender`: valida endpoint, timeouts desde config (mín. 1 s).
+- `HermesConfigCodec`: health_check_url obligatorio.
+- `docs/sync-contract.md` + actualización ADR-003.
+- Tests: 24 nuevos/adaptados (198 total).
+
+### Notas
+- El checker no impone HTTPS a nivel transporte; la restricción vive en la validación de config (worker la aplica) y en network_security_config. Pendiente R7 endurecerlo.
+- Keystore TLS de test (`test-tls.p12`, autofirmado) agregado en test resources; evaluar generarlo en runtime.
+
+### Próximo paso
+R1/R3: drenaje completo del outbox, purga de SENT, worker periódico. Luego R5, R7-R12.

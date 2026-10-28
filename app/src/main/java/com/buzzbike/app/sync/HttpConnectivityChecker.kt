@@ -1,6 +1,9 @@
 package com.buzzbike.app.sync
 
 import com.buzzbike.app.domain.sync.ConnectivityChecker
+import com.buzzbike.app.domain.sync.HmacSecretMissingException
+import com.buzzbike.app.domain.sync.HmacSigner
+import com.buzzbike.app.domain.sync.Reachability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -12,51 +15,88 @@ import java.net.URL
  * [ConnectivityChecker] backed by [HttpURLConnection] — the `sync/` edge
  * adapter that owns the transport details (AGENTS.md §3).
  *
+ * The health endpoint is **dedicated and authenticated**: it must accept a
+ * `GET` signed with HMAC-SHA256 over an empty body using the same secret as
+ * regular deliveries. The request carries [HEADER_TIMESTAMP] (Unix epoch
+ * seconds) and [HEADER_SIGNATURE] (`hmacSigner.sign(timestamp, ByteArray(0))`),
+ * so a receiver that verifies the signature can distinguish BuzzBike from
+ * anonymous probes. Signing an empty body reuses the exact `<timestamp>.` input
+ * defined in ADR-003.
+ *
  * A health check is considered successful **only** when the server answers
  * HTTP 200 exactly. This is a product requirement: 204, 3xx, 4xx, 5xx, a
  * timeout, a DNS failure or a refused connection all mean "not available", so
  * the caller keeps the ride in the outbox and retries later instead of
- * dropping it.
+ * dropping it. A missing HMAC secret or a blank/malformed URL is reported as
+ * [Reachability.Misconfigured] without opening a socket, because retrying
+ * cannot fix either condition.
  *
  * Redirects are not followed (`instanceFollowRedirects = false`): a 302 is
  * itself a non-200 answer and must not be transformed into a 200 downstream.
  *
  * Android note: the app's `network_security_config` blocks cleartext traffic,
- * so the health-check URL must be HTTPS (ADR-003, AGENTS.md §7). A cleartext
- * URL fails with an `IOException` and therefore reports `false`.
+ * so a production health-check URL must be HTTPS (ADR-003, AGENTS.md §7). A
+ * cleartext URL fails with an `IOException` and therefore reports
+ * [Reachability.Unavailable].
  *
  * The check never throws: expected network problems are part of the answer.
  */
 class HttpConnectivityChecker(
+    private val hmacSigner: HmacSigner,
+    private val nowSeconds: () -> Long = { System.currentTimeMillis() / MILLIS_PER_SECOND },
     private val connectTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
     private val readTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
 ) : ConnectivityChecker {
-    override suspend fun isReachable(healthCheckUrl: String): Boolean =
-        withContext(Dispatchers.IO) { probe(healthCheckUrl) }
+    override suspend fun check(
+        healthCheckUrl: String,
+        hmacKeyConfigured: Boolean,
+    ): Reachability =
+        when {
+            !hmacKeyConfigured -> Reachability.Misconfigured
+            else ->
+                parseUrl(healthCheckUrl)?.let { url ->
+                    withContext(Dispatchers.IO) { probe(url) }
+                } ?: Reachability.Misconfigured
+        }
+
+    /** Parses [healthCheckUrl], returning `null` for blank or malformed input. */
+    private fun parseUrl(healthCheckUrl: String): URL? {
+        if (healthCheckUrl.isBlank()) return null
+        return try {
+            URL(healthCheckUrl.trim())
+        } catch (ignored: MalformedURLException) {
+            null
+        }
+    }
 
     /** Performs the blocking probe; extracted so no labeled return is needed. */
-    private fun probe(healthCheckUrl: String): Boolean {
+    private fun probe(url: URL): Reachability {
         var connection: HttpURLConnection? = null
         return try {
-            val opened = URL(healthCheckUrl).openConnection()
+            val opened = url.openConnection()
             if (opened !is HttpURLConnection) {
-                false
+                Reachability.Unavailable
             } else {
                 connection = opened
                 opened.requestMethod = HTTP_GET
                 opened.instanceFollowRedirects = false
                 opened.connectTimeout = connectTimeoutMillis
                 opened.readTimeout = readTimeoutMillis
+                val timestamp = nowSeconds()
+                opened.setRequestProperty(HEADER_TIMESTAMP, timestamp.toString())
+                opened.setRequestProperty(HEADER_SIGNATURE, hmacSigner.sign(timestamp, EMPTY_BODY))
                 val responseCode = opened.responseCode
                 closeResponseStream(opened, responseCode)
-                responseCode == HTTP_OK
+                if (responseCode == HTTP_OK) Reachability.Available else Reachability.Unavailable
             }
-        } catch (ignored: MalformedURLException) {
-            false
+        } catch (ignored: HmacSecretMissingException) {
+            // The secret was reported as provisioned by the caller, but the
+            // provider could not load it: still a configuration problem.
+            Reachability.Misconfigured
         } catch (ignored: IOException) {
-            false
+            Reachability.Unavailable
         } catch (ignored: SecurityException) {
-            false
+            Reachability.Unavailable
         } finally {
             connection?.disconnect()
         }
@@ -86,6 +126,10 @@ class HttpConnectivityChecker(
         const val HTTP_GET = "GET"
         const val HTTP_OK = 200
         const val CLIENT_ERROR_MIN = 400
+        const val HEADER_TIMESTAMP = "X-Webhook-Timestamp"
+        const val HEADER_SIGNATURE = "X-Webhook-Signature-V2"
         const val DEFAULT_TIMEOUT_MILLIS = 5_000
+        const val MILLIS_PER_SECOND = 1_000L
+        val EMPTY_BODY = ByteArray(0)
     }
 }

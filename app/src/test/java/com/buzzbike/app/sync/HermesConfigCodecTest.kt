@@ -11,8 +11,9 @@ import org.junit.Test
  *
  * The codec is the only bridge between a [HermesConfig] and WorkManager's
  * primitive input data, so these tests pin both directions: a full round-trip
- * must be lossless, and a missing/blank endpoint must produce `null` so the
- * worker fails instead of syncing to an unknown destination.
+ * must be lossless, and a missing/blank endpoint **or health-check URL** must
+ * produce `null` so the worker fails instead of syncing (or probing) an
+ * unknown destination.
  */
 class HermesConfigCodecTest {
     @Test
@@ -33,13 +34,29 @@ class HermesConfigCodecTest {
     }
 
     @Test
-    fun given_configWithoutHealthCheckUrl_when_encodeThenDecode_then_roundTrip() {
+    fun given_configWithoutHealthCheckUrl_when_encodeThenDecode_then_null() {
         val config = HermesConfig(endpoint = "https://hermes.example/sync")
 
         val decoded = HermesConfigCodec.decode(HermesConfigCodec.encode(config))
 
-        assertEquals(config, decoded)
-        assertNull(decoded?.healthCheckUrl)
+        assertNull(decoded)
+    }
+
+    @Test
+    fun given_mapWithoutHealthCheckUrl_when_decode_then_null() {
+        assertNull(HermesConfigCodec.decode(mapOf(HermesConfigCodec.KEY_ENDPOINT to ENDPOINT)))
+    }
+
+    @Test
+    fun given_blankHealthCheckUrl_when_decode_then_null() {
+        assertNull(
+            HermesConfigCodec.decode(
+                mapOf(
+                    HermesConfigCodec.KEY_ENDPOINT to ENDPOINT,
+                    HermesConfigCodec.KEY_HEALTH_CHECK_URL to "   ",
+                ),
+            ),
+        )
     }
 
     @Test
@@ -58,6 +75,7 @@ class HermesConfigCodecTest {
             HermesConfigCodec.decode(
                 mapOf(
                     HermesConfigCodec.KEY_ENDPOINT to ENDPOINT,
+                    HermesConfigCodec.KEY_HEALTH_CHECK_URL to HEALTH_URL,
                     HermesConfigCodec.KEY_SENDER_TYPE to "SMOKE_SIGNAL",
                 ),
             )
@@ -66,11 +84,17 @@ class HermesConfigCodecTest {
     }
 
     @Test
-    fun given_onlyEndpoint_when_decode_then_usesDefaults() {
-        val decoded = HermesConfigCodec.decode(mapOf(HermesConfigCodec.KEY_ENDPOINT to ENDPOINT))
+    fun given_endpointAndHealthUrl_when_decode_then_usesDefaults() {
+        val decoded =
+            HermesConfigCodec.decode(
+                mapOf(
+                    HermesConfigCodec.KEY_ENDPOINT to ENDPOINT,
+                    HermesConfigCodec.KEY_HEALTH_CHECK_URL to HEALTH_URL,
+                ),
+            )
 
         assertEquals(
-            HermesConfig(endpoint = ENDPOINT),
+            HermesConfig(endpoint = ENDPOINT, healthCheckUrl = HEALTH_URL),
             decoded,
         )
     }
@@ -81,17 +105,19 @@ class HermesConfigCodecTest {
             HermesConfigCodec.decode(
                 mapOf(
                     HermesConfigCodec.KEY_ENDPOINT to ENDPOINT,
+                    HermesConfigCodec.KEY_HEALTH_CHECK_URL to HEALTH_URL,
                     HermesConfigCodec.KEY_TIMEOUT_SECONDS to "not-a-number",
                     HermesConfigCodec.KEY_RETRY_COUNT to "-3",
                 ),
             )
 
-        val defaults = HermesConfig(endpoint = ENDPOINT)
+        val defaults = HermesConfig(endpoint = ENDPOINT, healthCheckUrl = HEALTH_URL)
         assertEquals(defaults.timeoutSeconds, decoded?.timeoutSeconds)
         assertEquals(defaults.retryCount, decoded?.retryCount)
     }
 
     private companion object {
         const val ENDPOINT = "https://hermes.example/sync"
+        const val HEALTH_URL = "https://hermes.example/health"
     }
 }

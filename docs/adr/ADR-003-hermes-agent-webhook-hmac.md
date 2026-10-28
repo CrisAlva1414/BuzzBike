@@ -110,6 +110,30 @@ El usuario puede, en una opción futura, elegir enviar el track completo — per
 
 ---
 
+## Actualización 2026-10-28
+
+El contrato operativo completo de sync se documenta en
+[`docs/sync-contract.md`](../sync-contract.md). Esa guía es la referencia para
+implementar y auditar el receptor; este ADR mantiene el *por qué* de las
+decisiones.
+
+Puntos fijados en esta actualización:
+
+- **Aprovisionamiento del secreto (opción A):** el secreto lo genera el NAS
+  (32+ bytes), el usuario lo pega en BuzzBike y el mismo valor se configura en
+  el receptor. La app lo guarda sellado con AES-GCM de Android Keystore y
+  nunca lo transporta por la red.
+- **Health check dedicado y autenticado:** `healthCheckUrl` es obligatorio y
+  distinto del endpoint de envío. Se consulta con `GET` firmado con HMAC sobre
+  body vacío y **solo HTTP 200** significa disponible; un `204`, `3xx`, `4xx`,
+  `5xx` o timeout dejan el ride en la outbox para reintento.
+- **Sin fallback:** el endpoint de envío nunca se usa como health check.
+- **HTTPS obligatorio** para ambas URLs, sin userinfo. No se bloquean CGNAT
+  (`100.64.0.0/10`) ni MagicDNS porque son el sustrato de Tailscale.
+- **Errores terminales vs transitorios:** falta de secreto o URL inválida se
+  reportan como configuración (no se reintenta); backend no disponible se
+  reintenta con backoff exponencial 30 s → 1 h.
+
 ## Fuentes
 
 | Fuente | Referencia |

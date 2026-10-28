@@ -10,17 +10,20 @@ import org.junit.Test
  *
  * Fakes stand in for the Room store, the connectivity checker and the sender,
  * so the retry state machine is exercised without Android, network, or time.
+ * The connectivity fake returns the full [Reachability] contract, which lets
+ * these tests pin the difference between a transient outage (retry) and a
+ * configuration error (terminal).
  */
 class OutboxProcessorTest {
     @Test
     fun given_blankUrl_when_process_then_configurationErrorAndNothingTouched() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
-            val connectivity = FakeConnectivityChecker(reachable = true)
+            val connectivity = FakeConnectivityChecker(Reachability.Available)
             val sender = FakeHermesSender()
             val processor = processor(store = store, connectivity = connectivity, sender = sender)
 
-            val outcome = processor.process("   ")
+            val outcome = processor.process("   ", hmacKeyConfigured = true)
 
             assertEquals(ProcessOutcome.ConfigurationError, outcome)
             assertEquals(0, connectivity.calls)
@@ -30,14 +33,32 @@ class OutboxProcessorTest {
         }
 
     @Test
-    fun given_unreachableBackend_when_process_then_backendUnavailableAndRowsPending() =
+    fun given_misconfiguredBackend_when_process_then_configurationErrorAndRowsPending() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
-            val connectivity = FakeConnectivityChecker(reachable = false)
+            val connectivity = FakeConnectivityChecker(Reachability.Misconfigured)
             val sender = FakeHermesSender()
             val processor = processor(store = store, connectivity = connectivity, sender = sender)
 
-            val outcome = processor.process(HEALTH_URL)
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConfigurationError, outcome)
+            assertEquals(1, connectivity.calls)
+            assertEquals(0, store.getPendingCalls)
+            assertTrue(sender.rideIds.isEmpty())
+            assertTrue(store.sentIds.isEmpty())
+            assertTrue(store.failedMarks.isEmpty())
+        }
+
+    @Test
+    fun given_unavailableBackend_when_process_then_backendUnavailableAndRowsPending() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A)))
+            val connectivity = FakeConnectivityChecker(Reachability.Unavailable)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
             assertEquals(ProcessOutcome.BackendUnavailable, outcome)
             assertEquals(0, store.getPendingCalls)
@@ -47,13 +68,30 @@ class OutboxProcessorTest {
         }
 
     @Test
+    fun given_availableBackend_when_process_then_forwardsSecretFlagAndSends() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A)))
+            val connectivity = FakeConnectivityChecker(Reachability.Available)
+            val sender = FakeHermesSender()
+            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = false)
+
+            assertEquals(ProcessOutcome.Sent(1), outcome)
+            assertEquals(HEALTH_URL, connectivity.lastUrl)
+            assertEquals(false, connectivity.lastHmacKeyConfigured)
+            assertEquals(listOf(rideIdOf(ID_A)), sender.rideIds)
+            assertEquals(listOf(ID_A), store.sentIds)
+        }
+
+    @Test
     fun given_twoPendingRows_when_process_then_bothSent() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
             val sender = FakeHermesSender()
             val processor = processor(store = store, sender = sender)
 
-            val outcome = processor.process(HEALTH_URL)
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
             assertEquals(ProcessOutcome.Sent(2), outcome)
             assertEquals(listOf(ID_A, ID_B), store.sentIds)
@@ -74,7 +112,7 @@ class OutboxProcessorTest {
                 }
             val processor = processor(store = store, sender = sender)
 
-            val outcome = processor.process(HEALTH_URL)
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
             assertEquals(ProcessOutcome.Partial(sent = 1, failed = 1), outcome)
             assertEquals(listOf(ID_A), store.sentIds)
@@ -98,7 +136,7 @@ class OutboxProcessorTest {
                 }
             val processor = processor(store = store, sender = sender)
 
-            val outcome = processor.process(HEALTH_URL)
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
             assertEquals(ProcessOutcome.Partial(sent = 1, failed = 1), outcome)
             assertEquals(SENDER_ERROR, store.failedMarks.single().error)
@@ -113,7 +151,7 @@ class OutboxProcessorTest {
             val sender = FakeHermesSender()
             val processor = processor(store = store, sender = sender)
 
-            val outcome = processor.process(HEALTH_URL)
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
             assertEquals(ProcessOutcome.NoPending, outcome)
             assertEquals(1, store.getPendingCalls)
@@ -122,7 +160,7 @@ class OutboxProcessorTest {
 
     private fun processor(
         store: OutboxStore,
-        connectivity: ConnectivityChecker = FakeConnectivityChecker(reachable = true),
+        connectivity: ConnectivityChecker = FakeConnectivityChecker(Reachability.Available),
         sender: HermesSender = FakeHermesSender(),
     ): OutboxProcessor =
         OutboxProcessor(
@@ -200,14 +238,23 @@ private data class FailedMark(
 )
 
 private class FakeConnectivityChecker(
-    private val reachable: Boolean,
+    private val reachability: Reachability,
 ) : ConnectivityChecker {
     var calls: Int = 0
         private set
+    var lastUrl: String? = null
+        private set
+    var lastHmacKeyConfigured: Boolean? = null
+        private set
 
-    override suspend fun isReachable(healthCheckUrl: String): Boolean {
+    override suspend fun check(
+        healthCheckUrl: String,
+        hmacKeyConfigured: Boolean,
+    ): Reachability {
         calls++
-        return reachable
+        lastUrl = healthCheckUrl
+        lastHmacKeyConfigured = hmacKeyConfigured
+        return reachability
     }
 }
 

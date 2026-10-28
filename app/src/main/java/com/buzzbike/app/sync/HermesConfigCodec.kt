@@ -34,24 +34,27 @@ object HermesConfigCodec {
     /**
      * Rebuilds a [HermesConfig] from [map].
      *
-     * Returns `null` only when the endpoint is missing or blank: without an
-     * endpoint there is nothing to sync to, so the worker must fail instead of
-     * guessing. Every other field falls back to the [HermesConfig] defaults
-     * when absent or unparseable; an unknown [SenderType] falls back to
-     * `WEBHOOK` because that is the safest transport.
+     * Returns `null` when the endpoint or the dedicated health-check URL is
+     * missing or blank: without either there is no safe sync destination (the
+     * send endpoint is never probed as a health check), so the worker must
+     * fail instead of guessing. Every other field falls back to the
+     * [HermesConfig] defaults when absent or unparseable; an unknown
+     * [SenderType] falls back to `WEBHOOK` because that is the safest
+     * transport.
      */
     fun decode(map: Map<String, String>): HermesConfig? {
         val endpoint = map[KEY_ENDPOINT]?.trim().orEmpty()
-        if (endpoint.isBlank()) return null
+        val healthCheckUrl = map[KEY_HEALTH_CHECK_URL]?.trim().orEmpty()
+        if (endpoint.isBlank() || healthCheckUrl.isBlank()) return null
 
-        val defaults = HermesConfig(endpoint = endpoint)
+        val defaults = HermesConfig(endpoint = endpoint, healthCheckUrl = healthCheckUrl)
         return HermesConfig(
             endpoint = endpoint,
             method = map[KEY_METHOD]?.takeIf { it.isNotBlank() } ?: defaults.method,
             timeoutSeconds = map[KEY_TIMEOUT_SECONDS].toPositiveIntOrNull() ?: defaults.timeoutSeconds,
             retryCount = map[KEY_RETRY_COUNT].toNonNegativeIntOrNull() ?: defaults.retryCount,
             senderType = map[KEY_SENDER_TYPE].toSenderTypeOrDefault(),
-            healthCheckUrl = map[KEY_HEALTH_CHECK_URL]?.takeIf { it.isNotBlank() },
+            healthCheckUrl = healthCheckUrl,
         )
     }
 

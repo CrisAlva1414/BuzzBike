@@ -30,8 +30,9 @@ sealed interface ProcessOutcome {
  *
  * Order is deliberate and fail-closed:
  * 1. A blank [process] URL is a configuration error — nothing is touched.
- * 2. The backend must answer the health check with HTTP 200 exactly; if not,
- *    rows are left pending for a later retry.
+ * 2. The backend must answer the authenticated health check with HTTP 200
+ *    exactly. [Reachability.Misconfigured] (missing secret or malformed URL)
+ *    is terminal; [Reachability.Unavailable] leaves rows pending for a retry.
  * 3. Only then are due rows read and delivered.
  *
  * Delivery failures never abort the batch: each row is marked failed (with
@@ -46,12 +47,24 @@ class OutboxProcessor(
     private val clock: () -> Long = System::currentTimeMillis,
     private val batchSize: Int = DEFAULT_BATCH_SIZE,
 ) {
-    suspend fun process(healthCheckUrl: String): ProcessOutcome =
-        when {
-            healthCheckUrl.isBlank() -> ProcessOutcome.ConfigurationError
-            !connectivity.isReachable(healthCheckUrl) -> ProcessOutcome.BackendUnavailable
-            else -> processPending()
+    /**
+     * Runs one outbox pass.
+     *
+     * [hmacKeyConfigured] is forwarded to the connectivity port: the health
+     * check is authenticated, so a missing secret is a configuration error
+     * rather than a transient backend failure.
+     */
+    suspend fun process(
+        healthCheckUrl: String,
+        hmacKeyConfigured: Boolean,
+    ): ProcessOutcome {
+        if (healthCheckUrl.isBlank()) return ProcessOutcome.ConfigurationError
+        return when (connectivity.check(healthCheckUrl, hmacKeyConfigured)) {
+            Reachability.Misconfigured -> ProcessOutcome.ConfigurationError
+            Reachability.Unavailable -> ProcessOutcome.BackendUnavailable
+            Reachability.Available -> processPending()
         }
+    }
 
     private suspend fun processPending(): ProcessOutcome {
         val now = clock()

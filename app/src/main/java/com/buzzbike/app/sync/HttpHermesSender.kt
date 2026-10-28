@@ -5,6 +5,7 @@ import com.buzzbike.app.domain.sync.HermesSender
 import com.buzzbike.app.domain.sync.HmacSecretMissingException
 import com.buzzbike.app.domain.sync.HmacSigner
 import com.buzzbike.app.domain.sync.SendResult
+import com.buzzbike.app.domain.sync.endpointValidationError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -14,6 +15,11 @@ import java.net.URL
 /**
  * [HermesSender] backed by [HttpURLConnection] — the real transport for the
  * optional Hermes sync defined in ADR-003.
+ *
+ * The endpoint is validated **before** any socket is opened: it must be an
+ * HTTPS URL with a host and without `user:pass@` userinfo. An invalid
+ * configuration returns [SendResult] with `"invalid endpoint configuration"`
+ * and never echoes the URL, which could contain credentials.
  *
  * Every request is signed with HMAC-SHA256 over `"<timestamp>." + payload`
  * (ADR-003 §"Firma HMAC V2"). The signature travels in
@@ -31,6 +37,9 @@ import java.net.URL
  * Redirects are not followed (`instanceFollowRedirects = false`): a 3xx is a
  * non-2xx answer and is reported as a failure so the outbox keeps the ride.
  *
+ * Timeouts come from [HermesConfig.timeoutSeconds] and are clamped to at least
+ * one second so a `0` or negative value can never mean "wait forever" (R4).
+ *
  * Expected transport problems (bad URL, DNS/connect failure, timeout, refused
  * connection, blocked cleartext) are returned as [SendResult] failures instead
  * of being thrown. Error messages never include the endpoint, because the URL
@@ -40,9 +49,9 @@ class HttpHermesSender(
     private val config: HermesConfig,
     private val hmacSigner: HmacSigner,
     private val nowSeconds: () -> Long = { System.currentTimeMillis() / MILLIS_PER_SECOND },
-    private val connectTimeoutMillis: Int = DEFAULT_CONNECT_TIMEOUT_MILLIS,
-    private val readTimeoutMillis: Int = DEFAULT_READ_TIMEOUT_MILLIS,
 ) : HermesSender {
+    private val timeoutMillis: Int = resolveTimeoutMillis(config.timeoutSeconds)
+
     override suspend fun sendRide(
         rideId: String,
         payload: ByteArray,
@@ -53,6 +62,9 @@ class HttpHermesSender(
         rideId: String,
         payload: ByteArray,
     ): SendResult {
+        if (endpointValidationError(config.endpoint) != null) {
+            return SendResult(success = false, errorMessage = INVALID_CONFIGURATION_MESSAGE)
+        }
         val timestamp = nowSeconds()
         return try {
             deliverSigned(rideId, payload, timestamp, hmacSigner.sign(timestamp, payload))
@@ -80,8 +92,8 @@ class HttpHermesSender(
             http.requestMethod = config.method.takeIf { it.isNotBlank() } ?: HTTP_POST
             http.doOutput = true
             http.instanceFollowRedirects = false
-            http.connectTimeout = connectTimeoutMillis
-            http.readTimeout = readTimeoutMillis
+            http.connectTimeout = timeoutMillis
+            http.readTimeout = timeoutMillis
             http.setRequestProperty(HEADER_CONTENT_TYPE, CONTENT_TYPE_JSON)
             http.setRequestProperty(HEADER_TIMESTAMP, timestamp.toString())
             http.setRequestProperty(HEADER_SIGNATURE, signature)
@@ -147,12 +159,18 @@ class HttpHermesSender(
         const val END_OF_STREAM = -1
         const val DRAIN_BUFFER_SIZE = 4_096
         const val MILLIS_PER_SECOND = 1_000L
-        const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 10_000
-        const val DEFAULT_READ_TIMEOUT_MILLIS = 20_000
+        const val MIN_TIMEOUT_SECONDS = 1
+        const val MAX_TIMEOUT_MILLIS = Int.MAX_VALUE.toLong()
         const val UNSUPPORTED_TRANSPORT_MESSAGE = "endpoint does not support HTTP"
+        const val INVALID_CONFIGURATION_MESSAGE = "invalid endpoint configuration"
         const val INVALID_ENDPOINT_MESSAGE = "endpoint is not a valid URL"
         const val NETWORK_ERROR_MESSAGE = "network error while sending ride"
         const val SECURITY_ERROR_MESSAGE = "security error while sending ride"
         const val HMAC_SECRET_MISSING_MESSAGE = "HMAC secret is not configured"
+
+        fun resolveTimeoutMillis(timeoutSeconds: Int): Int =
+            (timeoutSeconds.coerceAtLeast(MIN_TIMEOUT_SECONDS).toLong() * MILLIS_PER_SECOND)
+                .coerceAtMost(MAX_TIMEOUT_MILLIS)
+                .toInt()
     }
 }
