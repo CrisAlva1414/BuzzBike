@@ -107,7 +107,7 @@ private fun gpsAltitude(sample: ElevationSample): Double? {
  * Elevation processor implementing ADR-006.
  * Barometer relative + GPS/DEM anchor, hysteresis, drift detection, elevator guard.
  */
-class ElevationProcessor {
+open class ElevationProcessor {
     private var anchorPressureHpa: Double? = null
     private var anchorAltitudeM: Double? = null
     private var anchorSource: ElevationSource = ElevationSource.NONE
@@ -117,7 +117,7 @@ class ElevationProcessor {
     private var lossM: Double = 0.0
     private var hasBarometer: Boolean = false
 
-    fun process(samples: List<ElevationSample>): ElevationDescriptors {
+    open fun process(samples: List<ElevationSample>): ElevationDescriptors {
         if (samples.isEmpty()) {
             return emptyDescriptors(
                 hasBarometer = false,

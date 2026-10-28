@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import com.buzzbike.app.domain.ride.session.MotionSensorPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -25,11 +26,11 @@ class MotionSensor
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-    ) {
+    ) : MotionSensorPort {
         private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-        fun motionUpdates(): Flow<MotionReading> =
+        override fun motionUpdates(): Flow<MotionReading> =
             callbackFlow {
                 val sensor = accelerometer
                 if (sensor == null) {

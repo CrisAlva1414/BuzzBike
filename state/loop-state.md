@@ -461,3 +461,40 @@ Crear TrackingManager que suscriba a LocationSensor, convierta a TrackPoint, per
 
 ### Próximo paso
 Slice 1.2: agregar PressureSensor y MotionSensor a TrackingManager.
+
+---
+
+## Iteration 7 — 2026-10-27 — Slice 1.2: Pressure + Motion sensors (COMPLETADO)
+
+### Tarea
+Integrar PressureSensor y MotionSensor al TrackingManager para capturar lecturas de barómetro y acelerómetro, convertirlas a ElevationSample y MotionReading, y procesarlas con ElevationProcessor.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (61 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK 62 MB) |
+
+### Archivos nuevos
+- `domain/elevation/PressureSensorPort.kt` — puerto `pressureUpdates(): Flow<PressureReading>`
+- `domain/ride/session/MotionSensorPort.kt` — puerto `motionUpdates(): Flow<MotionReading>`
+- `test/domain/ride/session/TrackingManagerElevationTest.kt` — 3 tests JVM
+
+### Archivos modificados
+- `sensor/pressure/PressureSensor.kt` — implementa PressureSensorPort
+- `sensor/motion/MotionSensor.kt` — implementa MotionSensorPort
+- `domain/ride/session/TrackingManager.kt` — nuevos parámetros, `startElevationTracking`, `stopElevationTracking`, `elevationDescriptors` Flow
+- `domain/elevation/ElevationProcessor.kt` — `class` → `open class`, `process` → `open fun` (para fake en tests)
+
+### Decisiones
+- `ElevationSampleAssembler` combina lecturas de presión y movimiento por timestamp más cercano (ventana 1 s).
+- `stopElevationTracking()` agregado para cancelar la suscripción.
+- `ElevationProcessor` se abrió para permitir fake en tests (alternativa: usar implementación real).
+- `TrackingManager` constructor llega a 7 parámetros; `@Suppress("LongParameterList")` local con justificación en KDoc.
+- Los puertos en domain importan `PressureReading`/`MotionReading` desde `sensor.*` (sin imports android.* en domain).
+
+### Próximo paso
+Slice 2.1: RideSessionManager (start/stop de ride, estado en tiempo real).

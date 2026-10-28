@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import com.buzzbike.app.domain.elevation.PressureSensorPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -22,13 +23,13 @@ class PressureSensor
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-    ) {
+    ) : PressureSensorPort {
         private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         private val barometer = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
 
         fun hasBarometer(): Boolean = barometer != null
 
-        fun pressureUpdates(): Flow<PressureReading> =
+        override fun pressureUpdates(): Flow<PressureReading> =
             callbackFlow {
                 val sensor = barometer
                 if (sensor == null) {
