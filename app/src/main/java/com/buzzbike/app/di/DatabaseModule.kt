@@ -3,6 +3,7 @@ package com.buzzbike.app.di
 import android.content.Context
 import androidx.room.Room
 import com.buzzbike.app.data.local.AppDatabase
+import com.buzzbike.app.data.local.MIGRATION_1_2
 import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
@@ -26,7 +27,8 @@ object DatabaseModule {
                 context,
                 AppDatabase::class.java,
                 "buzzbike.db",
-            ).build()
+            ).addMigrations(MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideRideDao(database: AppDatabase): RideDao = database.rideDao()

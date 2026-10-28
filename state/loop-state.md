@@ -642,3 +642,33 @@ Crear entidad OutboxEntity y DAO en Room para rides pendientes de enviar a Herme
 
 ### Próximo paso
 Slice 3.2.2: ConnectivityChecker (health check que devuelve 200 cerrado).
+
+---
+
+## Iteration 12 — 2026-10-27 — Fix outbox retry + migración Room (COMPLETADO)
+
+### Tarea
+Corregir los dos gaps del Slice 3.2.1: FAILED nunca se reintentaba y faltaba migración Room 1→2.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (92 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `OutboxDao.getPendingOutbox`: `status='PENDING' AND attemptCount < maxAttempts AND nextAttemptAt <= now`.
+- `OutboxDao.markFailed`: incrementa attemptCount y deriva `FAILED` solo al agotar `maxAttempts`; si no, sigue `PENDING` con backoff.
+- `data/local/Migrations.kt`: `MIGRATION_1_2` crea tabla `outbox` + índices con SQL verificado contra el esquema generado por Room.
+- `di/DatabaseModule.kt`: `.addMigrations(MIGRATION_1_2)`, sin destructive fallback.
+- Tests nuevos: retry bajo máximo, agotamiento, exclusión por backoff futuro, migración v1→v2 real.
+
+### Notas
+- `countPending` cuenta todas las PENDING (gauge de trabajo), no solo elegibles; documentado en KDoc.
+- Test existente de markFailed actualizado a la semántica correcta (no debilitado: se agregaron aserciones de elegibilidad).
+
+### Próximo paso
+Slice 3.2.2: ConnectivityChecker (health check 200 cerrado).

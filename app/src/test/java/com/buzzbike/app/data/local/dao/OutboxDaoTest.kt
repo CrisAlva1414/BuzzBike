@@ -136,15 +136,76 @@ class OutboxDaoTest {
                 nextAttempt = NOW + BACKOFF_MS,
             )
 
-            // markFailed moves the row out of PENDING: it is no longer eligible
-            // for the pending query, but the failure metadata is persisted.
-            assertEquals(0, dao.countPending())
-            assertTrue(dao.getPendingOutbox(now = NOW + BACKOFF_MS, limit = 10).isEmpty())
-            assertEquals(OutboxEntity.STATUS_FAILED, readColumn("ob-1", "status"))
+            // attemptCount 1 < maxAttempts (5): the row stays PENDING and is
+            // retried once the backoff deadline passes. The failure metadata
+            // is persisted either way.
+            assertEquals(1, dao.countPending())
+            assertTrue(dao.getPendingOutbox(now = NOW + BACKOFF_MS - 1, limit = 10).isEmpty())
+            assertEquals(listOf("ob-1"), dao.getPendingOutbox(now = NOW + BACKOFF_MS, limit = 10).map { it.id })
+            assertEquals(OutboxEntity.STATUS_PENDING, readColumn("ob-1", "status"))
             assertEquals(1L, readLong("ob-1", "attemptCount"))
             assertEquals("HTTP 503", readColumn("ob-1", "lastError"))
             assertEquals(NOW + UPDATED_MS, readLong("ob-1", "updatedAt"))
             assertEquals(NOW + BACKOFF_MS, readLong("ob-1", "nextAttemptAt"))
+        }
+
+    @Test
+    fun given_failedAttemptBelowMax_when_markFailed_thenStillPendingAndEligible() =
+        runTest {
+            dao.insert(
+                outboxWithAttempts(
+                    id = "ob-1",
+                    attemptCount = 0,
+                    maxAttempts = 3,
+                    createdAt = NOW,
+                    nextAttemptAt = NOW,
+                ),
+            )
+
+            dao.markFailed(
+                id = "ob-1",
+                error = "offline",
+                now = NOW + UPDATED_MS,
+                nextAttempt = NOW,
+            )
+
+            assertEquals(OutboxEntity.STATUS_PENDING, readColumn("ob-1", "status"))
+            assertEquals(1L, readLong("ob-1", "attemptCount"))
+            assertEquals(listOf("ob-1"), dao.getPendingOutbox(now = NOW + UPDATED_MS, limit = 10).map { it.id })
+        }
+
+    @Test
+    fun given_failedAttemptReachesMax_when_markFailed_thenNotEligible() =
+        runTest {
+            dao.insert(
+                outboxWithAttempts(
+                    id = "ob-1",
+                    attemptCount = 2,
+                    maxAttempts = 3,
+                    createdAt = NOW,
+                    nextAttemptAt = NOW,
+                ),
+            )
+
+            dao.markFailed(
+                id = "ob-1",
+                error = "HTTP 503",
+                now = NOW + UPDATED_MS,
+                nextAttempt = NOW,
+            )
+
+            assertEquals(OutboxEntity.STATUS_FAILED, readColumn("ob-1", "status"))
+            assertEquals(3L, readLong("ob-1", "attemptCount"))
+            assertTrue(dao.getPendingOutbox(now = NOW + BACKOFF_MS, limit = 10).isEmpty())
+        }
+
+    @Test
+    fun given_nextAttemptInFuture_when_getPending_thenNotReturned() =
+        runTest {
+            dao.insert(outbox(id = "ob-1", createdAt = NOW, nextAttemptAt = NOW + BACKOFF_MS))
+
+            assertTrue(dao.getPendingOutbox(now = NOW, limit = 10).isEmpty())
+            assertEquals(listOf("ob-1"), dao.getPendingOutbox(now = NOW + BACKOFF_MS, limit = 10).map { it.id })
         }
 
     @Test
@@ -222,6 +283,15 @@ class OutboxDaoTest {
         updatedAt = createdAt,
         nextAttemptAt = nextAttemptAt,
     )
+
+    private fun outboxWithAttempts(
+        id: String,
+        attemptCount: Int,
+        maxAttempts: Int,
+        createdAt: Long,
+        nextAttemptAt: Long,
+    ) = outbox(id = id, createdAt = createdAt, nextAttemptAt = nextAttemptAt)
+        .copy(attemptCount = attemptCount, maxAttempts = maxAttempts)
 
     private fun countAllRows(): Long =
         database
