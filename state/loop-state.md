@@ -572,3 +572,38 @@ Asegurar que los descriptores finales de un ride se persistan al detener, y cone
 
 ### Próximo paso opcional
 Bloque 3: HermesSender configurable (webhook/REST) + WorkManager + outbox + HMAC (pendiente aprobación humana para secretos).
+
+---
+
+## Iteration 10 — 2026-10-27 — Slice 3.1: HermesSender configurable (COMPLETADO)
+
+### Tarea
+Crear interfaz HermesSender configurable con implementaciones WebhookHermesSender y RestHermesSender, más HermesConfig y HermesSenderFactory. Todo en domain/sync, sin red real (stubs).
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (79 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK generado) |
+
+### Archivos nuevos
+- `domain/sync/HermesSender.kt` — interfaz + SendResult
+- `domain/sync/HermesConfig.kt` — HermesConfig, SenderType, endpointValidationError()
+- `domain/sync/WebhookHermesSender.kt` — stub de webhook
+- `domain/sync/RestHermesSender.kt` — stub de REST
+- `domain/sync/HermesSenderFactory.kt` — factory por SenderType
+- `test/domain/sync/HermesSenderFactoryTest.kt` — 3 tests
+- `test/domain/sync/WebhookHermesSenderTest.kt` — 4 tests
+- `test/domain/sync/RestHermesSenderTest.kt` — 4 tests
+
+### Decisiones
+- Validación de endpoint: java.net.URL para parseo + protocolo http/https + host no vacío (sin abrir conexión).
+- Mensaje de error genérico para no exponer credenciales potenciales en URLs malformadas.
+- rideId y payload no se usan todavía (transporte real en slice 3.2).
+- Validación centralizada en HermesConfig.endpointValidationError().
+
+### Próximo paso opcional
+Slice 3.2: WorkManager + outbox en Room + firma HMAC (pendiente aprobación humana para secretos).
