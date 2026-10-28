@@ -1,0 +1,148 @@
+package com.buzzbike.app.ui.ride
+
+import com.buzzbike.app.domain.model.RideDescriptors
+import com.buzzbike.app.domain.model.TrackPoint
+import com.buzzbike.app.domain.ride.engine.RideEngine
+import com.buzzbike.app.domain.ride.session.LocationPermissionChecker
+import com.buzzbike.app.domain.ride.session.LocationReading
+import com.buzzbike.app.domain.ride.session.LocationSensorPort
+import com.buzzbike.app.domain.ride.session.RideSessionManager
+import com.buzzbike.app.domain.ride.session.RideSessionWriter
+import com.buzzbike.app.domain.ride.session.TrackPointWriter
+import com.buzzbike.app.domain.ride.session.TrackingManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * JVM tests for the [RideViewModel] ↔ [RideSessionManager] wiring.
+ *
+ * No Robolectric is needed: the manager is real, the ephemeral Android
+ * collaborators are replaced by domain ports, and [viewModelScope] is driven by
+ * a test dispatcher installed as `Dispatchers.Main`.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class RideViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun given_idleSession_when_startRide_thenStateIsTracking() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer)
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.isTracking)
+            assertEquals(RIDE_ID, viewModel.uiState.value.activeRideId)
+            assertEquals(RIDE_ID, writer.startedRideId)
+        }
+
+    @Test
+    fun given_activeSession_when_stopRide_thenStateIsClearedAndDescriptorsSaved() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer)
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            viewModel.stopRide()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.isTracking)
+            assertNull(viewModel.uiState.value.activeRideId)
+            assertEquals(RIDE_ID, writer.stoppedRideId)
+            assertTrue(writer.savedDescriptors)
+        }
+
+    private fun TestScope.viewModel(writer: RecordingRideSessionWriter): RideViewModel {
+        val trackingManager =
+            TrackingManager(
+                locationSensor = EmptyLocationSensor,
+                trackPointWriter = writer,
+                permissionChecker = GrantedPermissionChecker,
+            )
+        val manager =
+            RideSessionManager(
+                rideEngine = RideEngine(),
+                trackingManager = trackingManager,
+                rideSessionWriter = writer,
+                scope = backgroundScope,
+            )
+        return RideViewModel(manager)
+    }
+
+    private class RecordingRideSessionWriter :
+        RideSessionWriter,
+        TrackPointWriter {
+        var startedRideId: String? = null
+            private set
+
+        var stoppedRideId: String? = null
+            private set
+
+        var savedDescriptors: Boolean = false
+            private set
+
+        override suspend fun startRide(): String {
+            startedRideId = RIDE_ID
+            return RIDE_ID
+        }
+
+        override suspend fun stopRide(rideId: String) {
+            stoppedRideId = rideId
+        }
+
+        override suspend fun saveRideDescriptors(
+            rideId: String,
+            descriptors: RideDescriptors,
+            elevationGainM: Double,
+            elevationLossM: Double,
+            caloriesKcal: Double?,
+        ) {
+            savedDescriptors = true
+        }
+
+        override suspend fun saveTrackPoint(
+            rideId: String,
+            point: TrackPoint,
+        ) = Unit
+    }
+
+    private object EmptyLocationSensor : LocationSensorPort {
+        override fun locationUpdates(): Flow<LocationReading> = emptyFlow()
+    }
+
+    private object GrantedPermissionChecker : LocationPermissionChecker {
+        override fun hasFineLocationPermission(): Boolean = true
+    }
+
+    private companion object {
+        private const val RIDE_ID = "ride-1"
+    }
+}

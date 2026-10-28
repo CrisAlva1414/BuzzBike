@@ -533,3 +533,42 @@ Crear RideSessionManager que coordine el ciclo de vida de un ride: iniciar sesi�
 
 ### Próximo paso
 Slice 2.2: Persistencia de descriptores finales al detener ride (ya parcialmente cubierto por saveRideDescriptors, pero necesita integración completa con RideViewModel y UI).
+
+---
+
+## Iteration 9 — 2026-10-27 — Slice 2.2: Persistencia de descriptores finales (COMPLETADO)
+
+### Tarea
+Asegurar que los descriptores finales de un ride se persistan al detener, y conectar RideViewModel a RideSessionManager.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin | 0 |
+| test | 0 (68 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 (APK generado) |
+
+### Archivos nuevos
+- `di/RideSessionModule.kt` — wiring Hilt para TrackingManager y RideSessionManager
+- `test/ui/ride/RideViewModelTest.kt` — 2 tests JVM (sin Robolectric)
+
+### Archivos modificados
+- `ui/ride/RideViewModel.kt` — migrado de RideRepository a RideSessionManager; expone StateFlow<RideSessionUiState>
+- `data/repository/RideRepository.kt` — agregado getRideWithDescriptors(rideId)
+- `test/domain/ride/session/RideSessionManagerTest.kt` — +1 test de persistencia final
+
+### Decisiones
+- RideViewModel delega startRide()/stopRide() a RideSessionManager
+- getRideWithDescriptors delega en getRideById (RideEntity ya tiene todas las columnas de descriptores)
+- RideSessionModule provee TrackingManager con sensores reales y RideSessionManager con RideEngine + RideRepository
+- viewModelScope manejado con StandardTestDispatcher() en tests JVM (sin Robolectric)
+
+### Bloques 1 y 2 cerrados
+- Bloque 1 (sensores → dominio → persistencia): 1.1 + 1.2 completados
+- Bloque 2 (sesión de ride): 2.1 + 2.2 completados
+- Total tests: 68, 0 fallos
+
+### Próximo paso opcional
+Bloque 3: HermesSender configurable (webhook/REST) + WorkManager + outbox + HMAC (pendiente aprobación humana para secretos).

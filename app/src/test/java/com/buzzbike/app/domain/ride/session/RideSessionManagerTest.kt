@@ -128,6 +128,41 @@ class RideSessionManagerTest {
             assertNull(state.activeRideId)
         }
 
+    @Test
+    fun given_completedSession_when_stopRide_thenEveryFinalDescriptorIsPersisted() =
+        runTest {
+            val writer = FakeRideSessionWriter()
+            val tracking = FakeTrackingManager()
+            val engine =
+                FakeRideEngine {
+                    processResult(
+                        distanceM = 1234.5,
+                        movingSeconds = 321L,
+                        avgSpeedMps = 8.4,
+                        caloriesKcal = 250.0,
+                    )
+                }
+            val manager = manager(writer = writer, tracking = tracking, engine = engine)
+            manager.startRide()
+            runCurrent()
+            tracking.points.value = listOf(point(seconds = 0), point(seconds = 321))
+            runCurrent()
+            tracking.elevation.value = elevation(gainM = 75.0, lossM = 40.0)
+            runCurrent()
+
+            manager.stopRide()
+
+            val saved = writer.saved.single()
+            assertEquals(RIDE_ID, saved.rideId)
+            assertEquals(1234.5, saved.descriptors.distanceM, TOLERANCE)
+            assertEquals(321L, saved.descriptors.movingSeconds)
+            assertEquals(8.4, saved.descriptors.avgSpeedMps, TOLERANCE)
+            assertEquals(8.4, saved.descriptors.maxSpeedMps, TOLERANCE)
+            assertEquals(75.0, saved.elevationGainM, TOLERANCE)
+            assertEquals(40.0, saved.elevationLossM, TOLERANCE)
+            assertEquals(250.0, saved.caloriesKcal ?: Double.NaN, TOLERANCE)
+        }
+
     private fun TestScope.manager(
         writer: FakeRideSessionWriter = FakeRideSessionWriter(),
         tracking: FakeTrackingManager = FakeTrackingManager(),

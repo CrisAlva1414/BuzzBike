@@ -27,6 +27,12 @@ class RideRepository
 
         suspend fun getRideById(id: String): RideEntity? = rideDao.getRideById(id)
 
+        /**
+         * Returns the full persisted ride, including every final descriptor
+         * populated by [saveRideDescriptors] once the session is stopped.
+         */
+        suspend fun getRideWithDescriptors(rideId: String): RideEntity? = rideDao.getRideById(rideId)
+
         override suspend fun startRide(): String {
             rideDao.deactivateAllRides()
             val rideId = UUID.randomUUID().toString()
