@@ -890,3 +890,59 @@ Al detener un ride, si el sync está configurado: serializar payload, encolar en
 
 ### Próximo paso
 Gate final tester + security-reviewer sobre el diff de sync (9d608bb..HEAD).
+
+---
+
+## Iteration 20 — 2026-10-27 — Gate final bloque sync: FAIL / ESCALADA
+
+### Resultado
+| Gate | Veredicto |
+|---|---|
+| Build/tests | PASS (157 tests, 0 failures, ktlint/detekt/assembleDebug OK) |
+| tester | **FAIL** |
+| security-reviewer | **FAIL** |
+
+### Hallazgo que fuerza escalada (alto)
+**Secreto HMAC sin ruta de aprovisionamiento E2E.** La clave se genera dentro de
+Android Keystore y nunca se exporta; el receptor Hermes necesita la MISMA clave
+para verificar. No existe flujo (pegar secreto, pairing, QR, export) ni UI de
+configuración. Si el receptor verifica, todo el sync falla; si no verifica, no
+hay autenticidad/integridad real. Requiere decisión humana de arquitectura.
+
+### Hallazgos code-fixables (tester + security)
+1. [alta] Outbox drena solo un batch de 10 y `Sent` → SUCCESS: filas PENDING
+   quedan huérfanas. `ExistingWorkPolicy.KEEP` puede ignorar rides nuevos.
+2. [media] Sin dedupe por `ride.id` (ADR-003); `Index(rideId)` no único;
+   `X-Ride-Id` viaja fuera de la firma.
+3. [media] `timeoutSeconds`/`retryCount`/`senderType` de HermesConfig no se aplican.
+4. [media] Payload calórico sin modelo ni intervalo (AGENTS §6.4, ADR-003).
+5. [media] Filas SENT nunca se purgan; retención indefinida de waypoints.
+6. [media/hipótesis] Health check por defecto hace GET al webhook POST → 405 y
+   `BackendUnavailable` permanente si no hay `healthCheckUrl` dedicado.
+7. [baja] URL permite http/loopback y el sender real no valida; posible URL con
+   credenciales en inputData de WorkManager.
+8. [baja] Permisos declarados de más (background location, activity recognition,
+   FGS health, BLE).
+9. [baja] Robolectric 4.16.1 → BouncyCastle 1.81 con CVE-2026-5598 (test-only);
+   sin lockfile de dependencias.
+10. [baja] Doble stop no idempotente; RideSyncOutcome descartado.
+11. [baja] Código duplicado/muerto: RideRepository.enqueueOutbox, HermesSenderFactory/stubs.
+12. [baja] `lintDebug` falla por 3 NonObservableLocale preexistentes en RideScreen.
+
+### Estado
+**ESCALADA** — esperando decisión humana sobre aprovisionamiento del secreto HMAC
+(y opcionalmente cifrado en reposo). No se commiteó nada nuevo.
+
+### Próximo paso propuesto
+R1 drenaje completo; R2 dedupe + idempotencia; R3 purga SENT + worker periódico;
+R4 honrar config; R5 payload calórico con rango/modelo; R6 healthCheckUrl dedicado;
+R7 validación https/loopback; R8 inputData sin credenciales; R9 permisos;
+R10 pin BouncyCastle + lockfile; R11 lint; R12 deuda de test de Keystore.
+
+### Decisión humana (2026-10-28)
+- **A**: secreto HMAC definido en el NAS y pegado en la app; se sella con clave AES de Android Keystore (envelope encryption).
+- **SQLCipher ahora** para no acumular deuda técnica.
+- Health check: endpoint dedicado documentado; la auth (HMAC) aplica tanto a API como a webhook.
+
+### Plan de remediación
+S1 secreto (A) → S2 SQLCipher → S3 health check autenticado + contrato → R1..R12.
