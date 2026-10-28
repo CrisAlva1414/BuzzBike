@@ -34,23 +34,25 @@ BuzzBike registra tus rides con el GPS y los sensores del teléfono, calcula des
 | Área | Estado |
 |---|---|
 | Documentación base | ✅ Creada (AGENTS.md, ADRs, formato, research) |
-| Código de producción | ❌ Aún no empezado |
-| Build de Android | ❌ Bloqueado: falta JDK 17+ y Android SDK en la máquina de desarrollo |
+| Toolchain de build | ✅ Instalado 2026-10-26 (JDK Zulu 17.0.13, Android SDK 36, Gradle 9.8.2) |
+| Código de producción | 🚧 Scaffold escrito y commiteado (2026-10-26); gate de build sin cerrar |
+| Build de Android | ⚠️ `assembleDebug` aún sin completar (interrumpido); `test`/linters nunca corridos. Sin APK todavía |
 | Releases | ❌ Ninguna todavía |
 
-El plan de implementación está dividido en 8 slices; el detalle está en [`docs/sessions/2026-10-02-sprint-00-discovery.md`](docs/sessions/2026-10-02-sprint-00-discovery.md).
+El plan de implementación (fases, slices, criterios de aceptación y estado) está en [`docs/roadmap.md`](docs/roadmap.md); el plan original de 8 slices quedó en la sesión de discovery [`docs/sessions/2026-10-02-sprint-00-discovery.md`](docs/sessions/2026-10-02-sprint-00-discovery.md).
 
 ---
 
 ## Cómo compilar
 
-> **Prerrequisito (pendiente):** JDK 17+ y Android SDK. Sin esto, Gradle no corre.
-
-Cuando el toolchain esté instalado:
+> **Prerrequisito:** JDK 17+ y Android SDK 36. En la máquina de desarrollo del proyecto ya están instalados (2026-10-26) — cargalos con `source /home/notebook01/tools/androidenv.sh` antes de correr Gradle. En cualquier otra máquina: instalalos por tu cuenta (JDK Zulu 17.0.13 o compatible + Android SDK 36).
+>
+> **Arrancando en una máquina vacía (Linux, sin sudo)?** Seguí la guía completa paso a paso, con verificación y pitfalls: [`docs/setup-entorno.md`](docs/setup-entorno.md).
 
 ```bash
 git clone <URL_DEL_REPO>
 cd BuzzBike
+source /home/notebook01/tools/androidenv.sh   # solo en la máquina de desarrollo del proyecto
 
 # Build de debug
 ./gradlew assembleDebug
