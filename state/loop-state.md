@@ -293,3 +293,38 @@ histéresis, grade/VAM. Después slice C: energía (ADR-001).
 
 ### Iteraciones
 - Total: 2 (slice A cerrado)
+
+---
+
+## Iteration 3 — 2026-10-27 — Domain slice B: elevación
+
+### Tarea
+Implementar ADR-006: fusión barómetro + GPS/DEM, histéresis, guardia de ascensor.
+
+### Resultado
+| Comando | Exit |
+|---|---|
+| test | 0 (44 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Archivos
+- `domain/elevation/ElevationModels.kt`, `ElevationParameters.kt`, `BarometricConverter.kt`, `ElevationProcessor.kt`
+- `test/domain/elevation/ElevationProcessorTest.kt` (5 tests)
+
+### Decisiones
+- Barómetro relativo con fórmula US Standard Atmosphere 1976; p0 no fijo a 1013.25.
+- Histéresis 3 m con barómetro, 10 m solo GPS.
+- Guardia de ascensor: Δh>3m, Δs<5m, aceleración baja.
+- Ancla: GPS MSL > GPS elipsoidal > barómetro relativo.
+- Sin interpolación entre gaps.
+
+### Pendiente
+- Suavizado Savitzky–Golay completo (mediana 3 + SG 9s/orden 2) — implementación básica.
+- De-trending en paradas >30s.
+- Grade/VAM sobre ventanas.
+- Integración con DEM anchor provider.
+
+### Próximo
+Slice C: energía (ADR-001) — MET sample-a-sample, perfil opcional, bandas de incertidumbre.
