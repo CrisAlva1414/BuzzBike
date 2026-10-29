@@ -63,4 +63,12 @@ interface OutboxStore {
      * [cutoffMillis]. `PENDING` rows are never touched.
      */
     suspend fun deleteFailedOlderThan(cutoffMillis: Long)
+
+    /**
+     * Deletes every queued payload.
+     *
+     * Used when the user disconnects sync: revoking the configuration must not
+     * leave ride payloads sitting in the outbox waiting for a future drain.
+     */
+    suspend fun deleteAll()
 }

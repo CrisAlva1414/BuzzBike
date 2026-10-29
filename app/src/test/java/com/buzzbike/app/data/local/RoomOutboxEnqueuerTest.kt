@@ -7,6 +7,7 @@ import com.buzzbike.app.data.local.entity.OutboxEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,6 +75,58 @@ class RoomOutboxEnqueuerTest {
             assertEquals(7L, readLong(RIDE_ID, "maxAttempts"))
         }
 
+    @Test
+    fun given_failedRow_when_enqueue_then_rewoundToPendingWithNewLimit() =
+        runTest {
+            enqueuer.enqueue(RIDE_ID, PAYLOAD, maxAttempts = 7)
+            execSql(
+                "UPDATE outbox SET status = 'FAILED', attemptCount = 3, lastError = 'x' WHERE rideId = ?",
+                RIDE_ID,
+            )
+
+            enqueuer.enqueue(RIDE_ID, OTHER_PAYLOAD, maxAttempts = 9)
+
+            assertEquals(1L, countAllRows())
+            assertEquals(OutboxEntity.STATUS_PENDING, readColumn(RIDE_ID, "status"))
+            assertEquals(0, readInt(RIDE_ID, "attemptCount"))
+            assertEquals(9, readInt(RIDE_ID, "maxAttempts"))
+            assertNull(readNullableString(RIDE_ID, "lastError"))
+        }
+
+    @Test
+    fun given_pendingRow_when_enqueueAgain_then_leftUntouched() =
+        runTest {
+            enqueuer.enqueue(RIDE_ID, PAYLOAD, maxAttempts = 7)
+            execSql("UPDATE outbox SET attemptCount = 2 WHERE rideId = ?", RIDE_ID)
+
+            enqueuer.enqueue(RIDE_ID, OTHER_PAYLOAD, maxAttempts = 3)
+
+            assertEquals(1L, countAllRows())
+            assertEquals(7, readInt(RIDE_ID, "maxAttempts"))
+            assertEquals(2, readInt(RIDE_ID, "attemptCount"))
+            assertEquals(OutboxEntity.STATUS_PENDING, readColumn(RIDE_ID, "status"))
+        }
+
+    @Test
+    fun given_sentRow_when_enqueueAgain_then_leftUntouched() =
+        runTest {
+            enqueuer.enqueue(RIDE_ID, PAYLOAD, maxAttempts = 7)
+            execSql("UPDATE outbox SET status = 'SENT' WHERE rideId = ?", RIDE_ID)
+
+            enqueuer.enqueue(RIDE_ID, OTHER_PAYLOAD, maxAttempts = 3)
+
+            assertEquals(1L, countAllRows())
+            assertEquals(OutboxEntity.STATUS_SENT, readColumn(RIDE_ID, "status"))
+            assertEquals(7, readInt(RIDE_ID, "maxAttempts"))
+        }
+
+    private fun execSql(
+        sql: String,
+        vararg args: Any,
+    ) {
+        database.openHelper.writableDatabase.execSQL(sql, args)
+    }
+
     private fun countAllRows(): Long =
         database
             .query("SELECT COUNT(*) FROM outbox", null)
@@ -101,6 +154,27 @@ class RoomOutboxEnqueuerTest {
             .use { cursor ->
                 cursor.moveToFirst()
                 cursor.getLong(0)
+            }
+
+    private fun readInt(
+        rideId: String,
+        column: String,
+    ): Int =
+        database
+            .query("SELECT $column FROM outbox WHERE rideId = ?", arrayOf(rideId))
+            .use { cursor ->
+                cursor.moveToFirst()
+                cursor.getInt(0)
+            }
+
+    private fun readNullableString(
+        rideId: String,
+        column: String,
+    ): String? =
+        database
+            .query("SELECT $column FROM outbox WHERE rideId = ?", arrayOf(rideId))
+            .use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
             }
 
     private companion object {

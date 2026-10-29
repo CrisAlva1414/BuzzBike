@@ -48,6 +48,10 @@ class RoomOutboxStore
         override suspend fun deleteFailedOlderThan(cutoffMillis: Long) {
             outboxDao.deleteFailedOlderThan(cutoffMillis)
         }
+
+        override suspend fun deleteAll() {
+            outboxDao.deleteAll()
+        }
     }
 
 private fun OutboxEntity.toOutboxItem(): OutboxItem =

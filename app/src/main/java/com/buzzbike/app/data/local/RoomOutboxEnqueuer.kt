@@ -11,9 +11,11 @@ import javax.inject.Singleton
  * Room-backed [OutboxEnqueuer].
  *
  * Inserts one immediately-eligible `PENDING` row. The insert is idempotent per
- * ride: if the ride is already in the outbox (including a row that was already
- * sent), the insert is ignored instead of replacing it, so a duplicated
- * `onRideFinished` cannot trigger a second delivery. The payload stays opaque:
+ * ride: if the ride is already in the outbox, the insert is ignored instead of
+ * replacing it, so a duplicated `onRideFinished` cannot trigger a second
+ * delivery. The only exception is an exhausted `FAILED` row: it is rewound to
+ * `PENDING` so a retry requested later is not blocked forever by the unique
+ * `rideId`. `PENDING`/`SENT` rows are left untouched. The payload stays opaque:
  * this adapter never parses or logs it.
  */
 @Singleton
@@ -28,18 +30,24 @@ class RoomOutboxEnqueuer
             maxAttempts: Int,
         ) {
             val now = System.currentTimeMillis()
-            outboxDao.insertIfAbsent(
-                OutboxEntity(
-                    id = UUID.randomUUID().toString(),
-                    rideId = rideId,
-                    payload = payload,
-                    status = OutboxEntity.STATUS_PENDING,
-                    // At least one attempt, even if the config says 0.
-                    maxAttempts = maxAttempts.coerceAtLeast(1),
-                    createdAt = now,
-                    updatedAt = now,
-                    nextAttemptAt = now,
-                ),
-            )
+            val attemptLimit = maxAttempts.coerceAtLeast(1)
+            val insertedRowId =
+                outboxDao.insertIfAbsent(
+                    OutboxEntity(
+                        id = UUID.randomUUID().toString(),
+                        rideId = rideId,
+                        payload = payload,
+                        status = OutboxEntity.STATUS_PENDING,
+                        // At least one attempt, even if the config says 0.
+                        maxAttempts = attemptLimit,
+                        createdAt = now,
+                        updatedAt = now,
+                        nextAttemptAt = now,
+                    ),
+                )
+            if (insertedRowId != -1L) {
+                return
+            }
+            outboxDao.resetFailedForRetry(rideId, now, attemptLimit)
         }
     }

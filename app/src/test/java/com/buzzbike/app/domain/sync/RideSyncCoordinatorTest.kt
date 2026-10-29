@@ -195,6 +195,8 @@ class RideSyncCoordinatorTest {
             failure?.let { throw it }
             configs += config
         }
+
+        override fun cancel() = Unit
     }
 
     private companion object {

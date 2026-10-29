@@ -1,6 +1,7 @@
 package com.buzzbike.app.sync
 
 import android.content.Context
+import androidx.work.WorkManager
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,5 +28,18 @@ class WorkManagerSyncScheduler
         override fun schedule(config: HermesConfig) {
             HermesSyncScheduler.enqueue(context, config)
             HermesSyncScheduler.schedulePeriodic(context, config)
+        }
+
+        /**
+         * Cancels both unique works by name.
+         *
+         * WorkManager 2.10 only exposes `cancelUniqueWork`; it applies to the
+         * one-time and the periodic unique work alike, so revoking sync leaves
+         * no scheduled delivery behind.
+         */
+        override fun cancel() {
+            val workManager = WorkManager.getInstance(context)
+            workManager.cancelUniqueWork(HermesSyncScheduler.UNIQUE_WORK_NAME)
+            workManager.cancelUniqueWork(HermesSyncScheduler.PERIODIC_WORK_NAME)
         }
     }

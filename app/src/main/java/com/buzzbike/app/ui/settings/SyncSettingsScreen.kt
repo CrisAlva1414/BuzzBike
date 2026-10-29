@@ -1,5 +1,9 @@
 package com.buzzbike.app.ui.settings
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,6 +32,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.password
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -45,6 +53,15 @@ private const val SYNC_CONSENT_TEXT =
  * The HMAC secret lives only in a local `remember` and is never exposed through
  * [SyncSettingsUiState]; it is written once to sealed storage by the view model
  * and never logged (AGENTS.md §7).
+ *
+ * The whole screen is protected with `FLAG_SECURE` while composed so the
+ * secret cannot appear in screenshots or the recent-apps thumbnail.
+ *
+ * Autofill is **not** explicitly disabled here: Compose does not expose a
+ * supported opt-out for the platform autofill service on a text field, so this
+ * screen relies on the password keyboard type plus the omission of any
+ * `contentType`/autofill semantics. That limitation is intentional and must be
+ * revisited if a stable opt-out becomes available.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,13 +72,24 @@ fun SyncSettingsScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     val state by viewModel.uiState.collectAsState()
 
+    // Hide the whole screen (secret included) from screenshots and recents.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = view.context.findActivity()?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
+
     var secret by remember { mutableStateOf("") }
     var retryText by remember { mutableStateOf("") }
 
     // Keep the numeric field in sync with loaded/persisted values.
     LaunchedEffect(state.retryCount) { retryText = state.retryCount.toString() }
-    // The secret is write-only: clear it as soon as it has been persisted.
-    LaunchedEffect(state.isSaved) { if (state.isSaved) secret = "" }
+    // The secret is write-only: clear it on the save event itself, not on the
+    // sticky `isSaved` flag (which is already true after loading a config).
+    LaunchedEffect(state.savedTick) {
+        if (state.savedTick > 0) secret = ""
+    }
 
     Scaffold(
         topBar = {
@@ -115,8 +143,15 @@ fun SyncSettingsScreen(
                 label = { Text("Secreto HMAC") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        autoCorrectEnabled = false,
+                    ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .semantics { password() },
             )
 
             Text(
@@ -165,3 +200,11 @@ fun SyncSettingsScreen(
         }
     }
 }
+
+/** Unwraps [ContextWrapper]s to reach the hosting [Activity], if any. */
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }

@@ -192,6 +192,8 @@ class RideViewModelTest {
 
     private object UnusedSyncWorkScheduler : SyncWorkScheduler {
         override fun schedule(config: HermesConfig) = Unit
+
+        override fun cancel() = Unit
     }
 
     /** No persisted sync configuration, so rides are not enqueued. */

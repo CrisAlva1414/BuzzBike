@@ -8,6 +8,9 @@ sealed interface ImportResult {
     /** The provided secret is below [HmacSecretManager.MIN_SECRET_BYTES]. */
     data object TooShort : ImportResult
 
+    /** The provided secret exceeds [HmacSecretManager.MAX_SECRET_BYTES]. */
+    data object TooLong : ImportResult
+
     /** Sealing or persisting failed; anything previously stored is untouched. */
     data object Failure : ImportResult
 }
@@ -29,16 +32,19 @@ class HmacSecretManager(
     /**
      * Seals [secret] and stores it, replacing any previous secret.
      *
-     * The caller's array is zeroed in a `finally` block (best effort) so the
-     * plaintext does not stay in memory longer than necessary — even when the
-     * input is rejected as too short. The secret is never logged.
+     * Length is checked before sealing: anything below [MIN_SECRET_BYTES] is
+     * rejected as weak, and anything above [MAX_SECRET_BYTES] is rejected
+     * instead of sealing an unbounded blob. The caller's array is zeroed in a
+     * `finally` block (best effort) so the plaintext does not stay in memory
+     * longer than necessary — even when the input is rejected. The secret is
+     * never logged.
      */
     fun importSecret(secret: ByteArray): ImportResult =
         try {
-            if (secret.size < MIN_SECRET_BYTES) {
-                ImportResult.TooShort
-            } else {
-                persist(secret)
+            when {
+                secret.size > MAX_SECRET_BYTES -> ImportResult.TooLong
+                secret.size < MIN_SECRET_BYTES -> ImportResult.TooShort
+                else -> persist(secret)
             }
         } finally {
             secret.fill(0)
@@ -67,5 +73,12 @@ class HmacSecretManager(
          * is rejected instead of silently accepted.
          */
         const val MIN_SECRET_BYTES = 32
+
+        /**
+         * Maximum accepted secret length. The NAS generates the secret, but a
+         * pasted value should not be able to balloon the sealed blob (or the
+         * Keystore operation) without bound.
+         */
+        const val MAX_SECRET_BYTES = 4096
     }
 }

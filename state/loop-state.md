@@ -1263,3 +1263,35 @@ Payload v2 con `calories` objeto, 401/403 = Misconfigured, purga en retornos tem
 
 ### Próximo paso
 F2: endurecer campo secreto, revocación real en disconnect, reencolar FAILED, IO en save/disconnect; luego instrumentación y gate final.
+
+---
+
+## Iteration 31 — 2026-10-28 — F2a: secreto + revocación + FAILED (COMPLETADO)
+
+### Tarea
+FLAG_SECURE, semántica password, trim/máximo del secreto, IO, disconnect cancela work y purga outbox, reencolar FAILED.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (246 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+
+### Cambios
+- `SyncSettingsScreen`: FLAG_SECURE, `password()` semantics, PasswordVisualTransformation, autoCorrect off, limpieza por `savedTick`.
+- `HmacSecretManager`: MAX 4096, `TooLong`; ViewModel hace trim.
+- `@IoDispatcher` + `CoroutineModule`; save/disconnect en IO.
+- `SyncWorkScheduler.cancel()` + `WorkManagerSyncScheduler.cancel()`; `OutboxStore.deleteAll()`; disconnect cancela y purga.
+- `OutboxDao.resetFailedForRetry(rideId,...)` atómico (fusionado con getByRideId para respetar TooManyFunctions); `RoomOutboxEnqueuer` reencola FAILED y no toca PENDING/SENT.
+- Tests: 246 (+7).
+
+### Notas
+- WorkManager 2.10.5 no tiene `cancelUniquePeriodicWork`; `cancelUniqueWork` cubre ambos nombres.
+- Autofill no está deshabilitado explícitamente en Compose (documentado).
+
+### Próximo paso
+F3a: secreto corrupto, 429 sin consumir intentos, botón “Probar conexión”.

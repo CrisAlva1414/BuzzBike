@@ -399,6 +399,10 @@ private class FakeOutboxStore(
     override suspend fun deleteFailedOlderThan(cutoffMillis: Long) {
         deleteFailedCutoffs += cutoffMillis
     }
+
+    override suspend fun deleteAll() {
+        remaining.clear()
+    }
 }
 
 private data class FailedMark(

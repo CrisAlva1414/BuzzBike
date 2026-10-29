@@ -28,6 +28,25 @@ interface OutboxDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIfAbsent(outbox: OutboxEntity): Long
 
+    /**
+     * Rewinds an exhausted `FAILED` row for [rideId] so it can be delivered
+     * again, applying [maxAttempts] to the new cycle.
+     *
+     * The `status = 'FAILED'` predicate makes this a no-op for `PENDING` or
+     * `SENT` rows, so callers can invoke it after an ignored insert without
+     * re-checking the status themselves.
+     */
+    @Query(
+        "UPDATE outbox SET status = 'PENDING', attemptCount = 0, lastError = NULL, " +
+            "nextAttemptAt = :now, updatedAt = :now, maxAttempts = :maxAttempts " +
+            "WHERE rideId = :rideId AND status = 'FAILED'",
+    )
+    suspend fun resetFailedForRetry(
+        rideId: String,
+        now: Long,
+        maxAttempts: Int,
+    )
+
     @Query(
         "SELECT * FROM outbox WHERE status = 'PENDING' AND attemptCount < maxAttempts " +
             "AND nextAttemptAt <= :now ORDER BY createdAt ASC LIMIT :limit",
@@ -68,6 +87,9 @@ interface OutboxDao {
 
     @Query("DELETE FROM outbox WHERE status = 'SENT'")
     suspend fun deleteSent()
+
+    @Query("DELETE FROM outbox")
+    suspend fun deleteAll()
 
     /**
      * Deletes exhausted failures whose last update is strictly before

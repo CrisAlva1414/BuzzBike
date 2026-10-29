@@ -45,6 +45,17 @@ class HmacSecretManagerTest {
     }
 
     @Test
+    fun given_secretOf4097Bytes_when_import_then_tooLongAndNothingStored() {
+        val secret = secretOf(HmacSecretManager.MAX_SECRET_BYTES + 1, START_BYTE)
+
+        val result = manager.importSecret(secret)
+
+        assertEquals(ImportResult.TooLong, result)
+        assertFalse(manager.hasSecret())
+        assertNull(storage.readSealed())
+    }
+
+    @Test
     fun given_importedSecret_when_clear_then_hasSecretFalse() {
         manager.importSecret(secretOf(SECRET_BYTES, START_BYTE))
 

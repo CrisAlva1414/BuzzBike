@@ -9,4 +9,12 @@ package com.buzzbike.app.domain.sync
  */
 interface SyncWorkScheduler {
     fun schedule(config: HermesConfig)
+
+    /**
+     * Cancels every queued or running sync pass.
+     *
+     * Used when sync is disconnected: leaving work enqueued would keep
+     * attempting deliveries after the user revoked the configuration.
+     */
+    fun cancel()
 }
