@@ -5,6 +5,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.buzzbike.app.ui.ride.RideScreen
+import com.buzzbike.app.ui.settings.SyncSettingsScreen
+
+private const val RIDE_ROUTE = "ride"
+private const val SETTINGS_ROUTE = "settings"
 
 @Composable
 fun NavGraph() {
@@ -12,10 +16,17 @@ fun NavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = "ride",
+        startDestination = RIDE_ROUTE,
     ) {
-        composable("ride") {
-            RideScreen()
+        composable(RIDE_ROUTE) {
+            RideScreen(
+                onOpenSettings = {
+                    navController.navigate(SETTINGS_ROUTE) { launchSingleTop = true }
+                },
+            )
+        }
+        composable(SETTINGS_ROUTE) {
+            SyncSettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }

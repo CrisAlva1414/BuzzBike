@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,7 +29,10 @@ private const val WHOLE_KCAL_FORMAT = "%.0f"
 private const val UNKNOWN_CALORIES = "Calories: --"
 
 @Composable
-fun RideScreen(viewModel: RideViewModel = hiltViewModel()) {
+fun RideScreen(
+    onOpenSettings: () -> Unit,
+    viewModel: RideViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsState()
     // Observable locale: recomposes when the user changes the app language.
     val locale = LocalConfiguration.current.locales[0]
@@ -84,6 +88,13 @@ fun RideScreen(viewModel: RideViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (uiState.isTracking) "Stop Ride" else "Start Ride")
+        }
+
+        OutlinedButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Sync settings")
         }
     }
 }

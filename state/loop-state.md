@@ -1206,3 +1206,33 @@ Store persistente de HermesConfig + ViewModel de ajustes + RideViewModel leyendo
 
 ### Próximo paso
 S4b: pantalla Compose de ajustes + navegación.
+
+---
+
+## Iteration 29 — 2026-10-28 — S4b: pantalla de Sync (COMPLETADO)
+
+### Tarea
+Pantalla Compose mínima para configurar endpoint, health check, retry y secreto; guardar/desconectar; navegación.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (233 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+
+### Cambios
+- `ui/settings/SyncSettingsScreen.kt`: Scaffold/TopAppBar, campos URL/retry, secreto con PasswordVisualTransformation en estado local (nunca en el VM), ayuda, error/confirmación, Guardar/Desconectar/Volver.
+- `NavGraph`: rutas ride/settings con launchSingleTop.
+- `RideScreen`: parámetro onOpenSettings + botón “Sync settings”.
+- Sin dependencias nuevas; sin iconos (TextButton Atrás).
+
+### Notas
+- El secreto se limpia al guardar; no se loguea.
+- El flujo de configuración ahora es alcanzable desde la app (resuelve el bloqueo de “sin caller”).
+
+### Próximo paso
+Gate final tester + security-reviewer sobre el diff de remediación.
