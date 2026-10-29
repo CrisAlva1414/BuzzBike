@@ -2,6 +2,8 @@ package com.buzzbike.app.sync
 
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.HmacKeyProvider
+import com.buzzbike.app.domain.sync.HmacSecretMissingException
+import com.buzzbike.app.domain.sync.HmacSigner
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpHandler
 import com.sun.net.httpserver.HttpsConfigurator
@@ -206,6 +208,30 @@ class HttpHermesSenderTest {
         }
 
     @Test
+    fun given_missingSecret_when_sendRide_thenFailureWithoutException() =
+        runTest {
+            val sender = senderWithSigner(MissingSecretSigner())
+
+            val result = sender.sendRide(RIDE_ID, PAYLOAD)
+
+            assertFalse(result.success)
+            assertNull(result.statusCode)
+            assertEquals(HMAC_SECRET_MISSING_MESSAGE, result.errorMessage)
+        }
+
+    @Test
+    fun given_corruptSecret_when_sendRide_thenFailureWithGenericMessageAndNoException() =
+        runTest {
+            val sender = senderWithSigner(CorruptSecretSigner())
+
+            val result = sender.sendRide(RIDE_ID, PAYLOAD)
+
+            assertFalse(result.success)
+            assertNull(result.statusCode)
+            assertEquals(HMAC_SECRET_CORRUPT_MESSAGE, result.errorMessage)
+        }
+
+    @Test
     fun given_differentPayloads_when_sendRideTwice_then_signaturesDiffer() =
         runTest {
             val signatures = CopyOnWriteArrayList<String>()
@@ -266,6 +292,14 @@ class HttpHermesSenderTest {
             nowSeconds = { TIMESTAMP },
         )
 
+    /** Sender bound to a signer that fails before any socket is opened. */
+    private fun senderWithSigner(signer: HmacSigner): HttpHermesSender =
+        HttpHermesSender(
+            config = HermesConfig(endpoint = HEALTHY_ENDPOINT),
+            hmacSigner = signer,
+            nowSeconds = { TIMESTAMP },
+        )
+
     private fun webhookUrl(server: HttpsServer): String = "https://$LOOPBACK:${server.address.port}$WEBHOOK_PATH"
 
     /** Independent HMAC-SHA256 over `"<timestamp>." + payload`, lowercase hex. */
@@ -295,6 +329,32 @@ class HttpHermesSenderTest {
         private val key: ByteArray,
     ) : HmacKeyProvider {
         override fun getOrCreateKey(): SecretKey = SecretKeySpec(key, ALGORITHM)
+    }
+
+    private class MissingSecretSigner : HmacSigner {
+        override fun sign(
+            timestampSeconds: Long,
+            payload: ByteArray,
+        ): String = throw HmacSecretMissingException()
+
+        override fun verify(
+            timestampSeconds: Long,
+            payload: ByteArray,
+            signature: String,
+        ): Boolean = false
+    }
+
+    private class CorruptSecretSigner : HmacSigner {
+        override fun sign(
+            timestampSeconds: Long,
+            payload: ByteArray,
+        ): String = throw IllegalArgumentException(CORRUPT_SECRET)
+
+        override fun verify(
+            timestampSeconds: Long,
+            payload: ByteArray,
+            signature: String,
+        ): Boolean = false
     }
 
     /** Loads the throwaway self-signed test keystore from test resources. */
@@ -344,6 +404,10 @@ class HttpHermesSenderTest {
         const val HEADER_LOCATION = "Location"
         const val CONTENT_TYPE_JSON = "application/json; charset=utf-8"
         const val INVALID_CONFIGURATION_MESSAGE = "invalid endpoint configuration"
+        const val HMAC_SECRET_MISSING_MESSAGE = "HMAC secret is not configured"
+        const val HMAC_SECRET_CORRUPT_MESSAGE = "HMAC secret is corrupt"
+        const val HEALTHY_ENDPOINT = "https://hermes.example/webhook"
+        const val CORRUPT_SECRET = "corrupt secret"
         const val SIGNATURE_COUNT = 2
         const val DEFAULT_TIMEOUT_SECONDS = 30
         const val RELEASE_TIMEOUT_SECONDS = 5L

@@ -101,6 +101,13 @@ class HttpConnectivityChecker(
             // The secret was reported as provisioned by the caller, but the
             // provider could not load it: still a configuration problem.
             Reachability.Misconfigured
+        } catch (ignored: IllegalArgumentException) {
+            // A corrupt/unreadable secret makes signing throw. The user can
+            // fix it by re-importing the secret, so this is configuration.
+            Reachability.Misconfigured
+        } catch (ignored: IllegalStateException) {
+            // Same as above for non-missing IllegalStateException failures.
+            Reachability.Misconfigured
         } catch (ignored: IOException) {
             Reachability.Unavailable
         } catch (ignored: SecurityException) {

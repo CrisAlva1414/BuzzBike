@@ -96,6 +96,26 @@ class HttpConnectivityCheckerTest {
         }
 
     @Test
+    fun given_signerThrowsIllegalArgument_when_check_then_misconfigured() =
+        runTest {
+            val reachability =
+                checker(hmacSigner = CorruptSecretSigner())
+                    .check(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(Reachability.Misconfigured, reachability)
+        }
+
+    @Test
+    fun given_signerThrowsIllegalState_when_check_then_misconfigured() =
+        runTest {
+            val reachability =
+                checker(hmacSigner = CorruptSecretStateSigner())
+                    .check(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(Reachability.Misconfigured, reachability)
+        }
+
+    @Test
     fun given_healthCheckReturns204_when_check_then_unavailable() =
         runTest {
             val server = startServer(HTTP_NO_CONTENT_CODE)
@@ -287,6 +307,32 @@ class HttpConnectivityCheckerTest {
         ): Boolean = false
     }
 
+    private class CorruptSecretSigner : HmacSigner {
+        override fun sign(
+            timestampSeconds: Long,
+            payload: ByteArray,
+        ): String = throw IllegalArgumentException(CORRUPT_SECRET)
+
+        override fun verify(
+            timestampSeconds: Long,
+            payload: ByteArray,
+            signature: String,
+        ): Boolean = false
+    }
+
+    private class CorruptSecretStateSigner : HmacSigner {
+        override fun sign(
+            timestampSeconds: Long,
+            payload: ByteArray,
+        ): String = throw IllegalStateException(CORRUPT_SECRET)
+
+        override fun verify(
+            timestampSeconds: Long,
+            payload: ByteArray,
+            signature: String,
+        ): Boolean = false
+    }
+
     private companion object {
         const val LOOPBACK = "127.0.0.1"
         const val EPHEMERAL_PORT = 0
@@ -307,6 +353,7 @@ class HttpConnectivityCheckerTest {
         const val HEADER_TIMESTAMP = "X-Webhook-Timestamp"
         const val HEADER_SIGNATURE = "X-Webhook-Signature-V2"
         const val ALGORITHM = "HmacSHA256"
+        const val CORRUPT_SECRET = "corrupt secret"
         val KEY = "test-secret".toByteArray(StandardCharsets.UTF_8)
         val EMPTY_BODY = ByteArray(0)
     }

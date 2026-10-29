@@ -68,12 +68,19 @@ class HttpHermesSender(
         }
         val timestamp = nowSeconds()
         return try {
-            deliverSigned(payload, timestamp, hmacSigner.sign(timestamp, payload))
+            val signature = hmacSigner.sign(timestamp, payload)
+            deliverSigned(payload, timestamp, signature)
         } catch (expected: HmacSecretMissingException) {
             // Sync is opt-in and the secret is user-provisioned; a missing
             // secret is a configuration state, not a transport failure. It is
             // reported without leaking any secret material.
             SendResult(success = false, errorMessage = HMAC_SECRET_MISSING_MESSAGE)
+        } catch (ignored: IllegalArgumentException) {
+            // A corrupt/unreadable secret makes signing throw. Report it as a
+            // configuration problem without logging any secret material.
+            SendResult(success = false, errorMessage = HMAC_SECRET_CORRUPT_MESSAGE)
+        } catch (ignored: IllegalStateException) {
+            SendResult(success = false, errorMessage = HMAC_SECRET_CORRUPT_MESSAGE)
         }
     }
 
@@ -165,6 +172,7 @@ class HttpHermesSender(
         const val NETWORK_ERROR_MESSAGE = "network error while sending ride"
         const val SECURITY_ERROR_MESSAGE = "security error while sending ride"
         const val HMAC_SECRET_MISSING_MESSAGE = "HMAC secret is not configured"
+        const val HMAC_SECRET_CORRUPT_MESSAGE = "HMAC secret is corrupt"
 
         fun resolveTimeoutMillis(timeoutSeconds: Int): Int =
             (timeoutSeconds.coerceAtLeast(MIN_TIMEOUT_SECONDS).toLong() * MILLIS_PER_SECOND)

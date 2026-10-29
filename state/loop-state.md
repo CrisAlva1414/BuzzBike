@@ -1295,3 +1295,26 @@ FLAG_SECURE, semántica password, trim/máximo del secreto, IO, disconnect cance
 
 ### Próximo paso
 F3a: secreto corrupto, 429 sin consumir intentos, botón “Probar conexión”.
+
+---
+
+## Iteration 32 — 2026-10-28 — F3a: corrupto + 429 + test connection (COMPLETADO)
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (257 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+
+### Cambios
+- Secreto corrupto (`IllegalArgumentException`/`IllegalStateException`) → Misconfigured en checker y “HMAC secret is corrupt” en sender, sin crash.
+- HTTP 429: `DeliveryOutcome.RATE_LIMITED`, no consume intentos, corta el drenaje y devuelve BackendUnavailable; filas siguen PENDING.
+- “Probar conexión”: `ConnectionStatus` (IDLE/CHECKING/OK/UNREACHABLE/MISCONFIGURED), validación previa, requiere secreto, botón + estado en UI.
+- Refactor detekt: `buildConfig`/`configValidationError` top-level y `evaluateConnection` sin labels.
+
+### Próximo paso
+F3b: documentar decisiones (pérdida de datos pre-release, TLS, consentimiento) y tests de instrumentación.

@@ -3,10 +3,12 @@ package com.buzzbike.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.buzzbike.app.di.IoDispatcher
+import com.buzzbike.app.domain.sync.ConnectivityChecker
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.HmacSecretManager
 import com.buzzbike.app.domain.sync.ImportResult
 import com.buzzbike.app.domain.sync.OutboxStore
+import com.buzzbike.app.domain.sync.Reachability
 import com.buzzbike.app.domain.sync.SyncConfigStore
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
 import com.buzzbike.app.domain.sync.endpointValidationError
@@ -20,6 +22,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.charset.StandardCharsets
 import javax.inject.Inject
+
+/** Outcome of the user-triggered "Probar conexión" action. */
+enum class ConnectionStatus {
+    IDLE,
+    CHECKING,
+    OK,
+    UNREACHABLE,
+    MISCONFIGURED,
+}
 
 /**
  * UI state for the sync settings form.
@@ -42,6 +53,8 @@ data class SyncSettingsUiState(
      * becomes true when a previous configuration is loaded).
      */
     val savedTick: Int = 0,
+    /** Last result of [SyncSettingsViewModel.testConnection]; never carries a URL. */
+    val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
 )
 
 /**
@@ -59,6 +72,7 @@ class SyncSettingsViewModel
         private val secretManager: HmacSecretManager,
         private val scheduler: SyncWorkScheduler,
         private val outboxStore: OutboxStore,
+        private val connectivity: ConnectivityChecker,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SyncSettingsUiState())
@@ -108,7 +122,7 @@ class SyncSettingsViewModel
          */
         fun save(secret: String) {
             viewModelScope.launch {
-                val config = buildConfig()
+                val config = buildConfig(_uiState.value)
                 val result =
                     withContext(ioDispatcher) {
                         val error =
@@ -136,6 +150,65 @@ class SyncSettingsViewModel
         }
 
         /**
+         * Probes the configured health endpoint without sending any ride.
+         *
+         * URLs are validated with the same rules as [save] before any network
+         * call, and a missing secret short-circuits to
+         * [ConnectionStatus.MISCONFIGURED] without touching the checker. The
+         * checker itself never throws, so the status is always one of
+         * [ConnectionStatus.OK], [ConnectionStatus.UNREACHABLE] or
+         * [ConnectionStatus.MISCONFIGURED].
+         */
+        fun testConnection() {
+            viewModelScope.launch {
+                when (val outcome = evaluateConnection()) {
+                    is ConnectionOutcome.Error ->
+                        _uiState.update {
+                            it.copy(
+                                error = outcome.message,
+                                connectionStatus = ConnectionStatus.MISCONFIGURED,
+                            )
+                        }
+                    is ConnectionOutcome.Done ->
+                        _uiState.update { it.copy(connectionStatus = outcome.status) }
+                }
+            }
+        }
+
+        /**
+         * Runs the probe and reports either a user-facing error or the final
+         * status. The single `return` keeps the control flow linear: validation
+         * and secret checks short-circuit before any network call.
+         */
+        private suspend fun evaluateConnection(): ConnectionOutcome {
+            val config = buildConfig(_uiState.value)
+            val validationError = configValidationError(config)
+            val hasSecret =
+                validationError == null &&
+                    withContext(ioDispatcher) { secretManager.hasSecret() }
+            return when {
+                validationError != null -> ConnectionOutcome.Error(validationError)
+                !hasSecret -> ConnectionOutcome.Error(ERROR_SECRET_REQUIRED_FOR_TEST)
+                else -> {
+                    _uiState.update {
+                        it.copy(error = null, connectionStatus = ConnectionStatus.CHECKING)
+                    }
+                    val reachability =
+                        withContext(ioDispatcher) {
+                            connectivity.check(config.healthCheckUrl.orEmpty(), true)
+                        }
+                    val status =
+                        when (reachability) {
+                            Reachability.Available -> ConnectionStatus.OK
+                            Reachability.Unavailable -> ConnectionStatus.UNREACHABLE
+                            Reachability.Misconfigured -> ConnectionStatus.MISCONFIGURED
+                        }
+                    ConnectionOutcome.Done(status)
+                }
+            }
+        }
+
+        /**
          * Revokes sync: cancels queued work, drops every queued payload, and
          * clears both the configuration and the sealed secret.
          *
@@ -154,18 +227,6 @@ class SyncSettingsViewModel
                 _uiState.value = SyncSettingsUiState()
             }
         }
-
-        private fun buildConfig(): HermesConfig {
-            val state = _uiState.value
-            return HermesConfig(
-                endpoint = state.endpoint.trim(),
-                retryCount = state.retryCount.coerceAtLeast(1),
-                healthCheckUrl = state.healthCheckUrl.trim(),
-            )
-        }
-
-        private fun configValidationError(config: HermesConfig): String? =
-            endpointValidationError(config.endpoint) ?: config.healthCheckValidationError()
 
         private fun secretProvisioningError(secret: String): String? =
             if (secret.isBlank()) {
@@ -191,6 +252,34 @@ class SyncSettingsViewModel
             }
     }
 
+/**
+ * Builds a [HermesConfig] from a snapshot of the form.
+ *
+ * Kept as a top-level helper so the view-model stays under detekt's
+ * function-count budget; it reads the passed [state], never the flow directly.
+ */
+private fun buildConfig(state: SyncSettingsUiState): HermesConfig =
+    HermesConfig(
+        endpoint = state.endpoint.trim(),
+        retryCount = state.retryCount.coerceAtLeast(1),
+        healthCheckUrl = state.healthCheckUrl.trim(),
+    )
+
+/** Same rules as [SyncSettingsViewModel.save], reusable without instance state. */
+private fun configValidationError(config: HermesConfig): String? =
+    endpointValidationError(config.endpoint) ?: config.healthCheckValidationError()
+
+/** Result of probing the configured endpoint without sending any ride. */
+private sealed interface ConnectionOutcome {
+    data class Error(
+        val message: String,
+    ) : ConnectionOutcome
+
+    data class Done(
+        val status: ConnectionStatus,
+    ) : ConnectionOutcome
+}
+
 /** Outcome of the off-main-thread portion of [SyncSettingsViewModel.save]. */
 private data class SaveResult(
     val config: HermesConfig,
@@ -203,4 +292,5 @@ private const val ERROR_SECRET_REQUIRED = "secret is required"
 private const val ERROR_SECRET_TOO_SHORT = "secret must be at least 32 bytes"
 private const val ERROR_SECRET_TOO_LONG = "secret must be at most 4096 bytes"
 private const val ERROR_SECRET_STORAGE = "could not store the secret"
+private const val ERROR_SECRET_REQUIRED_FOR_TEST = "guardá el secreto primero"
 private const val ERROR_CONFIG_STORAGE = "could not save the sync configuration"

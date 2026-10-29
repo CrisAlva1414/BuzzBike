@@ -160,6 +160,56 @@ class OutboxProcessorTest {
         }
 
     @Test
+    fun given_rateLimitedResponse_when_process_then_backendUnavailableAndStopsWithoutMarkingFailed() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
+            val sender =
+                FakeHermesSender { rideId ->
+                    if (rideId == rideIdOf(ID_A)) {
+                        SendResult(success = false, statusCode = HTTP_TOO_MANY_REQUESTS)
+                    } else {
+                        SendResult(success = true)
+                    }
+                }
+            val processor = processor(store = store, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.BackendUnavailable, outcome)
+            assertTrue(store.failedMarks.isEmpty())
+            assertEquals(listOf(rideIdOf(ID_A)), sender.rideIds)
+            assertEquals(
+                listOf(ID_A, ID_B),
+                store.getPending(NOW_MILLIS, DEFAULT_BATCH_SIZE).map { it.id },
+            )
+        }
+
+    @Test
+    fun given_serverError_when_process_then_partialAndMarkFailed() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
+            val sender =
+                FakeHermesSender { rideId ->
+                    if (rideId == rideIdOf(ID_A)) {
+                        SendResult(
+                            success = false,
+                            statusCode = HTTP_SERVER_ERROR,
+                            errorMessage = HTTP_ERROR,
+                        )
+                    } else {
+                        SendResult(success = true)
+                    }
+                }
+            val processor = processor(store = store, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.Partial(sent = 1, failed = 1), outcome)
+            assertEquals(listOf(ID_A), store.failedMarks.map { it.id })
+            assertEquals(listOf(rideIdOf(ID_A), rideIdOf(ID_B)), sender.rideIds)
+        }
+
+    @Test
     fun given_senderThrows_when_process_then_marksFailedAndContinues() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
@@ -333,6 +383,8 @@ class OutboxProcessorTest {
         const val SECOND_ATTEMPT_DELAY_MILLIS = 120_000L
         const val SEVEN_DAYS_MILLIS = 7L * 24 * 60 * 60 * 1000
         const val HTTP_ERROR = "HTTP 503"
+        const val HTTP_SERVER_ERROR = 500
+        const val HTTP_TOO_MANY_REQUESTS = 429
         const val SENDER_ERROR = "boom"
     }
 }

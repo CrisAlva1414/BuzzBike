@@ -1,9 +1,11 @@
 package com.buzzbike.app.ui.settings
 
+import com.buzzbike.app.domain.sync.ConnectivityChecker
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.HmacSecretManager
 import com.buzzbike.app.domain.sync.OutboxItem
 import com.buzzbike.app.domain.sync.OutboxStore
+import com.buzzbike.app.domain.sync.Reachability
 import com.buzzbike.app.domain.sync.SecretSealer
 import com.buzzbike.app.domain.sync.SecretStorage
 import com.buzzbike.app.domain.sync.SyncConfigStore
@@ -45,6 +47,7 @@ class SyncSettingsViewModelTest {
     private lateinit var secretStorage: InMemorySecretStorage
     private lateinit var scheduler: RecordingSyncWorkScheduler
     private lateinit var outboxStore: RecordingOutboxStore
+    private lateinit var connectivity: FakeConnectivityChecker
 
     @Before
     fun setUp() {
@@ -213,6 +216,79 @@ class SyncSettingsViewModelTest {
         }
 
     @Test
+    fun given_availableBackendAndSecret_when_testConnection_then_ok() =
+        runTest {
+            val viewModel = configuredViewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            connectivity.reachability = Reachability.Available
+
+            viewModel.testConnection()
+            advanceUntilIdle()
+
+            assertEquals(ConnectionStatus.OK, viewModel.uiState.value.connectionStatus)
+            assertEquals(HEALTH_URL, connectivity.lastUrl)
+            assertEquals(1, connectivity.calls)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun given_unavailableBackend_when_testConnection_then_unreachable() =
+        runTest {
+            val viewModel = configuredViewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            connectivity.reachability = Reachability.Unavailable
+
+            viewModel.testConnection()
+            advanceUntilIdle()
+
+            assertEquals(ConnectionStatus.UNREACHABLE, viewModel.uiState.value.connectionStatus)
+            assertEquals(1, connectivity.calls)
+        }
+
+    @Test
+    fun given_misconfiguredBackend_when_testConnection_then_misconfigured() =
+        runTest {
+            val viewModel = configuredViewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            connectivity.reachability = Reachability.Misconfigured
+
+            viewModel.testConnection()
+            advanceUntilIdle()
+
+            assertEquals(ConnectionStatus.MISCONFIGURED, viewModel.uiState.value.connectionStatus)
+            assertEquals(1, connectivity.calls)
+        }
+
+    @Test
+    fun given_noSecret_when_testConnection_then_misconfiguredWithoutCallingChecker() =
+        runTest {
+            val viewModel = configuredViewModel()
+
+            viewModel.testConnection()
+            advanceUntilIdle()
+
+            assertEquals(ConnectionStatus.MISCONFIGURED, viewModel.uiState.value.connectionStatus)
+            assertEquals("guardá el secreto primero", viewModel.uiState.value.error)
+            assertEquals(0, connectivity.calls)
+        }
+
+    @Test
+    fun given_invalidUrl_when_testConnection_then_misconfiguredWithoutCallingChecker() =
+        runTest {
+            val viewModel = viewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            viewModel.onEndpointChange("http://hermes.example/sync")
+            viewModel.onHealthCheckUrlChange(HEALTH_URL)
+
+            viewModel.testConnection()
+            advanceUntilIdle()
+
+            assertEquals(ConnectionStatus.MISCONFIGURED, viewModel.uiState.value.connectionStatus)
+            assertNotNull(viewModel.uiState.value.error)
+            assertEquals(0, connectivity.calls)
+        }
+
+    @Test
     fun given_secret_when_save_then_stateNeverContainsTheSecret() =
         runTest {
             val viewModel = viewModel()
@@ -226,6 +302,13 @@ class SyncSettingsViewModelTest {
             assertFalse(renderedState.contains(VALID_SECRET))
         }
 
+    private fun configuredViewModel(): SyncSettingsViewModel {
+        val viewModel = viewModel()
+        viewModel.onEndpointChange(SYNC_URL)
+        viewModel.onHealthCheckUrlChange(HEALTH_URL)
+        return viewModel
+    }
+
     private fun viewModel(): SyncSettingsViewModel {
         store = InMemorySyncConfigStore()
         secretStorage = InMemorySecretStorage()
@@ -236,7 +319,8 @@ class SyncSettingsViewModelTest {
             )
         scheduler = RecordingSyncWorkScheduler()
         outboxStore = RecordingOutboxStore()
-        return SyncSettingsViewModel(store, secretManager, scheduler, outboxStore, dispatcher)
+        connectivity = FakeConnectivityChecker()
+        return SyncSettingsViewModel(store, secretManager, scheduler, outboxStore, connectivity, dispatcher)
     }
 
     private class InMemorySyncConfigStore : SyncConfigStore {
@@ -271,6 +355,24 @@ class SyncSettingsViewModelTest {
 
         override fun clear() {
             sealed = null
+        }
+    }
+
+    private class FakeConnectivityChecker(
+        var reachability: Reachability = Reachability.Available,
+    ) : ConnectivityChecker {
+        var calls: Int = 0
+            private set
+        var lastUrl: String? = null
+            private set
+
+        override suspend fun check(
+            healthCheckUrl: String,
+            hmacKeyConfigured: Boolean,
+        ): Reachability {
+            calls += 1
+            lastUrl = healthCheckUrl
+            return reachability
         }
     }
 

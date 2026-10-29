@@ -182,6 +182,41 @@ fun SyncSettingsScreen(
                 )
             }
 
+            OutlinedButton(
+                onClick = viewModel::testConnection,
+                enabled = state.connectionStatus != ConnectionStatus.CHECKING,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (state.connectionStatus == ConnectionStatus.CHECKING) {
+                        "Probando conexión…"
+                    } else {
+                        "Probar conexión"
+                    },
+                )
+            }
+            when (state.connectionStatus) {
+                ConnectionStatus.IDLE, ConnectionStatus.CHECKING -> Unit
+                ConnectionStatus.OK ->
+                    Text(
+                        text = "Conexión verificada.",
+                        color = SAVED_COLOR,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                ConnectionStatus.UNREACHABLE ->
+                    Text(
+                        text = "No se pudo alcanzar el backend.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                ConnectionStatus.MISCONFIGURED ->
+                    Text(
+                        text = "Configuración incompleta o inválida.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

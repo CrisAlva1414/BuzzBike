@@ -146,10 +146,16 @@ class OutboxProcessor(
             previousIds = ids
 
             for (item in pending) {
-                if (deliver(item, now)) {
-                    totalSent++
-                } else {
-                    totalFailed++
+                when (deliver(item, now)) {
+                    DeliveryOutcome.SENT -> totalSent++
+                    DeliveryOutcome.FAILED -> totalFailed++
+                    DeliveryOutcome.RATE_LIMITED -> {
+                        // The backend asked us to back off: leave this row and
+                        // the rest of the batch PENDING (no attempt consumed)
+                        // and let the worker retry later instead of hammering.
+                        purge(now)
+                        return ProcessOutcome.BackendUnavailable
+                    }
                 }
             }
             batches++
@@ -184,21 +190,25 @@ class OutboxProcessor(
     private suspend fun deliver(
         item: OutboxItem,
         now: Long,
-    ): Boolean =
+    ): DeliveryOutcome =
         try {
             val result = sender.sendRide(item.rideId, item.payload)
-            if (result.success) {
-                store.markSent(item.id, now)
-                true
-            } else {
-                markFailed(item, now, result.errorMessage ?: SEND_FAILED_MESSAGE)
-                false
+            when {
+                result.success -> {
+                    store.markSent(item.id, now)
+                    DeliveryOutcome.SENT
+                }
+                result.statusCode == HTTP_TOO_MANY_REQUESTS -> DeliveryOutcome.RATE_LIMITED
+                else -> {
+                    markFailed(item, now, result.errorMessage ?: SEND_FAILED_MESSAGE)
+                    DeliveryOutcome.FAILED
+                }
             }
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (expectedFailure: Exception) {
             markFailed(item, now, expectedFailure.message ?: SEND_FAILED_MESSAGE)
-            false
+            DeliveryOutcome.FAILED
         }
 
     private suspend fun markFailed(
@@ -214,9 +224,16 @@ class OutboxProcessor(
         )
     }
 
+    private enum class DeliveryOutcome {
+        SENT,
+        FAILED,
+        RATE_LIMITED,
+    }
+
     private companion object {
         const val HTTPS_SCHEME = "https://"
         const val ELIGIBILITY_PROBE_LIMIT = 1
+        const val HTTP_TOO_MANY_REQUESTS = 429
         const val SEND_FAILED_MESSAGE = "send failed"
     }
 }
