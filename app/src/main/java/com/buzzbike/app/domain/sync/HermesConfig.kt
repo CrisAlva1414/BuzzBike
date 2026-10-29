@@ -45,14 +45,26 @@ data class HermesConfig(
      * Validates [healthCheckUrl] with the same rules as [endpoint]. A missing
      * or blank value is also an error: sync cannot run without a dedicated,
      * authenticated health endpoint.
+     *
+     * The health check must be a **different** URL from [endpoint]. Trailing
+     * slashes and surrounding spaces are ignored for that comparison, because
+     * `https://host/sync/` and `https://host/sync` probe the same resource.
      */
     fun healthCheckValidationError(): String? {
-        val url =
-            healthCheckUrl?.trim()?.takeIf { it.isNotBlank() }
-                ?: return "health check URL must not be blank"
-        return healthCheckUrlValidationError(url)
+        val url = healthCheckUrl?.trim()?.takeIf { it.isNotBlank() }
+        val formatError = url?.let { healthCheckUrlValidationError(it) }
+        return when {
+            url == null -> "health check URL must not be blank"
+            formatError != null -> formatError
+            normalizeForComparison(url) == normalizeForComparison(endpoint) ->
+                "health check URL must differ from the send endpoint"
+            else -> null
+        }
     }
 }
+
+/** Trims surrounding spaces and trailing slashes for URL equality checks. */
+private fun normalizeForComparison(value: String): String = value.trim().trimEnd('/')
 
 /**
  * Semantic receiver contract, **not** a transport difference.

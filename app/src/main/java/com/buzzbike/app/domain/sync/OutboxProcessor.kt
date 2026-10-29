@@ -18,10 +18,10 @@ sealed interface ProcessOutcome {
     /** The outbox had no row eligible for delivery. */
     data object NoPending : ProcessOutcome
 
-    /** The health check failed; rows are untouched and stay pending. */
+    /** The health check failed; pending rows stay untouched for a retry. */
     data object BackendUnavailable : ProcessOutcome
 
-    /** The health check URL is missing; rows are untouched. */
+    /** The health check URL is missing or invalid; pending rows stay untouched. */
     data object ConfigurationError : ProcessOutcome
 
     /**
@@ -57,16 +57,19 @@ data class OutboxProcessorConfig(
  * Drains the sync outbox batch after batch until nothing eligible remains.
  *
  * Order is deliberate and fail-closed:
- * 1. A blank [process] URL is a configuration error — nothing is touched.
+ * 1. A blank [process] URL is a configuration error — no pending row is
+ *    delivered, but delivered and stale exhausted rows are still purged.
  * 2. A non-HTTPS URL is also a configuration error before any network call.
  *    This is defence in depth: [ConnectivityChecker] implementations are
  *    scheme-agnostic so tests can use local servers, but production sync must
  *    never reach a cleartext endpoint (AGENTS.md §7). The URL is still
  *    validated by [HermesConfig] at the worker boundary.
  * 3. The backend must answer the authenticated health check with HTTP 200
- *    exactly. [Reachability.Misconfigured] (missing secret or malformed URL)
- *    is terminal; [Reachability.Unavailable] leaves rows pending for a retry.
- * 3. Only then are due rows read and delivered, repeating until the eligible
+ *    exactly. [Reachability.Misconfigured] (missing secret, bad auth or
+ *    malformed URL) is terminal; [Reachability.Unavailable] leaves pending
+ *    rows for a retry. Both early outcomes still purge delivered and stale
+ *    exhausted rows, never `PENDING` ones.
+ * 4. Only then are due rows read and delivered, repeating until the eligible
  *    queue is empty.
  *
  * Delivery failures never abort a batch: each row is marked failed (with its
@@ -103,11 +106,21 @@ class OutboxProcessor(
         hmacKeyConfigured: Boolean,
     ): ProcessOutcome {
         if (healthCheckUrl.isBlank() || !healthCheckUrl.startsWith(HTTPS_SCHEME, ignoreCase = true)) {
+            // Early exits still purge delivered rows and stale exhausted
+            // failures: a misconfiguration must not freeze already-terminal
+            // rows forever. PENDING rows are never touched by purge().
+            purge(clock())
             return ProcessOutcome.ConfigurationError
         }
         return when (connectivity.check(healthCheckUrl, hmacKeyConfigured)) {
-            Reachability.Misconfigured -> ProcessOutcome.ConfigurationError
-            Reachability.Unavailable -> ProcessOutcome.BackendUnavailable
+            Reachability.Misconfigured -> {
+                purge(clock())
+                ProcessOutcome.ConfigurationError
+            }
+            Reachability.Unavailable -> {
+                purge(clock())
+                ProcessOutcome.BackendUnavailable
+            }
             Reachability.Available -> drain()
         }
     }

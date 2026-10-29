@@ -24,20 +24,22 @@ import java.net.URL
  * defined in ADR-003.
  *
  * A health check is considered successful **only** when the server answers
- * HTTP 200 exactly. This is a product requirement: 204, 3xx, 4xx, 5xx, a
- * timeout, a DNS failure or a refused connection all mean "not available", so
- * the caller keeps the ride in the outbox and retries later instead of
- * dropping it. A missing HMAC secret or a blank/malformed URL is reported as
- * [Reachability.Misconfigured] without opening a socket, because retrying
- * cannot fix either condition.
+ * HTTP 200 exactly. `401` and `403` mean the configured secret does not match
+ * (or the receiver did not authenticate the request), so they are reported as
+ * [Reachability.Misconfigured]: retrying cannot fix bad credentials. `204`,
+ * `3xx`, `5xx`, a timeout, a DNS failure or a refused connection all mean "not
+ * available", so the caller keeps the ride in the outbox and retries later
+ * instead of dropping it. A missing HMAC secret or a blank/malformed URL is
+ * reported as [Reachability.Misconfigured] without opening a socket, because
+ * retrying cannot fix either condition.
  *
  * Redirects are not followed (`instanceFollowRedirects = false`): a 302 is
  * itself a non-200 answer and must not be transformed into a 200 downstream.
  *
- * Android note: the app's `network_security_config` blocks cleartext traffic,
- * so a production health-check URL must be HTTPS (ADR-003, AGENTS.md §7). A
- * cleartext URL fails with an `IOException` and therefore reports
- * [Reachability.Unavailable].
+ * HTTPS is required by default: a cleartext `http://` URL is reported as
+ * [Reachability.Misconfigured] without opening a socket (ADR-003, AGENTS.md
+ * §7). [allowInsecureForTests] exists only so JVM tests can target a local
+ * `HttpServer`; production wiring must keep the default.
  *
  * The check never throws: expected network problems are part of the answer.
  */
@@ -46,18 +48,20 @@ class HttpConnectivityChecker(
     private val nowSeconds: () -> Long = { System.currentTimeMillis() / MILLIS_PER_SECOND },
     private val connectTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
     private val readTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
+    private val allowInsecureForTests: Boolean = false,
 ) : ConnectivityChecker {
     override suspend fun check(
         healthCheckUrl: String,
         hmacKeyConfigured: Boolean,
-    ): Reachability =
-        when {
-            !hmacKeyConfigured -> Reachability.Misconfigured
-            else ->
-                parseUrl(healthCheckUrl)?.let { url ->
-                    withContext(Dispatchers.IO) { probe(url) }
-                } ?: Reachability.Misconfigured
+    ): Reachability {
+        val url = if (hmacKeyConfigured) parseUrl(healthCheckUrl) else null
+        return when {
+            url == null -> Reachability.Misconfigured
+            !allowInsecureForTests && !url.protocol.equals(HTTPS_SCHEME, ignoreCase = true) ->
+                Reachability.Misconfigured
+            else -> withContext(Dispatchers.IO) { probe(url) }
         }
+    }
 
     /** Parses [healthCheckUrl], returning `null` for blank or malformed input. */
     private fun parseUrl(healthCheckUrl: String): URL? {
@@ -87,7 +91,11 @@ class HttpConnectivityChecker(
                 opened.setRequestProperty(HEADER_SIGNATURE, hmacSigner.sign(timestamp, EMPTY_BODY))
                 val responseCode = opened.responseCode
                 closeResponseStream(opened, responseCode)
-                if (responseCode == HTTP_OK) Reachability.Available else Reachability.Unavailable
+                when (responseCode) {
+                    HTTP_OK -> Reachability.Available
+                    HTTP_UNAUTHORIZED, HTTP_FORBIDDEN -> Reachability.Misconfigured
+                    else -> Reachability.Unavailable
+                }
             }
         } catch (ignored: HmacSecretMissingException) {
             // The secret was reported as provisioned by the caller, but the
@@ -124,7 +132,10 @@ class HttpConnectivityChecker(
 
     private companion object {
         const val HTTP_GET = "GET"
+        const val HTTPS_SCHEME = "https"
         const val HTTP_OK = 200
+        const val HTTP_UNAUTHORIZED = 401
+        const val HTTP_FORBIDDEN = 403
         const val CLIENT_ERROR_MIN = 400
         const val HEADER_TIMESTAMP = "X-Webhook-Timestamp"
         const val HEADER_SIGNATURE = "X-Webhook-Signature-V2"

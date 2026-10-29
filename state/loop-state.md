@@ -1236,3 +1236,30 @@ Pantalla Compose mínima para configurar endpoint, health check, retry y secreto
 
 ### Próximo paso
 Gate final tester + security-reviewer sobre el diff de remediación.
+
+---
+
+## Iteration 30 — 2026-10-28 — F1: contrato v2 + auth/health (COMPLETADO)
+
+### Tarea
+Payload v2 con `calories` objeto, 401/403 = Misconfigured, purga en retornos tempranos, checker HTTPS por defecto, health URL distinta del endpoint, consentimiento visible.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| test | 0 (239 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 (17 warnings preexistentes) |
+
+### Cambios
+- `RideSyncPayload.version = 2`; docs §5 y ADR-003 actualizados con breaking change (`caloriesKcal` → `calories`).
+- `HttpConnectivityChecker`: 401/403 → Misconfigured; `allowInsecureForTests=false` por defecto (HTTPS obligatorio).
+- `OutboxProcessor`: purga SENT/FAILED también en ConfigurationError/BackendUnavailable.
+- `HermesConfig`: healthCheckUrl normalizada no puede igualar al endpoint.
+- `SyncSettingsScreen`: párrafo de consentimiento (métricas + waypoints decimados, no track crudo).
+- Tests de contrato v2 y de los nuevos comportamientos.
+
+### Próximo paso
+F2: endurecer campo secreto, revocación real en disconnect, reencolar FAILED, IO en save/disconnect; luego instrumentación y gate final.

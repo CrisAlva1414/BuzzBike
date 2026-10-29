@@ -142,6 +142,24 @@ class HermesConfigTest {
         assertNull(config.healthCheckValidationError())
     }
 
+    @Test
+    fun given_healthCheckUrlEqualToEndpoint_when_healthCheckValidationError_then_error() {
+        val config = HermesConfig(endpoint = HTTPS_ENDPOINT, healthCheckUrl = HTTPS_ENDPOINT)
+
+        assertNotNull(config.healthCheckValidationError())
+    }
+
+    @Test
+    fun given_healthCheckUrlEqualToEndpointIgnoringSlashAndSpaces_when_validated_then_error() {
+        val config =
+            HermesConfig(
+                endpoint = HTTPS_ENDPOINT,
+                healthCheckUrl = "  $HTTPS_ENDPOINT/  ",
+            )
+
+        assertNotNull(config.healthCheckValidationError())
+    }
+
     private companion object {
         const val HTTPS_ENDPOINT = "https://hermes.example/sync"
         const val HTTPS_HEALTH = "https://hermes.example/health"

@@ -79,6 +79,8 @@ class OutboxProcessorTest {
             assertTrue(sender.rideIds.isEmpty())
             assertTrue(store.sentIds.isEmpty())
             assertTrue(store.failedMarks.isEmpty())
+            assertEquals(1, store.deleteSentCalls)
+            assertEquals(listOf(NOW_MILLIS - SEVEN_DAYS_MILLIS), store.deleteFailedCutoffs)
         }
 
     @Test
@@ -96,6 +98,9 @@ class OutboxProcessorTest {
             assertTrue(sender.rideIds.isEmpty())
             assertTrue(store.sentIds.isEmpty())
             assertTrue(store.failedMarks.isEmpty())
+            assertEquals(1, store.deleteSentCalls)
+            assertEquals(listOf(NOW_MILLIS - SEVEN_DAYS_MILLIS), store.deleteFailedCutoffs)
+            assertEquals(listOf(ID_A), store.getPending(NOW_MILLIS, DEFAULT_BATCH_SIZE).map { it.id })
         }
 
     @Test

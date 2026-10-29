@@ -1,6 +1,6 @@
 # Contrato de sync con Hermes Agent
 
-- **Versión del contrato:** 1 (2026-10-28)
+- **Versión del contrato:** 2 (2026-10-28)
 - **Ámbito:** envío opcional de un ride de BuzzBike a un Hermes Agent que corre
   en el NAS del usuario (ADR-003).
 - **Estado:** vigente para la app a partir del slice S3.
@@ -114,9 +114,11 @@ Comportamiento de la app:
    - `X-Webhook-Timestamp: <ts>`
    - `X-Webhook-Signature-V2: HMAC_SHA256(secret, "<ts>.")` (body vacío)
 4. **Solo HTTP 200 exacto** significa disponible.
-5. `204`, cualquier `3xx`, `4xx`, `5xx`, timeout, DNS, conexión rechazada o
-   error TLS → **no disponible**. El ride queda en la outbox y se reintenta.
-6. Sin redirects: un `302` no se sigue ni se convierte en `200`.
+5. `401` o `403` → **mal configurado**: el secreto no coincide con el del
+   receptor o falta autenticación. Reintentar no lo arregla.
+6. `204`, cualquier `3xx`, `5xx`, timeout, DNS, conexión rechazada o error TLS
+   → **no disponible**. El ride queda en la outbox y se reintenta.
+7. Sin redirects: un `302` no se sigue ni se convierte en `200`.
 
 Regla de interpretación para el worker:
 
@@ -124,7 +126,7 @@ Regla de interpretación para el worker:
 |---|---|---|
 | Disponible (`Available`) | Puede intentarse el envío | Drenar outbox |
 | No disponible (`Unavailable`) | Falla transitoria | Reintentar con backoff |
-| Mal configurado (`Misconfigured`) | Falta secreto o URL inválida | Fallar (no reintentar) |
+| Mal configurado (`Misconfigured`) | Falta secreto, `401`/`403` o URL inválida | Fallar (no reintentar) |
 
 El receptor debe autenticar el `GET` del health check con la misma regla HMAC
 que los envíos, incluyendo la ventana anti-replay. Un health check sin firma
@@ -132,14 +134,14 @@ válida debe responder `401`/`403`, nunca `200`.
 
 ---
 
-## 5. Payload v1
+## 5. Payload v2
 
 El body es JSON compacto UTF-8, sin `NaN` ni `Infinity` (los valores no
 finitos se serializan como `null`). Campos y orden:
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `version` | int | Versión del payload; hoy `1`. |
+| `version` | int | Versión del payload; hoy `2`. |
 | `rideId` | string | UUID local del ride. Clave de deduplicación. |
 | `startTimeMillis` | long | Inicio del ride, epoch millis. |
 | `endTimeMillis` | long \| null | Fin del ride, epoch millis; `null` si sigue abierto. |
@@ -148,10 +150,24 @@ finitos se serializan como `null`). Campos y orden:
 | `stoppedTimeSeconds` | long | Tiempo detenido, segundos. |
 | `elevationGainM` | double | Desnivel positivo acumulado, metros. |
 | `elevationLossM` | double | Desnivel negativo acumulado, metros. |
-| `caloriesKcal` | double \| null | Calorías estimadas; `null` si no se pudo calcular. |
+| `calories` | object \| null | Banda calórica; `null` si no se pudo calcular. |
 | `avgSpeedMps` | double | Velocidad media en m/s. |
 | `maxSpeedMps` | double | Velocidad máxima en m/s. |
 | `waypoints` | array | Puntos decimados para visualización aproximada. |
+
+El objeto `calories` (ADR-001) nunca se envía como un número exacto:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `estimateKcal` | double | Estimación puntual, en kcal. |
+| `lowKcal` | double | Límite inferior de la banda, en kcal. |
+| `highKcal` | double | Límite superior de la banda, en kcal. |
+| `model` | string | Nivel/modelo de la cascada que produjo la estimación. |
+
+**Breaking change respecto de v1:** v1 enviaba un escalar
+`caloriesKcal: double \| null`. v2 lo reemplaza por el objeto `calories` y sube
+`version` a `2`. Un receptor que todavía espere `caloriesKcal` debe actualizarse
+antes de aceptar payloads v2; la app ya no emite `caloriesKcal`.
 
 Cada waypoint:
 
@@ -174,7 +190,7 @@ Ejemplo mínimo:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "rideId": "3f7c2b1e-9a4d-4c2f-8b7e-2d1a6f5c9e10",
   "startTimeMillis": 1730000000000,
   "endTimeMillis": 1730003600000,
@@ -183,7 +199,12 @@ Ejemplo mínimo:
   "stoppedTimeSeconds": 300,
   "elevationGainM": 312.5,
   "elevationLossM": 298.1,
-  "caloriesKcal": 640.0,
+  "calories": {
+    "estimateKcal": 640.0,
+    "lowKcal": 448.0,
+    "highKcal": 832.0,
+    "model": "COMPENDIUM_VELOCITY"
+  },
   "avgSpeedMps": 7.44,
   "maxSpeedMps": 12.9,
   "waypoints": [

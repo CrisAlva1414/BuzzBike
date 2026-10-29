@@ -34,6 +34,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 private const val MAX_RETRY_DIGITS = 3
 private val SAVED_COLOR = Color(0xFF2E7D32)
+private const val SYNC_CONSENT_TEXT =
+    "Al activar el sync, cada ride enviará métricas agregadas y waypoints " +
+        "decimados (cada 10 s, máximo 2000) al endpoint configurado. El track " +
+        "GPS crudo no se envía. Podés desconectar en cualquier momento."
 
 /**
  * Minimal sync configuration form.
@@ -120,6 +124,11 @@ fun SyncSettingsScreen(
                     "El secreto se genera en el NAS (32+ bytes) y se guarda " +
                         "cifrado en el dispositivo. La URL no debe incluir " +
                         "credenciales, query ni fragment.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            Text(
+                text = SYNC_CONSENT_TEXT,
                 style = MaterialTheme.typography.bodySmall,
             )
 

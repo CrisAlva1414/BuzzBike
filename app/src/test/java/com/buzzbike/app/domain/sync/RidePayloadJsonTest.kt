@@ -46,7 +46,7 @@ class RidePayloadJsonTest {
 
         val fragments =
             listOf(
-                "\"version\":1",
+                "\"version\":2",
                 "\"rideId\":\"$RIDE_ID\"",
                 "\"startTimeMillis\":$START_MILLIS",
                 "\"endTimeMillis\":${START_MILLIS + END_OFFSET_MILLIS}",
@@ -68,6 +68,15 @@ class RidePayloadJsonTest {
         }
         assertTrue(json.startsWith("{"))
         assertTrue(json.endsWith("}"))
+    }
+
+    @Test
+    fun given_defaultPayload_when_encoded_thenContractVersionIsTwo() {
+        val json = encodeToString(payload())
+
+        assertTrue(json.contains("\"version\":2"))
+        assertFalse(json.contains("\"version\":1"))
+        assertFalse(json.contains("caloriesKcal"))
     }
 
     @Test

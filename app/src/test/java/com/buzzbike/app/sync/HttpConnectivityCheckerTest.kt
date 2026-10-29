@@ -120,6 +120,42 @@ class HttpConnectivityCheckerTest {
         }
 
     @Test
+    fun given_healthCheckReturns401_when_check_then_misconfigured() =
+        runTest {
+            val server = startServer(HTTP_UNAUTHORIZED_CODE)
+
+            assertEquals(Reachability.Misconfigured, checker().check(healthUrl(server), true))
+        }
+
+    @Test
+    fun given_healthCheckReturns403_when_check_then_misconfigured() =
+        runTest {
+            val server = startServer(HTTP_FORBIDDEN_CODE)
+
+            assertEquals(Reachability.Misconfigured, checker().check(healthUrl(server), true))
+        }
+
+    @Test
+    fun given_insecureUrlAndDefaultChecker_when_check_then_misconfiguredWithoutNetwork() =
+        runTest {
+            val requests = AtomicInteger(0)
+            val server =
+                startServer(HTTP_OK_CODE) { _ ->
+                    requests.incrementAndGet()
+                }
+            val strictChecker =
+                HttpConnectivityChecker(
+                    hmacSigner = HmacSha256Signer(FakeHmacKeyProvider(KEY)),
+                    nowSeconds = { TIMESTAMP },
+                )
+
+            val reachability = strictChecker.check(healthUrl(server), hmacKeyConfigured = true)
+
+            assertEquals(Reachability.Misconfigured, reachability)
+            assertEquals(0, requests.get())
+        }
+
+    @Test
     fun given_malformedUrl_when_check_then_misconfigured() =
         runTest {
             assertEquals(Reachability.Misconfigured, checker().check("not-a-url", true))
@@ -163,12 +199,14 @@ class HttpConnectivityCheckerTest {
         hmacSigner: HmacSigner = HmacSha256Signer(FakeHmacKeyProvider(KEY)),
         connectTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
         readTimeoutMillis: Int = DEFAULT_TIMEOUT_MILLIS,
+        allowInsecureForTests: Boolean = true,
     ): HttpConnectivityChecker =
         HttpConnectivityChecker(
             hmacSigner = hmacSigner,
             nowSeconds = { TIMESTAMP },
             connectTimeoutMillis = connectTimeoutMillis,
             readTimeoutMillis = readTimeoutMillis,
+            allowInsecureForTests = allowInsecureForTests,
         )
 
     private fun startServer(responseCode: Int): HttpServer =
@@ -258,6 +296,8 @@ class HttpConnectivityCheckerTest {
         const val HTTP_OK_CODE = 200
         const val HTTP_NO_CONTENT_CODE = 204
         const val HTTP_REDIRECT_CODE = 302
+        const val HTTP_UNAUTHORIZED_CODE = 401
+        const val HTTP_FORBIDDEN_CODE = 403
         const val HTTP_SERVER_ERROR_CODE = 500
         const val SHORT_TIMEOUT_MILLIS = 200
         const val DEFAULT_TIMEOUT_MILLIS = 5_000

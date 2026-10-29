@@ -133,6 +133,11 @@ Puntos fijados en esta actualización:
 - **Errores terminales vs transitorios:** falta de secreto o URL inválida se
   reportan como configuración (no se reintenta); backend no disponible se
   reintenta con backoff exponencial 30 s → 1 h.
+- **Payload v2 (breaking change):** el campo escalar `caloriesKcal` de v1 se
+  reemplazó por el objeto `calories` (`estimateKcal`, `lowKcal`, `highKcal`,
+  `model`) y `version` pasó a `2`. Así el receptor recibe siempre la banda de
+  incertidumbre y el modelo junto con la estimación, conforme a ADR-001. Un
+  receptor v1 debe actualizarse antes de aceptar payloads v2.
 
 ## Fuentes
 

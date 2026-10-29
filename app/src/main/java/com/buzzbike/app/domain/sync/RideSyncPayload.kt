@@ -9,10 +9,13 @@ package com.buzzbike.app.domain.sync
  * an approximation for visualization, not the original trace.
  *
  * Pure domain model: no `android.*` imports and no serialization annotations.
- * [version] lets the receiver evolve independently; it starts at 1.
+ * [version] lets the receiver evolve independently. Version 2 replaced the
+ * scalar `caloriesKcal` field with the [CaloriesPayload] object so the receiver
+ * always gets the estimate together with its uncertainty band and model
+ * (ADR-001, ADR-003 update 2026-10-28).
  */
 data class RideSyncPayload(
-    val version: Int = 1,
+    val version: Int = 2,
     val rideId: String,
     val startTimeMillis: Long,
     val endTimeMillis: Long?,
