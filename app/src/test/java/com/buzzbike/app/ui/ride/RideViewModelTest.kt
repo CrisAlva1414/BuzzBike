@@ -15,6 +15,7 @@ import com.buzzbike.app.domain.sync.OutboxEnqueuer
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
 import com.buzzbike.app.domain.sync.RideSyncDataSource
 import com.buzzbike.app.domain.sync.RideSyncInput
+import com.buzzbike.app.domain.sync.SyncConfigStore
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -122,7 +123,7 @@ class RideViewModelTest {
                 enqueuer = UnusedOutboxEnqueuer,
                 scheduler = UnusedSyncWorkScheduler,
             )
-        return RideViewModel(manager, coordinator)
+        return RideViewModel(manager, coordinator, FakeSyncConfigStore())
     }
 
     private class RecordingRideSessionWriter :
@@ -191,6 +192,21 @@ class RideViewModelTest {
 
     private object UnusedSyncWorkScheduler : SyncWorkScheduler {
         override fun schedule(config: HermesConfig) = Unit
+    }
+
+    /** No persisted sync configuration, so rides are not enqueued. */
+    private class FakeSyncConfigStore : SyncConfigStore {
+        private var config: HermesConfig? = null
+
+        override fun current(): HermesConfig? = config
+
+        override fun save(config: HermesConfig) {
+            this.config = config
+        }
+
+        override fun clear() {
+            config = null
+        }
     }
 
     private companion object {

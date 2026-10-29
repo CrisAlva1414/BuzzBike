@@ -1175,3 +1175,34 @@ BouncyCastle 1.84, eliminación de código muerto, lockfiles y documentación de
 
 ### Próximo paso
 Gate final tester + security-reviewer sobre el diff de remediación (d4494d2..HEAD + S1-S3).
+
+---
+
+## Iteration 28 — 2026-10-28 — S4a: configuración de sync (COMPLETADO)
+
+### Tarea
+Store persistente de HermesConfig + ViewModel de ajustes + RideViewModel leyendo el store.
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (233 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+
+### Cambios
+- `domain/sync/SyncConfigStore.kt` (current/save/clear).
+- `data/settings/SharedPrefsSyncConfigStore.kt` (prefs `sync_config_v1`, commit verificado).
+- `ui/settings/SyncSettingsViewModel.kt` — valida URLs, importa secreto 32+, disconnect.
+- `di/SettingsModule.kt`.
+- `RideViewModel` inyecta el store; `stopRide` usa `syncConfig ?: store.current()`.
+- Tests: SharedPrefsSyncConfigStoreTest (4), SyncSettingsViewModelTest (8).
+
+### Notas
+- El secreto nunca entra al estado del ViewModel ni a prefs; solo `HmacSecretManager`.
+- `load()` marca isSaved si hay config persistida.
+
+### Próximo paso
+S4b: pantalla Compose de ajustes + navegación.

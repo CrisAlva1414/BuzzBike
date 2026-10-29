@@ -6,6 +6,7 @@ import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionUiState
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
+import com.buzzbike.app.domain.sync.SyncConfigStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,8 @@ import javax.inject.Inject
  * actions, so the UI never talks to persistence directly.
  *
  * Optional Hermes sync is off by default (AGENTS.md §7): [syncConfig] starts
- * `null` and only a call to [configureSync] enables the post-ride pipeline.
+ * `null` and the persisted [SyncConfigStore] is consulted on stop. A call to
+ * [configureSync] overrides the store for tests or future per-ride toggles.
  */
 @HiltViewModel
 class RideViewModel
@@ -29,6 +31,7 @@ class RideViewModel
     constructor(
         private val rideSessionManager: RideSessionManager,
         private val rideSyncCoordinator: RideSyncCoordinator,
+        private val syncConfigStore: SyncConfigStore,
     ) : ViewModel() {
         val uiState: StateFlow<RideSessionUiState> =
             rideSessionManager.uiState.stateIn(
@@ -65,7 +68,7 @@ class RideViewModel
                     // Capture the id before the manager clears the active state.
                     val rideId = uiState.value.activeRideId
                     rideSessionManager.stopRide()
-                    val config = syncConfig
+                    val config = syncConfig ?: syncConfigStore.current()
                     if (rideId != null && config != null) {
                         rideSyncCoordinator.onRideFinished(rideId, config)
                     }
