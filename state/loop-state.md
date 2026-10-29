@@ -1318,3 +1318,29 @@ F3a: secreto corrupto, 429 sin consumir intentos, botón “Probar conexión”.
 
 ### Próximo paso
 F3b: documentar decisiones (pérdida de datos pre-release, TLS, consentimiento) y tests de instrumentación.
+
+---
+
+## Iteration 33 — 2026-10-28 — F3b: decisiones + instrumentación (COMPLETADO)
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| assembleDebugAndroidTest | 0 |
+| test | 0 (257 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+
+### Cambios
+- ADR-003 “Decisiones 2026-10-28”: pérdida de datos pre-release, TLS Tailscale sin pinning, consentimiento global con texto.
+- docs/testing.md: tests instrumentados y comandos.
+- androidTest deps (ext-junit 1.2.1, runner 1.6.2, rules 1.6.1) + lockfile regenerado.
+- `EncryptedDatabaseInstrumentedTest`: SQLCipher real, round-trip y header no “SQLite format 3”.
+- `KeystoreHmacInstrumentedTest`: import 32B, sign/verify, tamper falla, hex 64.
+- Deuda de hardware documentada (no hay emulador).
+
+### Próximo paso
+Gate final tester + security sobre el árbol completo.

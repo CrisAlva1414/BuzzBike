@@ -21,9 +21,11 @@ Reporte HTML: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
 ## 2. Qué requiere dispositivo o emulador (`app/src/androidTest`)
 
-Hoy **no existe** el source set instrumentado: no hay emulador en esta
-máquina (ver §5). Los siguientes comportamientos solo se pueden validar
-con hardware/emulador real y quedan listados como deuda:
+El source set instrumentado ya existe, pero **no hay emulador en esta
+máquina** (ver §6): los tests compilan localmente y quedan como deuda de
+hardware hasta que se ejecuten en CI con emulador o en un dispositivo
+físico. Además de los dos tests nuevos de §3, los siguientes
+comportamientos solo se pueden validar con hardware/emulador real:
 
 - **SQLCipher real:** apertura, cifrado en reposo y `PRAGMA key` sobre una
   base física. Robolectric usa una implementación in-memory que no ejercita
@@ -40,7 +42,50 @@ con hardware/emulador real y quedan listados como deuda:
 - **`HttpsServer` real con Tailscale:** conectividad al NAS por MagicDNS /
   `100.64.0.0/10`, certificados y comportamiento de red real.
 
-## 3. Comandos
+## 3. Tests instrumentados
+
+Dos tests cubren los puntos que Robolectric no puede ejercitar: la
+librería nativa de SQLCipher y Android Keystore.
+
+### `EncryptedDatabaseInstrumentedTest`
+
+`app/src/androidTest/java/com/buzzbike/app/data/local/EncryptedDatabaseInstrumentedTest.kt`
+
+- Abre Room con SQLCipher (`SupportOpenHelperFactory` + passphrase sellada
+  por `AndroidKeystoreSecretSealer`/`DatabasePassphraseProvider`).
+- Inserta un `RideEntity` real, lo lee por `RideDao` y verifica que el `id`
+  coincide.
+- Cierra la base, lee los primeros 16 bytes del archivo y verifica que
+  **no** empiezan con `SQLite format 3`, es decir, que no quedó texto plano.
+- `@After` cierra la base y borra `instrumented-encrypted.db`.
+
+### `KeystoreHmacInstrumentedTest`
+
+`app/src/androidTest/java/com/buzzbike/app/sync/KeystoreHmacInstrumentedTest.kt`
+
+- Importa un secreto de 32 bytes con `HmacSecretManager` y espera
+  `ImportResult.Success` (queda sellado con AES-GCM de Android Keystore).
+- Firma con `StoredHmacKeyProvider` + `HmacSha256Signer` y verifica la firma.
+- Un payload alterado debe fallar la verificación.
+- La firma hex tiene 64 caracteres (32 bytes de HMAC-SHA256) y el secreto
+  nunca se loguea.
+
+### Comandos
+
+```bash
+# Ejecutar todos los tests instrumentados (requiere emulador/dispositivo)
+./gradlew connectedDebugAndroidTest
+
+# Solo compilar los tests instrumentados (no requiere dispositivo)
+./gradlew assembleDebugAndroidTest
+```
+
+**No hay emulador ni dispositivo en esta máquina**, así que
+`connectedDebugAndroidTest` no se puede correr localmente. Que
+`assembleDebugAndroidTest` compile es el gate actual; ejecutar los tests
+es la deuda de hardware pre-release (ver §6).
+
+## 4. Comandos
 
 ```bash
 # Tests JVM (dominio, Room/Robolectric, HMAC, HTTP local, payload)
@@ -63,7 +108,7 @@ adb devices
 Si en una máquina nueva el SDK/JDK no están en el `PATH`, cargar las
 variables del entorno antes de Gradle (ver `docs/setup-entorno.md`).
 
-## 4. Dependencias fijadas por seguridad
+## 5. Dependencias fijadas por seguridad
 
 `app/build.gradle.kts` fuerza `org.bouncycastle:bcprov-jdk18on:1.84`
 (CVE-2026-5598). El archivo solo entra al classpath de tests vía
@@ -74,7 +119,7 @@ Robolectric; no se empaqueta en la app. Verificar con:
 # Debe mostrar 1.84 (forzado), no 1.81.
 ```
 
-## 5. Riesgo aceptado
+## 6. Riesgo aceptado
 
 No hay emulador ni dispositivo Android en esta máquina. Por eso:
 
@@ -85,7 +130,7 @@ No hay emulador ni dispositivo Android en esta máquina. Por eso:
 - El resto del pipeline (compilación, `test`, `ktlintCheck`, `detekt`,
   `lintDebug`, `assembleDebug`) sí se valida en JVM y es el gate actual.
 
-## 6. Dependency locking
+## 7. Dependency locking
 
 `app/build.gradle.kts` habilita `dependencyLocking { lockAllConfigurations() }`
 y el repo versiona `app/gradle.lockfile` (más `settings-gradle.lockfile`

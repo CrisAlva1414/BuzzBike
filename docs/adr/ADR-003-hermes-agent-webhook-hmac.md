@@ -139,6 +139,32 @@ Puntos fijados en esta actualización:
   incertidumbre y el modelo junto con la estimación, conforme a ADR-001. Un
   receptor v1 debe actualizarse antes de aceptar payloads v2.
 
+## Decisiones 2026-10-28
+
+### Pérdida de datos pre-release al migrar a SQLCipher
+
+Al pasar de la base plana (`buzzbike.db`) a la base cifrada con SQLCipher se
+borra `buzzbike.db`: no se migra su contenido. Se acepta porque no hay usuarios
+reales todavía (`versionCode = 1`) y la app no se distribuyó fuera del entorno
+de desarrollo. Antes del primer release con usuarios hay que implementar
+export/import de la base plana y una estrategia de recuperación para el caso de
+pérdida de la clave de Android Keystore (si se pierde la clave, la passphrase
+sellada no se puede recuperar y la base cifrada queda ilegible).
+
+### TLS
+
+v1 usa Tailscale Serve (HTTPS con certificado válido) y el trust store del
+sistema. **No** hay certificate pinning. Un NAS con CA self-signed requiere
+instalar esa CA en el dispositivo; el pinning se reevalúa si el modelo de
+despliegue lo exige.
+
+### Consentimiento
+
+El sync tiene un toggle global y un texto visible en Ajustes que describe qué
+se envía: métricas agregadas y waypoints decimados, no el track GPS crudo. La
+confirmación por ride queda diferida. El usuario puede desconectar el sync en
+cualquier momento y al hacerlo se purga el outbox.
+
 ## Fuentes
 
 | Fuente | Referencia |

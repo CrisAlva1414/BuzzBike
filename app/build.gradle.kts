@@ -174,6 +174,14 @@ dependencies {
     // Room DAO tests run on the JVM against an in-memory database.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+
+    // Instrumented tests — SQLCipher open/close and Android Keystore.
+    // They compile on the JVM but need a device/emulator to run.
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.coroutines.test)
 }
 
 detekt {
