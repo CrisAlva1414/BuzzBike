@@ -178,6 +178,6 @@ Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Conve
 
 ## Licencia
 
-MIT — ver [`LICENSE`](LICENSE). Copyright (c) 2026 Cristian Álvarez.
+MIT — ver [`LICENSE`](LICENSE). Copyright (c) 2026 Cristian Alvarado.
 
 Código abierto, sin nube obligatoria, sin pedirte una cuenta para ver tus propios datos. Si te sirve, una estrella ayuda a que otros ciclistas lo encuentren.
