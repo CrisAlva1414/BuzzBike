@@ -2,6 +2,9 @@
 
 package com.buzzbike.app.ui.ride
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,7 +86,6 @@ private const val CONFIRM_DISCARD_LABEL = "DESCARTAR DEFINITIVAMENTE"
 private const val CANCEL_LABEL = "CANCELAR"
 private const val RECOVER_LABEL = "RECUPERAR"
 private const val SETTINGS_LABEL = "Ajustes de sync"
-private const val NO_PERMISSION_TEXT = "Falta permiso de ubicación para grabar."
 private const val AUTO_PAUSE_TEXT = "Pausa automática"
 private const val PAUSED_TEXT = "En pausa"
 private const val FINISHED_TITLE = "RIDE TERMINADO"
@@ -105,12 +108,34 @@ fun RideScreen(
 ) {
     val sessionState by viewModel.state.collectAsState()
     val locale = LocalConfiguration.current.locales[0]
+    var permissionResult by rememberSaveable {
+        mutableStateOf(LocationPermissionRequestResult.NOT_REQUESTED)
+    }
+    val permissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            permissionResult =
+                LocationPermissionUi.classify(
+                    fineGranted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true,
+                    coarseGranted = grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true,
+                )
+            viewModel.onLocationPermissionResult()
+        }
+    val onRequestPermission = {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            ),
+        )
+    }
 
     KeepScreenOn(sessionState)
 
     RideContent(
         state = sessionState,
         locale = locale,
+        permissionResult = permissionResult,
+        onRequestPermission = onRequestPermission,
         onOpenSettings = onOpenSettings,
         onStart = viewModel::startRide,
         onPause = viewModel::pauseRide,
@@ -138,6 +163,8 @@ private fun KeepScreenOn(state: RideSessionState) {
 private fun RideContent(
     state: RideSessionState,
     locale: Locale,
+    permissionResult: LocationPermissionRequestResult,
+    onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit,
     onStart: () -> Unit,
     onPause: () -> Unit,
@@ -172,6 +199,8 @@ private fun RideContent(
             is RideSessionState.Ready ->
                 ReadyContent(
                     state = state,
+                    permissionResult = permissionResult,
+                    onRequestPermission = onRequestPermission,
                     onStart = onStart,
                     onOpenSettings = onOpenSettings,
                 )
@@ -253,11 +282,14 @@ private fun IdleContent() {
 @Composable
 private fun ReadyContent(
     state: RideSessionState.Ready,
+    permissionResult: LocationPermissionRequestResult,
+    onRequestPermission: () -> Unit,
     onStart: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val colors = BuzzTheme.colors
     val hasPermission = state.gps != GpsStatus.NO_PERMISSION
+    val prompt = LocationPermissionUi.resolve(state.gps, permissionResult)
 
     BuzzDisplay(
         text = APP_TITLE,
@@ -276,11 +308,18 @@ private fun ReadyContent(
         color = colors.ink,
         modifier = Modifier.fillMaxWidth(),
     )
-    if (!hasPermission) {
+    if (prompt.message != null) {
         StatusBanner(
-            text = NO_PERMISSION_TEXT,
+            text = prompt.message,
             tone = StatusTone.DANGER,
             modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    if (prompt.showGrantAction) {
+        BuzzButton(
+            text = prompt.grantActionLabel,
+            onClick = onRequestPermission,
+            modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
         )
     }
     BuzzButton(

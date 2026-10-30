@@ -96,6 +96,54 @@ class RideViewModelTest {
         }
 
     @Test
+    fun given_noPermission_when_permissionGrantedAndRefreshed_thenReadyAndStartWorks() =
+        runTest {
+            val checker = MutablePermissionChecker(granted = false)
+            val writer = RecordingRideSessionWriter()
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service, permissionChecker = checker)
+
+            advanceUntilIdle()
+            val denied = viewModel.state.value
+            assertTrue(denied is RideSessionState.Ready)
+            assertEquals(GpsStatus.NO_PERMISSION, (denied as RideSessionState.Ready).gps)
+
+            checker.granted = true
+            viewModel.onLocationPermissionResult()
+            advanceUntilIdle()
+
+            val refreshed = viewModel.state.value
+            assertTrue(refreshed is RideSessionState.Ready)
+            assertEquals(GpsStatus.SEARCHING, (refreshed as RideSessionState.Ready).gps)
+            assertNull(writer.startedRideId)
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value is RideSessionState.Recording)
+            assertEquals(1, service.startCalls)
+        }
+
+    @Test
+    fun given_recordingSession_when_onLocationPermissionResult_thenNoOp() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer)
+            viewModel.startRide()
+            advanceUntilIdle()
+            val recording = viewModel.state.value
+            assertTrue(recording is RideSessionState.Recording)
+            val rideId = (recording as RideSessionState.Recording).rideId
+
+            viewModel.onLocationPermissionResult()
+            advanceUntilIdle()
+
+            val after = viewModel.state.value
+            assertTrue(after is RideSessionState.Recording)
+            assertEquals(rideId, (after as RideSessionState.Recording).rideId)
+        }
+
+    @Test
     fun given_viewModelConstruction_when_restoreRuns_thenStateLeavesIdle() =
         runTest {
             val writer = RecordingRideSessionWriter()
@@ -374,6 +422,12 @@ class RideViewModelTest {
 
     private object EmptyLocationSensor : LocationSensorPort {
         override fun locationUpdates(): Flow<LocationReading> = emptyFlow()
+    }
+
+    private class MutablePermissionChecker(
+        var granted: Boolean,
+    ) : LocationPermissionChecker {
+        override fun hasFineLocationPermission(): Boolean = granted
     }
 
     private object GrantedPermissionChecker : LocationPermissionChecker {

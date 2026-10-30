@@ -129,6 +129,20 @@ class RideViewModel
         }
 
         /**
+         * Re-evaluates [RideSessionState.Ready] after the system permission dialog returns.
+         *
+         * It is a no-op outside [RideSessionState.Ready]: the dialog callback can
+         * arrive after a ride became active, and refreshing then would clobber
+         * the live session. The check reads the manager's authoritative state,
+         * not the [state] mirror, which may lag behind.
+         */
+        fun onLocationPermissionResult() {
+            if (rideSessionManager.state.value is RideSessionState.Ready) {
+                rideSessionManager.refreshReady()
+            }
+        }
+
+        /**
          * Closes an interrupted ride: the manager processes the persisted
          * points and publishes [RideSessionState.Finished]. The foreground
          * service is not started because the ride is ending, not recording.
