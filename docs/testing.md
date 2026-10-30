@@ -17,6 +17,12 @@ Todo lo que sigue corre sin emulador ni dispositivo, con
 | Cliente HTTP / sync | `HttpHermesSender` contra un `HttpsServer` local efímero, códigos de respuesta, timeouts, validación de endpoint, `HttpConnectivityChecker`. | JUnit (`com.sun.net.httpserver`) |
 | Payload | Serialización JSON del ride, inclusión del rango calórico y del modelo, contrato de campos. | JUnit puro |
 
+> **Keystore TLS de test:** `app/src/test/resources/test-tls.p12` es un
+> keystore **autofirmado y solo de test**; su password (`testpass`) es
+> pública y no es un secreto de producción. Está versionado a propósito
+> (excepción en `.gitignore`) para que el CI pueda levantar el `HttpsServer`
+> efímero de los tests de `HttpHermesSender`.
+
 Reporte HTML: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
 ## 2. Qué requiere dispositivo o emulador (`app/src/androidTest`)

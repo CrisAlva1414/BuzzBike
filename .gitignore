@@ -20,6 +20,8 @@ captures/
 keystore.properties
 secrets.properties
 *.p12
+# Test-only self-signed TLS keystore (public test password, not a secret).
+!app/src/test/resources/test-tls.p12
 *.pem
 *.key
 
