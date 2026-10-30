@@ -16,19 +16,24 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          # Install only platform-tools: the action's default package list still
+          # references the legacy `tools` package, which no longer exists in the
+          # SDK repository and aborts the setup step on fresh runners.
+          packages: "platform-tools"
       - name: Install SDK packages
         run: |
-          yes | sdkmanager --licenses >/dev/null
+          # The action above already accepts licenses; sdkmanager is on PATH.
           # compileSdk 37 maps to the SDK package `platforms;android-37.0`.
           # Keep `platforms;android-37` as the primary name for repositories
           # that expose it, and fall back to the currently published package.
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" \
-            || sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-37" "build-tools;36.0.0" \
+            || sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
       - uses: gradle/actions/setup-gradle@v4
       - name: Gate
         run: ./gradlew test ktlintCheck detekt lintDebug assembleDebug --stacktrace
