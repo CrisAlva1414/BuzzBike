@@ -1,123 +1,129 @@
 # Loop State — BuzzBike
 
 > Bitácora de auditoría del pipeline. Actualizado por el orchestrator en cada iteración.
-> Tarea previa (Iterations 0–39): archivada en
-> `state/archive/loop-state-2026-10-30-handoff-u0-l1.md`.
-> Referencia de diseño de esta tarea:
-> `/home/pc01/Escritorio/buzzbike-handoff/android-handoff/ANDROID_HANDOFF.md` §5 U1.
+> Tarea anterior (U1 "Ride en vivo"): **completada** y archivada en
+> `state/archive/loop-state-2026-10-30-u1-ride-en-vivo.md`.
+> Estado de producto vigente: `AGENTS.md` §0.
 
 ---
 
-## Tarea activa — U1: Ride en vivo
-
-### Pedido
-Continuar el plan de UI del handoff: implementar **U1 (Ride en vivo)** sobre el
-repo en `main` (`64faa25`). U0 (tema/componentes) y L1 (pause/resume + FGS) ya
-están cerrados con gate PASS.
-
-### Clase de triage
-**Standard.** Código de aplicación (Compose + dominio de sesión) con slices y
-gates `tester` + `security-reviewer`. No es Fast: toca FGS/permisos de
-ubicación en su superficie de UI y es un slice de producto. No es Heavy: no
-agrega auth, secretos, esquema ni dependencias nuevas; **si `builder` necesita
-tocar el manifest, permisos o el esquema Room, se detiene y escala** (pasa a
-Heavy con aprobación humana).
-
-### Criterio de aceptación
-U1 se cierra cuando se cumplen **todos**:
-
-1. `RideScreen` renderiza los cinco estados del handoff — `Idle`, `Ready`,
-   `Recording`, `Paused`, `Finished`, `Recoverable` — con:
-   - calorías **siempre** como banda (`≈ min–max kcal` + modelo), nunca un
-     número exacto (ADR-001 / AGENTS.md §6.4);
-   - franja de pausa automática cuando `autoPaused` es `true`;
-   - `HoldToStopButton` para detener (no tap simple).
-2. El estado de sesión vive en `domain/ride/session/` como `sealed interface`
-   JVM-puro, y el controlador cubre `start`, `pause`, `resume`, `finish`,
-   `discard` y `recovery` con tests JVM (sin Robolectric).
-3. `autoPaused` se deriva de `MovingTimeEstimator` / `RideParameters`
-   (ADR-005: `V_STOP_MPS 0.4`/`T_STOP_SECONDS 10`, `V_GO_MPS 0.8`/
-   `T_GO_SECONDS 3`). Prohibido inventar umbrales nuevos.
-4. `FLAG_KEEP_SCREEN_ON` solo mientras se graba (o pausa) y se libera al salir.
-5. Gate verde: `./gradlew test ktlintCheck detekt assembleDebug lintDebug` y
-   `./gradlew assembleDebugAndroidTest`.
-6. `tester: PASS` y `security-reviewer: PASS` sobre el diff final.
-
-### Fuera de alcance (queda para U2–U6)
-- Mapa MapLibre (U5). En U1 la traza se dibuja en un `Canvas` simple o se omite.
-- Historial/detalle, GPX y la regla de reloj de pared monotónico (U2, laguna §5.5).
-- Garaje/bici real (`bikes`/`components`) y `WearEngine` (U4). El selector de
-  bici queda detrás de un placeholder sin esquema nuevo.
-- DataStore para tema persistido (U3).
-- Cambios de manifest/permisos/FGS tipo `health`: **bloqueado**, requiere
-  aprobación humana.
-- Migraciones Room / columnas nuevas.
-
-### Plan de slices
-| # | Slice | Alcance | Archivos (aprox.) |
-|---|---|---|---|
-| A | Dominio de sesión | `RideSessionState` sellado + `LiveMetrics`/`CalorieBand`/`GpsStatus`; detector de auto-pausa sobre `MovingTimeEstimator`; `discard` y detección de `Recoverable` en el controlador + puertos; tests JVM | `domain/ride/session/*`, `data/repository/RideRepository.kt`, tests |
-| B | Formateo + componentes | Helpers puros de formato (km, km/h, mm:ss, banda calórica) con tests; `MetricCell`, `BuzzButton`, `StatusBanner` en `ui/components` | `ui/ride/*Format*.kt`, `ui/components`, tests |
-| C | Pantalla + ViewModel | `RideScreen` con los 5 estados, `HoldToStopButton`, keep-screen-on, diálogo de recuperación, `RideViewModel` adaptado | `ui/ride/*`, `MainActivity`/nav solo si hace falta |
-| D | Cierre | gate completo, docs (`AGENTS.md` §0, `docs/roadmap.md`, handoff), commit + changelog | docs/state |
-
-### Iteraciones
-| Iter | Fecha | Slice | Resultado | Notas |
-|---|---|---|---|---|
-| 1 | 2026-10-30 | A | gate PASS (tras fixes) | `RideSessionState` sellado + auto-pausa ADR-005 + `discard`/`restore`. Security: 1 media (doble `startRide`) + 4 bajas. |
-| 2 | 2026-10-30 | A (fixes) | PASS | `Mutex` en transiciones, guard de `rideId` en `TrackingManager`, `@Transaction` en `replaceActiveRide`/`deleteRideWithPoints`, `cancelAndJoin`, `resumeRide` respeta permiso, `try/finally` del FGS. Security: F1/F3/F5 cerrados, F2 parcial (baja). |
-| 3 | 2026-10-30 | B | PASS | `RideFormat` (km, km/h, duración, altitud, banda calórica) + `MetricCell`/`BuzzButton`/`StatusBanner`. 312 tests. |
-| 4 | 2026-10-30 | C1 | PASS | `RideSessionWriter.loadTrackPoints`, `salvageRecoverableRide` (procesa puntos persistidos → `Finished`; sin puntos → borra y `Ready`), `restore()` solo desde `Idle`, `init` del ViewModel. 322 tests. |
-| 5 | 2026-10-30 | C2 | PASS | `RideScreen` con 6 estados, `RideTrace` (Canvas), keep-screen-on restaurado, doble confirmación de descarte, diálogo de recuperación no cerrable, botón de inicio deshabilitado sin permiso. Lint/format/detekt verdes. |
-| 6 | 2026-10-30 | D | PASS | Docs (`AGENTS.md` §0/§4, `docs/roadmap.md` §1, sesión, `CHANGELOG.md`) + commit `fcea1ab`. Gate completo verde. |
-
-### Deuda abierta al cerrar A y B (baja, no bloqueante)
-- F2 residual: `TrackingManager.stopTracking()` no hace `join()` del `trackingJob`; un
-  `saveTrackPoint` en vuelo podría commitear después del delete (sin FK/cascade).
-  Fix acotado pendiente: `stopTrackingAndJoin()`.
-- `refreshReady()` y `acknowledgeFinished()` escriben estado fuera de `lifecycleMutex`.
-- `stopRide` del ViewModel puede salir temprano si `stateIn` aún no propagó → FGS vivo
-  hasta el siguiente toque. Derivar el id del manager o mover el guard dentro de la corrutina.
-- Cobertura: falta test manager-level de parada <10 s y de "stop lanza excepción → service.stop()".
-- TalkBack: `MetricCell`/`StatusBanner` duplican anuncio (contentDescription en contenedor
-  sin `clearAndSetSemantics`/`mergeDescendants`).
-- `RideFormat`: faltan casos de entrada negativa/NaN en distancia, `low==high`, locale default hostil.
-- Atomicidad real de `@Transaction` en default methods de DAO no ejercitada con Room in-memory.
-
-### Decisiones
-- Se adopta el contrato sellado del handoff (§5 U1) en lugar de seguir
-  engordando el `RideSessionUiState` plano: da `when` exhaustivo en la UI y
-  hace testeable el estado de recuperación en JVM.
-- El `TrackingService` sigue siendo propiedad del `RideViewModel` (decisión de
-  L1); U1 **no** mueve el servicio al controlador. El controlador no conoce
-  Android.
-- Si el diff de A obliga a tocar esquema Room o manifest → STOP y escalado.
-
-### Riesgos conocidos
-- Sin emulador ni dispositivo: la UI Compose solo se verifica compilando
-  (`assembleDebug` + `assembleDebugAndroidTest`). Lista de verificación manual
-  en `docs/sessions/` al cerrar D.
-- Laguna §5.4 (tick en vivo): hoy se reprocesa a 1 Hz; en U1 se mantiene y se
-  deja anotado como deuda de performance hasta medir en dispositivo.
+## Tarea encolada — U1.1: permiso de ubicación en runtime
 
 ### Estado
-**completada** — 2026-10-30, commit `fcea1ab`.
+**pendiente de ejecución** (plan **aprobado por la persona el 2026-10-30**).
+`iteracion: 0` · `max_iteraciones: 4`
 
-### Gate final
-| Check | Resultado |
-|---|---|
-| `test` | 322 tests, 0 fallos, 0 skipped |
-| `ktlintCheck` / `detekt` | PASS |
-| `assembleDebug` / `lintDebug` | PASS |
-| `assembleDebugAndroidTest` | compila |
-| `tester` | PASS (A, B, C2) |
-| `security-reviewer` | PASS (A con fixes, B, C2 sin hallazgos) |
+### Por qué existe
+U1 cerró con la pantalla completa y el estado sellado, pero **nadie pide el
+permiso en runtime**: en una instalación nueva `RideSessionManager.startRide()`
+siempre devuelve `null` y deja `Ready(NO_PERMISSION)`, con el botón INICIAR RIDE
+deshabilitado. La app puede grabar, pero no puede arrancar un ride. El plan se
+dejó sin implementar a propósito porque es superficie de permisos (Heavy) y
+requería aprobación humana; ya está aprobada.
 
-### Pendiente de aprobación humana
-- **Pedido de permiso de ubicación en runtime**: sin él, en una instalación
-  nueva `startRide()` siempre devuelve `Ready(NO_PERMISSION)` y el botón queda
-  deshabilitado. Es superficie de permisos → Heavy → requiere aprobación
-  explícita antes de que `builder` toque una línea. Propuesta: usar
-  `rememberLauncherForActivityResult(RequestMultiplePermissions)` para
-  `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` en `Ready(NO_PERMISSION)`,
-  sin tocar el manifest (ya declara ambos).
+### Clase de triage
+**Heavy** — toca permisos de ubicación. La aprobación humana del plan **ya está
+dada** (no hace falta volver a pedirla), pero el gate es más estricto:
+`tester` + `security-reviewer` obligatorios, y cualquier necesidad de tocar
+`AndroidManifest.xml` **detiene la ejecución** (hoy no hace falta: los permisos
+ya están declarados).
+
+### Plan aprobado
+1. En `Ready(NO_PERMISSION)` la UI ofrece una acción primaria **"DAR PERMISO"**
+   que dispara el diálogo del sistema con
+   `rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions())`
+   para `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION`. **Sin tocar el
+   manifest** (ambos ya declarados).
+2. Al volver del diálogo (concedido o no), re-evaluar el estado de sesión:
+   `RideSessionManager.refreshReady()` (ya existe) → `Ready(SEARCHING)` cuando
+   hay permiso fino, o `Ready(NO_PERMISSION)` cuando no. Un nuevo `fun
+   onLocationPermissionResult()` en `RideViewModel` que delegue es suficiente.
+3. Concedido: el botón INICIAR RIDE queda habilitado y el flujo sigue igual
+   (el guard del manager ya impide crear fila sin permiso).
+4. Denegado: se mantiene `NO_PERMISSION` con copy claro ("Sin permiso de
+   ubicación no se puede grabar un ride"). No reintentar automáticamente ni
+   pedir dos veces seguidas.
+5. **Opcional (solo si sale limpio)**: si tras una denegación
+   `shouldShowRequestPermissionRationale` es `false`, ofrecer "ABRIR AJUSTES"
+   con `Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)`. Si agrega
+   complejidad o riesgo, se deja como follow-up y se anota.
+6. La lógica de decisión (qué acción/label mostrar según
+   `GpsStatus` + resultado del pedido) va en un helper **puro** en `ui/ride/`
+   (p. ej. `LocationPermissionUi.kt`), testeable en JVM. La pantalla solo lo
+   consume.
+
+### Criterio de aceptación
+- [ ] `Ready(NO_PERMISSION)` muestra "DAR PERMISO" y al conceder pasa a
+      `Ready(SEARCHING)` con INICIAR RIDE habilitado, **sin reiniciar la app**.
+- [ ] Denegar deja `NO_PERMISSION` con copy claro y sin crash.
+- [ ] Ningún camino arranca tracking ni crea fila sin permiso (regresión de U1).
+- [ ] Manifest intacto; sin permisos nuevos; sin dependencias nuevas.
+- [ ] Helper de decisión con tests JVM (concedido / denegado / estado inicial).
+- [ ] Gate verde: `./gradlew test ktlintCheck detekt assembleDebug lintDebug`
+      y `./gradlew assembleDebugAndroidTest`.
+- [ ] `tester: PASS` + `security-reviewer: PASS` explícitos.
+
+### Archivos esperados
+- `app/src/main/java/com/buzzbike/app/ui/ride/RideScreen.kt` (solo el bloque `Ready`)
+- `app/src/main/java/com/buzzbike/app/ui/ride/RideViewModel.kt` (delegación)
+- NUEVO `app/src/main/java/com/buzzbike/app/ui/ride/LocationPermissionUi.kt` + test
+- `RideSessionManager.refreshReady()` ya existe: **no** cambiar el dominio salvo
+  que falte algo y se reporte.
+
+### Fuera de alcance
+- Pedido de permiso en background / `ACCESS_BACKGROUND_LOCATION` (no está en v1
+  y requiere ADR + revisión de Play; la app es local-first).
+- Notificaciones (`POST_NOTIFICATIONS`) y FGS tipo `health`: siguen diferidos.
+- Deep link a ajustes del sistema si complica el slice (anotar como follow-up).
+
+### Verificación manual (no hay emulador en esta máquina)
+- Instalación limpia → INICIAR RIDE deshabilitado + "DAR PERMISO".
+- Conceder → habilita sin reiniciar. Denegar → mensaje, sin crash.
+- Revocar permiso desde Ajustes con la app en pausa → reanudar queda en
+  `Paused` (comportamiento ya cubierto por U1, verificar que no se rompió).
+
+---
+
+## Contexto para retomar (leer antes de tocar código)
+
+- **Últimos commits:** `bcf20ec` (cierre de estado de U1) sobre `fcea1ab`
+  (`feat(ui): add live ride screen with sealed session state`). Árbol limpio.
+- **Gate actual:** 322 tests, 0 fallos; `ktlintCheck`, `detekt`,
+  `assembleDebug`, `lintDebug` y `assembleDebugAndroidTest` en verde.
+- **Contrato de sesión:** `domain/ride/session/RideSessionState.kt`
+  (`Idle / Ready(gps, hasBarometer) / Recording / Paused / Finished / Recoverable`).
+- **Auto-pausa:** `MovingTimeEstimator` (`MovingState.isMoving`,
+  `stoppedSinceNSanos`) — ADR-005, sin umbrales nuevos.
+- **Calorías:** siempre banda `≈ min–max kcal` + modelo (ADR-001).
+- **Docs de la sesión anterior:** `docs/sessions/2026-10-30-u1-ride-en-vivo.md`.
+- **Handoff de diseño:** `/home/pc01/Escritorio/buzzbike-handoff/android-handoff/ANDROID_HANDOFF.md`.
+
+### Deuda abierta (baja, no bloqueante — no la arregles salvo que el slice la toque)
+- `TrackingManager.stopTracking()` no hace `join()` del `trackingJob` → un
+  `saveTrackPoint` en vuelo podría dejar un punto huérfano tras `discard`
+  (fix acotado sugerido: `stopTrackingAndJoin()`).
+- `refreshReady()` / `acknowledgeFinished()` escriben estado fuera del
+  `lifecycleMutex`. **Ojo: U1.1 usa `refreshReady()`**, así que si tocás esa
+  ruta, considerá moverla bajo el mutex (haría `refreshReady()` suspend).
+- `stopRide` del ViewModel puede salir temprano si el `StateFlow` no propagó →
+  FGS vivo hasta el siguiente toque.
+- Cobertura: falta test manager-level de parada <10 s y de "stop lanza
+  excepción → `service.stop()`".
+- TalkBack: posible anuncio duplicado en `MetricCell`/`StatusBanner`
+  (contentDescription en contenedor sin `clearAndSetSemantics`).
+- `RideFormat`: faltan casos negativos/NaN en distancia, `low == high`, locale
+  default hostil.
+- Atomicidad real de `@Transaction` en default methods de DAO no ejercitada con
+  Room in-memory (sin emulador).
+- Lagunas del handoff §5.4 (reproceso a 1 Hz sin medir en dispositivo) y §5.5
+  (monotónico → reloj de pared para GPX, es de U2).
+
+### Después de U1.1
+**U2 — Historial y detalle + GPX** (handoff §5): lista desde
+`RideDao.getAllRides()`, franja semanal calculada, detalle con traza, 8 métricas,
+exportar GPX 1.1 + `TrackPointExtension` (aquí se cierra la laguna §5.5).
+
+## Iteraciones
+| Iter | Fecha | Slice | Resultado | Notas |
+|---|---|---|---|---|
+| — | — | — | pendiente | arranca en 0 |

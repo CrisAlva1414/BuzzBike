@@ -49,11 +49,13 @@ causa raíz antes de dar el slice por cerrado.
    incertidumbre y modelo usado (§6, ADR-001).
 
 **Pendientes que dependen del usuario:** app id definitivo (hoy
-`com.buzzbike.app` es placeholder), nombre definitivo de la app, validación
-E2E del sync contra un NAS real con Hermes Agent (ruta de webhook), y
-**pedido de permiso de ubicación en runtime** (aprobación pendiente: U1 deja el
-botón deshabilitado con aviso en `Ready(NO_PERMISSION)`). El copyright ya está
-resuelto en el LICENSE (Cristian Alvarado, 2026).
+`com.buzzbike.app` es placeholder), nombre definitivo de la app, y validación
+E2E del sync contra un NAS real con Hermes Agent (ruta de webhook). El
+copyright ya está resuelto en el LICENSE (Cristian Alvarado, 2026).
+
+**Permiso de ubicación en runtime:** el plan **ya está aprobado** (2026-10-30) y
+queda encolado como **U1.1** en `state/loop-state.md`. Hasta que se implemente,
+U1 deja `Ready(NO_PERMISSION)` con el botón INICIAR RIDE deshabilitado.
 
 ---
 

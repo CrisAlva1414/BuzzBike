@@ -128,3 +128,23 @@ build**, pero falta la pasada manual en hardware real:
   default hostil.
 - La atomicidad real de `@Transaction` en default methods de DAO no está
   ejercitada con Room in-memory.
+
+## Handoff a la sesión siguiente
+
+- **Próxima tarea:** **U1.1 — permiso de ubicación en runtime**, con plan ya
+  aprobado por la persona (2026-10-30) y criterio de aceptación completo en
+  `state/loop-state.md`.
+- **Alcance:** acción "DAR PERMISO" en `Ready(NO_PERMISSION)` con
+  `RequestMultiplePermissions` (`ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION`),
+  re-evaluación vía `RideSessionManager.refreshReady()` y helper puro testeable
+  en `ui/ride/LocationPermissionUi.kt`. Sin tocar el manifest.
+- **Después:** U2 — historial/detalle + GPX (ahí se cierra la laguna del reloj
+  de pared monotónico → pared).
+- **Ojo con la deuda registrada:** `refreshReady()` escribe estado fuera del
+  `Mutex`; si U1.1 lo vuelve a usar, evaluar moverlo bajo `lifecycleMutex`.
+- **Verificación:** este repo no tiene emulador; la UI se valida compilando
+  (`assembleDebug`, `assembleDebugAndroidTest`) y con la lista de verificación
+  manual de este documento.
+- **Nota de harness:** `doc-writer` está configurado con un modelo inexistente
+  (`opencode-go/longcat-2.5-preview-free`), y el subagente `tester` devuelve
+  respuestas vacías con prompts largos (funciona con prompts acotados).
