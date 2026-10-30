@@ -170,8 +170,8 @@ Archivos escritos y commiteados (`e54cce2`). **Pendiente: gate de verificación*
 ## 5. Restricciones y supuestos
 
 - **Sin sensores externos en v1** (sin HR strap, sin potenciómetro) → techo de
-  precisión calórica **±25–35%** (ADR-001, respaldado por Wallen 2016). **No
-  prometer exactitud**; la UI declara el intervalo y el modelo.
+  precisión calórica **±30–40% sin perfil / ±20–30% con perfil (ADR-001, bandas
+  de producto)**. **No prometer exactitud**; la UI declara el intervalo y el modelo.
 - **Distribución: GitHub Releases (APK).** Sin Play Store. F-Droid solo futuro
   con build reproducible.
 - **Hermes Agent en el NAS del usuario**, alcanzable por Tailscale. Si no está

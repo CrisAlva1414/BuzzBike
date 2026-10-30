@@ -114,6 +114,12 @@ adb devices
 Si en una máquina nueva el SDK/JDK no están en el `PATH`, cargar las
 variables del entorno antes de Gradle (ver `docs/setup-entorno.md`).
 
+**CI:** el gate se ejecuta en **GitHub Actions**
+(`.github/workflows/android.yml`) en cada push/PR. El artifact
+`buzzbike-debug-apk` y los GitHub Releases (tags `v*`) son la vía de
+instalación del APK. Los tests instrumentados de §3 **siguen requiriendo un
+dispositivo o emulador conectado**; el CI actual no los ejecuta.
+
 ## 5. Dependencias fijadas por seguridad
 
 `app/build.gradle.kts` fuerza `org.bouncycastle:bcprov-jdk18on:1.84`

@@ -38,7 +38,7 @@ Verificado contra el código en `main`:
 - ✅ **Elevación:** fusión de barómetro + altitud GPS con suavizado e histéresis para desnivel positivo/negativo (ADR-006).
 - ✅ **Calculadora de calorías:** nivel 3 (Compendium) implementado; ACSM/Keytel quedan preparados para sensores futuros (ADR-001).
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
-- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**264 tests, 0 fallos**), `ktlintCheck`, `detekt`, `lintDebug` y `assembleDebug` (APK ~81 MB) pasan.
+- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**272 tests, 0 fallos**), `ktlintCheck`, `detekt`, `lintDebug` y `assembleDebug` (APK ~81 MB) pasan.
 
 **Todavía no:**
 
@@ -143,6 +143,8 @@ Guía paso a paso desde una máquina vacía (Linux, sin sudo), con los pitfalls 
 
 Todavía **no hay release firmada de producción**: el CI publica builds de debug.
 
+- **Release `v0.1.0` (APK debug):** descarga directa en [github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0](https://github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0).
+- **Historial de releases:** [github.com/CrisAlva1414/BuzzBike/releases](https://github.com/CrisAlva1414/BuzzBike/releases).
 - **Cada push a `main` y cada PR:** el APK queda como artifact `buzzbike-debug-apk` en la pestaña **Actions** del workflow.
 - **Tags `v*`:** se publica un GitHub Release con `app-debug.apk`.
 - Instalación: `adb install -r app-debug.apk` o sideload (habilitar "Instalar apps desconocidas" para el navegador/gestor de archivos).

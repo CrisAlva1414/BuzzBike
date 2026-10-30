@@ -11,11 +11,13 @@
 
 **¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
 elevación, calorías (nivel 3) y **backend/sync están cerrados**. El backend/sync
-cerró con gate PASS y **264 tests**; `test`, `ktlintCheck`, `detekt`,
+cerró con gate PASS y **272 tests**; `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
-compila. **La UI de producto está en curso.** CI/CD vive en
-`.github/workflows/android.yml` (GitHub Actions): corre el gate, sube el artifact
-`buzzbike-debug-apk` y publica un Release con el APK de debug en tags `v*`.
+compila. La UI de producto está en curso: **U0 (tema/componentes) y L1
+(pause/resume + FGS) están hechos**; el próximo slice es **U1 (Ride en vivo)**.
+CI/CD vive en `.github/workflows/android.yml` (GitHub Actions): corre el gate,
+sube el artifact `buzzbike-debug-apk`, está **verde** y ya se publicó el release
+**`v0.1.0`** con el APK de debug.
 
 **Retomar (copiar y pegar):**
 
@@ -37,9 +39,9 @@ causa raíz antes de dar el slice por cerrado.
 
 **Reglas duras que no se negocian:**
 1. Ningún slice se cierra sin `tester: PASS` (roadmap §4).
-2. `security-reviewer` está **diferido al release** por decisión explícita del
-   usuario — la deuda de seguridad está registrada (roadmap §4). La tarea no
-   se marca completa sin ese pase.
+2. `security-reviewer` corre en los slices que tocan **secretos o red**, y como
+   **gate final de release**. La deuda de seguridad está registrada (roadmap §4);
+   la tarea no se marca completa sin ese pase.
 3. Toda fórmula de dominio físico requiere fuente citada + ADR (§6).
 4. La UI nunca muestra calorías como un número exacto: siempre intervalo de
    incertidumbre y modelo usado (§6, ADR-001).
@@ -128,7 +130,7 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**264 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**272 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
 > **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lintDebug`. Los instrumentados solo se compilan con `assembleDebugAndroidTest`.
 >
