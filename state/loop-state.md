@@ -1480,3 +1480,61 @@ L1: servicio FGS + pausa/reanudación + no borrar puntos.
 
 ### Próximo paso
 Push + verificación de CI; luego U1 (Ride en vivo) y resto de U2–U6.
+
+---
+
+## Iteration 39 — 2026-10-30 — CI/CD verde + release v0.1.0 + cierre de sesión (COMPLETADO)
+
+### Resultado
+| Check | Resultado |
+|---|---|
+| CI main `41000593633` | success |
+| CI tag `41001256662` | success |
+| CI docs `41001497111` | success |
+| Release `v0.1.0` | publicado, asset `app-debug.apk` |
+| APK | 81 MB, debug-signed, `com.buzzbike.app`, versionCode 1 / versionName 0.1.0, minSdk 26 / target 36, SQLCipher en 4 ABI |
+| Árbol git | limpio, `main` = `352ae0a` |
+
+### Cambios de esta iteración
+- `.github/workflows/android.yml`: `setup-android` instala solo `platform-tools` (el paquete legacy `tools` ya no existe); `sdkmanager` explícito para platform 37/build-tools con fallback `android-37.0`; `setup-java@v5`.
+- `.gitignore` + `docs/testing.md`: excepción explícita para `app/src/test/resources/test-tls.p12`, keystore autofirmado **solo de test** (password pública `testpass`). Sin esto, 11 tests de `HttpHermesSenderTest` fallaban en CI por clonar sin el p12.
+- `README.md` / `AGENTS.md` / `docs/roadmap.md` / `docs/testing.md`: 272 tests, bandas ±30–40% sin perfil / ±20–30% con perfil, link al release, regla de `security-reviewer` (slices con secretos/red + gate final de release), estado U0/L1 y próximo U1.
+- Release público: https://github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0
+
+### Estado del handoff UI
+- **Hecho:** U0 (tema Sol/Noche, Anton/Darker Grotesque/JetBrains Mono, `BuzzDisplay`, `HoldToStopButton`) y L1 (pause/resume sin borrar puntos, FGS start/stop, restart con intent null, `onDestroy` cleanup).
+- **Lagunas §5 cerradas:** 1 (servicio), 2 (pause/resume), 3 (puntos preservados).
+- **Lagunas §5 abiertas:** 4 (loop de tick en vivo cada 2–3 s; hoy se reprocesa a 1 Hz y no se midió en dispositivo), 5 (mapeo monotónico→reloj de pared para GPX), 6 (cerrada).
+- **Pendiente:** U1 Ride en vivo; U2 historial/detalle + GPX; U3 ajustes/perfil + tema persistido (DataStore; hoy default Sol); U4 garaje/desgaste (schema bikes/components/events + `WearEngine`); U5 mapa MapLibre; U6 accesibilidad/pulido.
+- El servicio **no posee los sensores** ni recupera tras muerte de proceso; eso queda para U1.
+- Sin emulador/dispositivo: solo JVM + `assembleDebugAndroidTest`.
+
+### Decisiones abiertas (requieren humano)
+- App id definitivo (hoy `com.buzzbike.app` placeholder) y nombre final.
+- Frenos: ponderación km vs desnivel.
+- Play Services vs `LocationManager` para F-Droid.
+- API local: descartar o ADR.
+- PMTiles offline: post-v1.
+- Release de producción firmada: falta keystore + secrets en CI (hoy solo debug).
+
+### Deuda/riesgos conocidos (bajos)
+- `scheduleAfterSave` traga fallos del scheduler (config guardada, trabajo viejo puede entregar).
+- Race de `connectionStatus` con health check en vuelo.
+- ADR-003 dice 10/20 s pero el default configurable es 30 s.
+- Sin test automatizado del diálogo de desconexión.
+- `onRetryCountChange("")` hace early-return y deja un OK viejo.
+- Limitaciones aceptadas en ADR-003: pérdida de DB plana pre-release, TLS vía Tailscale sin pinning, consentimiento global, ventana in-flight en disconnect, autofill/accesibilidad, sin Retry-After, background location pendiente.
+
+### Retomar (copiar y pegar)
+```bash
+cd /home/pc01/Proyectos/BuzzBike
+git pull
+./gradlew test ktlintCheck detekt assembleDebug lintDebug --console=plain
+./gradlew assembleDebugAndroidTest --console=plain
+gh run list --limit 3
+```
+Orden de lectura: `AGENTS.md` §0 → `docs/roadmap.md` → este archivo → `docs/sessions/` → handoff en `/home/pc01/Escritorio/buzzbike-handoff/android-handoff/ANDROID_HANDOFF.md`.
+
+### Notas de CI
+- Warning no bloqueante: actions en Node 20 forzadas a Node 24; `ubuntu-latest` migra a Ubuntu 26 en oct-2026. Revisar bumps de actions cuando salgan.
+- El Release `v0.1.0` es APK de **debug**; no es una release de producción.
