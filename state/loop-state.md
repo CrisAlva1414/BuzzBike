@@ -67,6 +67,9 @@ U1 se cierra cuando se cumplen **todos**:
 | 1 | 2026-10-30 | A | gate PASS (tras fixes) | `RideSessionState` sellado + auto-pausa ADR-005 + `discard`/`restore`. Security: 1 media (doble `startRide`) + 4 bajas. |
 | 2 | 2026-10-30 | A (fixes) | PASS | `Mutex` en transiciones, guard de `rideId` en `TrackingManager`, `@Transaction` en `replaceActiveRide`/`deleteRideWithPoints`, `cancelAndJoin`, `resumeRide` respeta permiso, `try/finally` del FGS. Security: F1/F3/F5 cerrados, F2 parcial (baja). |
 | 3 | 2026-10-30 | B | PASS | `RideFormat` (km, km/h, duración, altitud, banda calórica) + `MetricCell`/`BuzzButton`/`StatusBanner`. 312 tests. |
+| 4 | 2026-10-30 | C1 | PASS | `RideSessionWriter.loadTrackPoints`, `salvageRecoverableRide` (procesa puntos persistidos → `Finished`; sin puntos → borra y `Ready`), `restore()` solo desde `Idle`, `init` del ViewModel. 322 tests. |
+| 5 | 2026-10-30 | C2 | PASS | `RideScreen` con 6 estados, `RideTrace` (Canvas), keep-screen-on restaurado, doble confirmación de descarte, diálogo de recuperación no cerrable, botón de inicio deshabilitado sin permiso. Lint/format/detekt verdes. |
+| 6 | 2026-10-30 | D | PASS | Docs (`AGENTS.md` §0/§4, `docs/roadmap.md` §1, sesión, `CHANGELOG.md`) + commit `fcea1ab`. Gate completo verde. |
 
 ### Deuda abierta al cerrar A y B (baja, no bloqueante)
 - F2 residual: `TrackingManager.stopTracking()` no hace `join()` del `trackingJob`; un
@@ -98,4 +101,23 @@ U1 se cierra cuando se cumplen **todos**:
   deja anotado como deuda de performance hasta medir en dispositivo.
 
 ### Estado
-**en curso**
+**completada** — 2026-10-30, commit `fcea1ab`.
+
+### Gate final
+| Check | Resultado |
+|---|---|
+| `test` | 322 tests, 0 fallos, 0 skipped |
+| `ktlintCheck` / `detekt` | PASS |
+| `assembleDebug` / `lintDebug` | PASS |
+| `assembleDebugAndroidTest` | compila |
+| `tester` | PASS (A, B, C2) |
+| `security-reviewer` | PASS (A con fixes, B, C2 sin hallazgos) |
+
+### Pendiente de aprobación humana
+- **Pedido de permiso de ubicación en runtime**: sin él, en una instalación
+  nueva `startRide()` siempre devuelve `Ready(NO_PERMISSION)` y el botón queda
+  deshabilitado. Es superficie de permisos → Heavy → requiere aprobación
+  explícita antes de que `builder` toque una línea. Propuesta: usar
+  `rememberLauncherForActivityResult(RequestMultiplePermissions)` para
+  `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` en `Ready(NO_PERMISSION)`,
+  sin tocar el manifest (ya declara ambos).
