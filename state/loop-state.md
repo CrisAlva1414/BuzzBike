@@ -1369,3 +1369,35 @@ Gate final tester + security sobre el árbol completo.
 
 ### Próximo paso
 Re-gate focalizado tester + security sobre `42016f0..HEAD`.
+
+---
+
+## Iteration 35 — 2026-10-28 — Gate final: PASS (backend/sync cerrado)
+
+### Veredictos
+| Gate | Veredicto |
+|---|---|
+| tester | **PASS** (264 tests, 0 failures) |
+| security-reviewer | **PASS** (sin altos/críticos) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+| assembleDebugAndroidTest | 0 |
+
+### Puntos 1–4 cerrados
+1. Tester re-ejecutado sobre el árbol final: PASS.
+2. F2/F3/F4: secreto endurecido, revocación real, FAILED reencolable, 429/401/403, test connection, workers reprogramados, confirmación de disconnect.
+3. Decisiones documentadas en ADR-003: pérdida pre-release, TLS Tailscale sin pinning, consentimiento global, ventana de cancelación, autofill, pacing, background location.
+4. Instrumentación: androidTest de SQLCipher y Keystore compilan; deuda de hardware documentada en docs/testing.md.
+
+### Limitaciones aceptadas (bajas, documentadas)
+- `scheduleAfterSave` silencia fallos del scheduler (config guardada, work viejo puede seguir).
+- Carrera menor de `connectionStatus` con un check en vuelo.
+- ADR dice 10/20 s; el default real de timeout es 30 s configurable.
+- Autofill/accesibilidad y ventana de worker en vuelo: plataforma.
+- Background location debe reincorporarse al habilitar tracking real.
+
+### Estado
+Backend/lógica/sync cerrado. 27+ commits locales por delante de origin/main.
+Próximo: fase de UI detallada.
