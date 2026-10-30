@@ -20,10 +20,9 @@ Y el número estaba mal. Los relojes comerciales tienen **9–43% de error** con
 
 BuzzBike hace lo contrario:
 
-- **Motor de cascada** (potenciómetro → banda de frecuencia cardíaca → METs por velocidad) y te dice **qué modelo aplicó**.
-- Muestra siempre el **rango de incertidumbre** (±25–35% sin sensores externos). Nunca un número "exacto".
+- **Motor de cascada** (potenciómetro → banda de frecuencia cardíaca → METs por velocidad): v1 usa el nivel 3 (Compendium) y te dice **qué modelo aplicó**.
+- Muestra siempre el **rango de incertidumbre** (±30–40% sin perfil corporal / ±20–30% con perfil). Nunca un número "exacto".
 - **Cero datos personales.** Sin cuenta, sin analytics, sin backend propio. Los tracks GPS no salen del teléfono salvo que vos lo pidas.
-- Trackea el **desgaste real de tu bici** (cadena, frenos, neumáticos, suspensión) por kilómetros/horas/días, con alertas al 80% y 100% de la vida útil.
 
 Hecho para la comunidad, en español, y quiero que se use: si le falta algo o una función está mal pensada, abrí un issue y lo discutimos.
 
@@ -37,14 +36,15 @@ Verificado contra el código en `main`:
 - ✅ **Captura GPS:** `LocationSensor` sobre Play Services Location (`FusedLocationProviderClient`), mapeado a un `LocationReading` puro (testeable en JVM sin Android).
 - ✅ **Segmentación de traza:** corte por pausas, moving time, distancia, velocidad media/máxima (ADR-005).
 - ✅ **Elevación:** fusión de barómetro + altitud GPS con suavizado e histéresis para desnivel positivo/negativo (ADR-006).
-- ✅ **Calculadora de calorías** con la cascada MET/ACSM/Keytel y banda de incertidumbre (ADR-001).
+- ✅ **Calculadora de calorías:** nivel 3 (Compendium) implementado; ACSM/Keytel quedan preparados para sensores futuros (ADR-001).
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
-- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**58 tests, 0 fallos**), `ktlintCheck`, `detekt` y `assembleDebug` (APK 64 MB) pasan.
+- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**264 tests, 0 fallos**), `ktlintCheck`, `detekt`, `lintDebug` y `assembleDebug` (APK ~81 MB) pasan.
 
 **Todavía no:**
 
 - 🚧 **UI de producto:** hay scaffold Compose; las pantallas de ride, mapa y desgaste están en desarrollo.
-- ❌ **Sin releases ni APK público.** La primera release firmada sale cuando el flujo end-to-end esté cerrado (GitHub Releases, no Play Store).
+- 🚧 **Desgaste de componentes:** en diseño (ADR-004), aún no implementado.
+- 🚧 **APK de debug en CI:** artifact por push y Release en tags `v*`; la release firmada de producción sigue pendiente (requiere keystore).
 - ❌ Sin mapas en producción aún (MapLibre + OpenFreeMap cableado, se activa en el slice de mapas).
 - ❌ Sin BLE (frecuencia cardíaca/potencia) ni exportación GPX.
 
@@ -60,7 +60,9 @@ O sea: **el motor está listo y probado, la app todavía no es usable de punta a
 |---|---|---|---|
 | 1 | ACSM `VO2 = 1.8 × (W × 6.12 / masaKg) + 7` | hay potenciómetro BLE | ±5–10% |
 | 2 | Keytel 2005 (con/sin VO2max) | hay banda de frecuencia cardíaca BLE | r = 0.857 |
-| 3 | Compendium 2024, METs por bandas de velocidad | solo GPS (caso v1) | ±25–35% |
+| 3 | Compendium 2024, METs por bandas de velocidad | solo GPS (caso v1) | ±30–40% sin perfil / ±20–30% con perfil |
+
+**v1 solo implementa el nivel 3 (Compendium).** ACSM (nivel 1) y Keytel (nivel 2) están preparados en la arquitectura para sensores futuros (potenciómetro / banda de frecuencia cardíaca), pero **no están implementados**.
 
 BMR de reposo con Mifflin-St Jeor. Regla dura: la UI **debe** mostrar el intervalo y el modelo aplicado. "≈250 kcal (±30%, modelo Compendium)" es correcto; "250 kcal" a secas no.
 
@@ -68,9 +70,9 @@ BMR de reposo con Mifflin-St Jeor. Regla dura: la UI **debe** mostrar el interva
 
 El GPS miente en desnivel (en cerros con árboles, bastante). Se fusiona barómetro con altitud GPS, con suavizado e histéresis para no acumular metros fantasma en cada ondulación del terreno.
 
-### Desgaste de componentes (ADR-004)
+### Desgaste de componentes (ADR-004) — en diseño, aún no implementado
 
-Cada pieza tiene su ciclo de vida normalizado en tres ejes — kilómetros, horas y días — y alerta al 80% y al 100%. Sin eso, la cadena se cambia cuando ya está destruyendo los piñones.
+Cada pieza tendrá su ciclo de vida normalizado en tres ejes — kilómetros, horas y días — y alertará al 80% y al 100%. Sin eso, la cadena se cambia cuando ya está destruyendo los piñones.
 
 ---
 
@@ -100,7 +102,7 @@ Cada ride se puede publicar como un `POST` JSON a **la URL que vos quieras** —
 
 El payload es JSON plano y documentado, así que se lo podés pasar a **cualquier endpoint compatible con la API de OpenAI** (chat completions): un agente local, Ollama o vLLM expuesto con el shim de OpenAI, OpenRouter, o un proveedor comercial si te da igual pagarlo. Convertir el payload en un prompt y pedirle la crónica del ride es literalmente un `POST`.
 
-Verificado hoy: funciona contra **Hermes Agent** (agente local self-hosted, que no es el modelo Hermes de Nous Research) corriendo en un NAS por Tailscale.
+Diseñado para **Hermes Agent** (agente local self-hosted, que no es el modelo Hermes de Nous Research) corriendo en un NAS por Tailscale; **pendiente validación E2E con un NAS real**.
 
 ---
 
@@ -123,17 +125,28 @@ Verificado hoy: funciona contra **Hermes Agent** (agente local self-hosted, que 
 
 ## Empezar
 
-Prerrequisitos: **JDK 17** y **Android SDK 36** (compileSdk 37 por el AAR metadata de las AndroidX resueltas).
+Prerrequisitos: **JDK 17+** (el CI usa JDK 21) y **Android SDK 37** (compileSdk 37 por el AAR metadata de las AndroidX resueltas; targetSdk 36).
 
 ```bash
 git clone https://github.com/CrisAlva1414/BuzzBike.git
 cd BuzzBike
 
-./gradlew assembleDebug              # APK de debug
-./gradlew detekt ktlintCheck test    # gate antes de cualquier PR
+./gradlew assembleDebug                          # APK de debug
+./gradlew test ktlintCheck detekt lintDebug assembleDebug   # gate antes de cualquier PR
 ```
 
 Guía paso a paso desde una máquina vacía (Linux, sin sudo), con los pitfalls del toolchain: [`docs/setup-entorno.md`](docs/setup-entorno.md).
+
+---
+
+## Descargar / instalar
+
+Todavía **no hay release firmada de producción**: el CI publica builds de debug.
+
+- **Cada push a `main` y cada PR:** el APK queda como artifact `buzzbike-debug-apk` en la pestaña **Actions** del workflow.
+- **Tags `v*`:** se publica un GitHub Release con `app-debug.apk`.
+- Instalación: `adb install -r app-debug.apk` o sideload (habilitar "Instalar apps desconocidas" para el navegador/gestor de archivos).
+- Es un APK de **debug**, firmado con la clave de debug: sirve para probar, no para distribución de producción. La release firmada requiere keystore y secrets (pendiente).
 
 ---
 
@@ -146,7 +159,7 @@ Esto se construye en público y le faltan ojos. Lo que más me sirve:
 - **Gente de datos y fitness:** ¿el orden de la cascada te parece correcto? ¿Falta Polar o Firstbeat?
 - **Self-hosters:** qué formato de payload te gustaría consumir en Home Assistant, Grafana o n8n.
 
-Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Convenciones en [`AGENTS.md`](AGENTS.md): `./gradlew detekt ktlintCheck test` en verde y Conventional Commits.
+Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Convenciones en [`AGENTS.md`](AGENTS.md): `./gradlew test ktlintCheck detekt lintDebug assembleDebug` en verde y Conventional Commits.
 
 ---
 
@@ -154,11 +167,12 @@ Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Conve
 
 - [x] Fundación: ADR-001..006, docs, toolchain
 - [x] Scaffold de build + dominio (tracking, descriptores, elevación, calorías) con gate verde
-- [ ] Schema Room completo + migraciones
+- [x] Schema Room de rides/track_points/outbox + migraciones
+- [x] Sync a Hermes Agent + webhooks firmados (HMAC, outbox, SQLCipher)
+- [ ] Schema Room de bikes/components (ADR-004)
 - [ ] UI de captura en vivo (mapa + métricas)
 - [ ] Desgaste de componentes con alertas
 - [ ] Exportación GPX 1.1
-- [ ] Sync a Hermes Agent + webhooks genéricos
 - [ ] Primera release firmada (GitHub Releases)
 - [ ] Post-v1: BLE frecuencia cardíaca/potencia, PMTiles offline, F-Droid
 

@@ -7,33 +7,26 @@
 
 ## 0. Estado actual y cómo retomar
 
-> **Última actualización: 2026-10-26.**
+> **Última actualización: 2026-10-30.**
 
-**¿En qué quedó esto?** Fundación completa (investigación, ADR-001..004,
-docs). El scaffold del slice 1 (Gradle + Compose + Hilt + Room + ktlint/detekt)
-está **escrito y commiteado** (`e54cce2`), con remoto
-`github.com/CrisAlva1414/BuzzBike`. HEAD actual: `git log -1`.
-
-**Bloqueo actual, sin maquillaje:** `./gradlew assembleDebug` fue interrumpido
-en `:app:compileDebugKotlin` (no produjo APK) y `test`, `ktlintCheck`,
-`detekt` y `lint` **nunca se ejecutaron**. **No hay ningún PASS registrado**
-— el slice 1 no está cerrado.
+**¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
+elevación, calorías (nivel 3) y **backend/sync están cerrados**. El backend/sync
+cerró con gate PASS y **264 tests**; `test`, `ktlintCheck`, `detekt`,
+`assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
+compila. **La UI de producto está en curso.** CI/CD vive en
+`.github/workflows/android.yml` (GitHub Actions): corre el gate, sube el artifact
+`buzzbike-debug-apk` y publica un Release con el APK de debug en tags `v*`.
 
 **Retomar (copiar y pegar):**
 
 ```bash
-source ~/tools/androidenv.sh          # si acabás de instalar el toolchain
 cd <ruta-del-repo>
-./gradlew assembleDebug --console=plain   # nunca completó
-./gradlew test --console=plain            # nunca ejecutado
-./gradlew ktlintCheck --console=plain     # nunca ejecutado
-./gradlew detekt --console=plain          # nunca ejecutado
-./gradlew lint --console=plain            # nunca ejecutado
+./gradlew test ktlintCheck detekt assembleDebug lintDebug --console=plain
+./gradlew assembleDebugAndroidTest --console=plain   # compila instrumentados
 ```
 
-Arreglar lo que falle y solo entonces dar el slice por cerrado con
-`tester: PASS`. Candidatos probables de falla: DSL de AGP 9, KSP 2.3.12 ↔
-Kotlin 2.4.21.
+Un slice se cierra con `tester: PASS` explícito. Si el gate falla, arreglar la
+causa raíz antes de dar el slice por cerrado.
 
 **Orden de lectura para un agente nuevo:**
 `AGENTS.md` (este archivo) → `docs/roadmap.md` →
@@ -52,10 +45,9 @@ Kotlin 2.4.21.
    incertidumbre y modelo usado (§6, ADR-001).
 
 **Pendientes que dependen del usuario:** app id definitivo (hoy
-`com.buzzbike.app` es placeholder), copyright holder del LICENSE (hoy
-`[TU NOMBRE]`), nombre definitivo de la app, y config del Hermes Agent en el
-NAS (ruta de webhook) para el slice 7 — si no está listo, se usa mock local
-(ADR-003).
+`com.buzzbike.app` es placeholder), nombre definitivo de la app, y validación
+E2E del sync contra un NAS real con Hermes Agent (ruta de webhook). El
+copyright ya está resuelto en el LICENSE (Cristian Alvarado, 2026).
 
 ---
 
@@ -134,38 +126,35 @@ app/
 
 ## 4. Comandos de build / test / lint / format
 
-> **Estado del entorno (2026-10-26):** toolchain **instalado** en esta máquina (instalación manual, sin sudo). Cargá las variables antes de cualquier comando Gradle:
+> **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> ```bash
-> source /home/notebook01/tools/androidenv.sh
-> ```
+> **Gate actual: verde.** `test` (**264 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
-> Detalle: JDK **Zulu 17.0.13** en `/home/notebook01/tools/zulu17.54.21-ca-jdk17.0.13-linux_x64`, Android SDK **36** en `~/Android/Sdk` (platform-tools 37.0.1, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper del proyecto. Matriz de versiones Camino A documentada en `gradle/libs.versions.toml`.
+> **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lintDebug`. Los instrumentados solo se compilan con `assembleDebugAndroidTest`.
 >
-> **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lint`.
->
-> **Estado del gate del scaffold (2026-10-26): SIN CERRAR.** `assembleDebug` fue interrumpido en `:app:compileDebugKotlin` (no produjo APK); `test`, `ktlintCheck`, `detekt` y `lint` **nunca se ejecutaron**. No hay ningún PASS registrado. Ver `docs/sessions/2026-10-26-sprint-01-toolchain-and-scaffold.md` y `docs/roadmap.md` §1.
+> **CI:** `.github/workflows/android.yml` corre el gate en cada push/PR con JDK 21 y SDK 37, sube el artifact `buzzbike-debug-apk` y publica un Release con `app-debug.apk` en tags `v*`. La release firmada de producción requiere keystore + secrets (pendiente).
 
 ```bash
 # Build
 ./gradlew assembleDebug          # APK de debug
-./gradlew assembleRelease        # APK de release (para GitHub Releases)
+./gradlew assembleRelease        # APK de release (requiere keystore; sin él no se firma)
 ./gradlew bundleRelease          # AAB — NO se usa para distribución (sin Play Store)
 
 # Test
 ./gradlew test                   # Unit tests (JVM) — incluye domain/
-./gradlew connectedDebugAndroidTest  # Instrumented tests (requiere emulador/dispositivo)
+./gradlew assembleDebugAndroidTest   # Compila instrumentados (no los ejecuta)
+./gradlew connectedDebugAndroidTest  # Ejecuta instrumentados (requiere emulador/dispositivo)
 
 # Lint / static analysis
 ./gradlew detekt                # Análisis estático Kotlin
-./gradlew lint                  # Android Lint (API/permisos/FGS)
+./gradlew lintDebug             # Android Lint (API/permisos/FGS)
 
 # Format
 ./gradlew ktlintCheck           # Verificar formato
 ./gradlew ktlintFormat          # Aplicar formato
 
-# Todo junto (correr antes de cada PR)
-./gradlew detekt ktlintCheck test assembleDebug
+# Gate completo (correr antes de cada PR)
+./gradlew test ktlintCheck detekt assembleDebug lintDebug
 ```
 
 Config esperada: `ktlint` (formato oficial Kotlin) y `detekt` (reglas + complejidad). Detalle de estilo en `docs/format/estilo-kotlin.md`.
@@ -282,9 +271,10 @@ Los tracks GPS son **datos de ubicación sensibles** bajo GDPR (y legislaciones 
 ## 11. Pendientes abiertos (TODO)
 
 - [ ] **Confirmar app id / package name.** Placeholder actual: `com.buzzbike.app`.
-- [x] **Instalar JDK 17+ y Android SDK** — **hecho el 2026-10-26.** JDK Zulu 17.0.13 (`/home/notebook01/tools/zulu17.54.21-ca-jdk17.0.13-linux_x64`), Gradle 9.8.2 (wrapper del proyecto), Android SDK 36 en `~/Android/Sdk` (platform-tools 37.0.1, build-tools 36.0.0, licencias aceptadas). Cargar con `source /home/notebook01/tools/androidenv.sh`. Nota: el **gate de build del scaffold sigue sin cerrar** (ver §4).
-- [ ] **Copyright holder del LICENSE.** Placeholder `[TU NOMBRE]`.
+- [x] **Instalar JDK 21 + Android SDK 37** — **hecho el 2026-10-26 y actualizado el 2026-10-30.** JDK Temurin 21.0.13, Gradle 9.8.2 (wrapper del proyecto), Android SDK 37.0 en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas). El gate completo está en verde (ver §4).
+- [x] **Copyright holder del LICENSE** — resuelto: Cristian Alvarado, 2026.
 - [ ] **Decidir nombre definitivo de la app** (BuzzBike es tentativo).
+- [x] **CI/CD con GitHub Actions** — `.github/workflows/android.yml`: gate por push/PR, artifact `buzzbike-debug-apk` y Release de debug en tags `v*`.
 - [ ] Future: HR strap BLE + potenciómetro (Nordic BLE Library ya elegida, sin implementar).
 - [ ] Future: offline PMTiles (diferido, ver ADR-002).
 - [ ] Future: F-Droid (requiere build reproducible, sin telemetría).

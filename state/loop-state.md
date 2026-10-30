@@ -1401,3 +1401,28 @@ Re-gate focalizado tester + security sobre `42016f0..HEAD`.
 ### Estado
 Backend/lógica/sync cerrado. 27+ commits locales por delante de origin/main.
 Próximo: fase de UI detallada.
+
+---
+
+## Iteration 36 — 2026-10-30 — C1: CI/CD + consistencia docs (COMPLETADO)
+
+### Tarea
+Resolver merge de licencia/README, crear CI/CD con APK descargable y corregir inconsistencias del README/AGENTS.
+
+### Resultado
+| Check | Resultado |
+|---|---|
+| merge origin/main | limpio (LICENSE + README) |
+| test/ktlint/detekt/assembleDebug/lintDebug | 0 (264 tests) |
+| assembleDebugAndroidTest | 0 |
+| YAML | válido |
+| git diff --check | limpio |
+
+### Cambios
+- `.github/workflows/android.yml`: gate + artifact `buzzbike-debug-apk` + Release en tags `v*` con APK debug.
+- README: ±30–40% / ±20–30%, 264 tests, APK ~81 MB, v1 solo nivel 3, desgaste “en diseño”, Hermes E2E pendiente, JDK 17+/SDK 37, sección Descargar/instalar.
+- AGENTS §0/§4/§11 actualizados al estado real.
+- Fuentes OFL copiadas a `res/font` y licencias a `docs/licenses`.
+
+### Próximo paso
+U0: integrar tema/componentes del handoff y compilar.

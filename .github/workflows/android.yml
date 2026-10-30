@@ -1,0 +1,54 @@
+name: Android CI
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          # compileSdk 37 maps to the SDK package `platforms;android-37.0`.
+          # Keep `platforms;android-37` as the primary name for repositories
+          # that expose it, and fall back to the currently published package.
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0" \
+            || sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Gate
+        run: ./gradlew test ktlintCheck detekt lintDebug assembleDebug --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: buzzbike-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      # This publishes the DEBUG APK (signed with the debug keystore and
+      # installable via sideload). A production-signed release requires a
+      # real keystore plus signing secrets, which are intentionally not
+      # configured in this repository yet.
+      - name: Publish release APK on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/debug/app-debug.apk
+          name: BuzzBike ${{ github.ref_name }}
+          body: |
+            APK de debug firmado con la clave de debug (instalable con sideload).
+            Requiere habilitar "Instalar apps desconocidas" para el navegador/gestor de archivos.
+            La release firmada de producción requiere keystore y secrets (pendiente).
