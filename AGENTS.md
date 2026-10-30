@@ -35,7 +35,7 @@ causa raíz antes de dar el slice por cerrado.
 
 **Orden de lectura para un agente nuevo:**
 `AGENTS.md` (este archivo) → `docs/roadmap.md` →
-`docs/sessions/2026-10-26-sprint-01-toolchain-and-scaffold.md` →
+`docs/sessions/2026-10-30-u1.1-permiso-ubicacion.md` →
 `state/loop-state.md` (solo lectura) para el detalle fino.
 **Si estás en una máquina nueva:** `docs/setup-entorno.md` va primero
 (toolchain sin sudo, verificación y pitfalls).
