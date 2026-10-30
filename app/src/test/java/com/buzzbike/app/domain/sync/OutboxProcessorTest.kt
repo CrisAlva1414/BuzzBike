@@ -185,6 +185,42 @@ class OutboxProcessorTest {
         }
 
     @Test
+    fun given_unauthorizedResponse_when_process_then_configurationErrorWithoutConsumingAttempt() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
+            val sender = FakeHermesSender { SendResult(success = false, statusCode = HTTP_UNAUTHORIZED) }
+            val processor = processor(store = store, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConfigurationError, outcome)
+            assertTrue(store.failedMarks.isEmpty())
+            assertEquals(listOf(rideIdOf(ID_A)), sender.rideIds)
+            assertEquals(
+                listOf(ID_A, ID_B),
+                store.getPending(NOW_MILLIS, DEFAULT_BATCH_SIZE).map { it.id },
+            )
+        }
+
+    @Test
+    fun given_forbiddenResponse_when_process_then_configurationErrorWithoutConsumingAttempt() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
+            val sender = FakeHermesSender { SendResult(success = false, statusCode = HTTP_FORBIDDEN) }
+            val processor = processor(store = store, sender = sender)
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConfigurationError, outcome)
+            assertTrue(store.failedMarks.isEmpty())
+            assertEquals(listOf(rideIdOf(ID_A)), sender.rideIds)
+            assertEquals(
+                listOf(ID_A, ID_B),
+                store.getPending(NOW_MILLIS, DEFAULT_BATCH_SIZE).map { it.id },
+            )
+        }
+
+    @Test
     fun given_serverError_when_process_then_partialAndMarkFailed() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
@@ -385,6 +421,8 @@ class OutboxProcessorTest {
         const val HTTP_ERROR = "HTTP 503"
         const val HTTP_SERVER_ERROR = 500
         const val HTTP_TOO_MANY_REQUESTS = 429
+        const val HTTP_UNAUTHORIZED = 401
+        const val HTTP_FORBIDDEN = 403
         const val SENDER_ERROR = "boom"
     }
 }

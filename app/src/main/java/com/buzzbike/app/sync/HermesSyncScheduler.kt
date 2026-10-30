@@ -44,8 +44,10 @@ object HermesSyncScheduler {
     /**
      * Schedules one sync pass for [config].
      *
-     * `KEEP` guarantees a single in-flight sync: enqueueing while a worker is
-     * already running or queued leaves the existing work untouched.
+     * `REPLACE` is deliberate: when the user changes the endpoint or the
+     * health-check URL, the queued request must carry the new input data
+     * instead of keeping a stale configuration until the next pass. A running
+     * worker is cancelled cooperatively and replaced.
      *
      * @return the id of the enqueued request.
      */
@@ -65,7 +67,7 @@ object HermesSyncScheduler {
                 .build()
         WorkManager
             .getInstance(context)
-            .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.KEEP, request)
+            .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
         return request.id
     }
 

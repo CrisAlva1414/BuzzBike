@@ -1344,3 +1344,28 @@ F3b: documentar decisiones (pérdida de datos pre-release, TLS, consentimiento) 
 
 ### Próximo paso
 Gate final tester + security sobre el árbol completo.
+
+---
+
+## Iteration 34 — 2026-10-28 — F4: cierre de medios de seguridad (COMPLETADO)
+
+### Resultado del gate
+| Comando | Exit |
+|---|---|
+| test | 0 (264 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+| assembleDebugAndroidTest | 0 |
+
+### Cambios
+- `HermesSyncScheduler` one-time con `ExistingWorkPolicy.REPLACE`; `save()` reprograma workers con la config nueva.
+- Editar endpoint/health/retry resetea `connectionStatus` a IDLE y limpia error.
+- 401/403 en envío → `AUTH_FAILED`: ConfigurationError, sin consumir intento, fila PENDING.
+- Diálogo de confirmación al desconectar (aclara que los rides locales no se borran).
+- ADR-003: limitaciones aceptadas (ventana de desconexión, autofill/accesibilidad, pacing/Retry-After, background location).
+- Tests: 264 (+7).
+
+### Próximo paso
+Re-gate focalizado tester + security sobre `42016f0..HEAD`.

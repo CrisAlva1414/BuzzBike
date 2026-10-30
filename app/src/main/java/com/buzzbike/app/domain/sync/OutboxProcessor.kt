@@ -74,6 +74,10 @@ data class OutboxProcessorConfig(
  *
  * Delivery failures never abort a batch: each row is marked failed (with its
  * own backoff deadline) or sent, and processing continues with the rest.
+ * Two responses are special: `429` (rate limited) leaves the row and the rest
+ * of the batch pending for a later pass, and `401`/`403` are terminal
+ * configuration errors — the same rejected secret cannot succeed on retry, so
+ * the drain stops without consuming an attempt for that row.
  * [CancellationException] is the only exception allowed to escape.
  *
  * Two loop guards keep a misbehaving store from spinning forever: the run
@@ -146,15 +150,20 @@ class OutboxProcessor(
             previousIds = ids
 
             for (item in pending) {
-                when (deliver(item, now)) {
+                val delivery = deliver(item, now)
+                when (delivery) {
                     DeliveryOutcome.SENT -> totalSent++
                     DeliveryOutcome.FAILED -> totalFailed++
-                    DeliveryOutcome.RATE_LIMITED -> {
-                        // The backend asked us to back off: leave this row and
-                        // the rest of the batch PENDING (no attempt consumed)
-                        // and let the worker retry later instead of hammering.
+                    DeliveryOutcome.RATE_LIMITED,
+                    DeliveryOutcome.AUTH_FAILED,
+                    -> {
+                        // 429 asks us to back off; 401/403 mean the rejected
+                        // secret cannot succeed on retry. Both stop the drain
+                        // without consuming an attempt: a rate-limited batch is
+                        // retried later, an auth failure is reported as a
+                        // terminal configuration error.
                         purge(now)
-                        return ProcessOutcome.BackendUnavailable
+                        return earlyOutcome(delivery)
                     }
                 }
             }
@@ -170,6 +179,14 @@ class OutboxProcessor(
             if (stillEligible) ProcessOutcome.MorePending else outcome(totalSent, totalFailed)
         }
     }
+
+    /** Maps a non-retryable-per-row delivery result to the run outcome. */
+    private fun earlyOutcome(delivery: DeliveryOutcome): ProcessOutcome =
+        if (delivery == DeliveryOutcome.AUTH_FAILED) {
+            ProcessOutcome.ConfigurationError
+        } else {
+            ProcessOutcome.BackendUnavailable
+        }
 
     private fun outcome(
         sent: Int,
@@ -199,6 +216,8 @@ class OutboxProcessor(
                     DeliveryOutcome.SENT
                 }
                 result.statusCode == HTTP_TOO_MANY_REQUESTS -> DeliveryOutcome.RATE_LIMITED
+                result.statusCode == HTTP_UNAUTHORIZED || result.statusCode == HTTP_FORBIDDEN ->
+                    DeliveryOutcome.AUTH_FAILED
                 else -> {
                     markFailed(item, now, result.errorMessage ?: SEND_FAILED_MESSAGE)
                     DeliveryOutcome.FAILED
@@ -228,12 +247,15 @@ class OutboxProcessor(
         SENT,
         FAILED,
         RATE_LIMITED,
+        AUTH_FAILED,
     }
 
     private companion object {
         const val HTTPS_SCHEME = "https://"
         const val ELIGIBILITY_PROBE_LIMIT = 1
         const val HTTP_TOO_MANY_REQUESTS = 429
+        const val HTTP_UNAUTHORIZED = 401
+        const val HTTP_FORBIDDEN = 403
         const val SEND_FAILED_MESSAGE = "send failed"
     }
 }

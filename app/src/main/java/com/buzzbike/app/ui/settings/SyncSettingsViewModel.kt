@@ -96,12 +96,31 @@ class SyncSettingsViewModel
                 }
         }
 
+        /**
+         * Editing any sync input invalidates the previous connection check:
+         * a stale "Conexión verificada" would no longer describe the form, so
+         * the status drops back to [ConnectionStatus.IDLE].
+         */
         fun onEndpointChange(value: String) {
-            _uiState.update { it.copy(endpoint = value, isSaved = false, error = null) }
+            _uiState.update {
+                it.copy(
+                    endpoint = value,
+                    isSaved = false,
+                    error = null,
+                    connectionStatus = ConnectionStatus.IDLE,
+                )
+            }
         }
 
         fun onHealthCheckUrlChange(value: String) {
-            _uiState.update { it.copy(healthCheckUrl = value, isSaved = false, error = null) }
+            _uiState.update {
+                it.copy(
+                    healthCheckUrl = value,
+                    isSaved = false,
+                    error = null,
+                    connectionStatus = ConnectionStatus.IDLE,
+                )
+            }
         }
 
         /**
@@ -110,7 +129,14 @@ class SyncSettingsViewModel
          */
         fun onRetryCountChange(value: String) {
             val retryCount = value.toIntOrNull() ?: return
-            _uiState.update { it.copy(retryCount = retryCount, isSaved = false, error = null) }
+            _uiState.update {
+                it.copy(
+                    retryCount = retryCount,
+                    isSaved = false,
+                    error = null,
+                    connectionStatus = ConnectionStatus.IDLE,
+                )
+            }
         }
 
         /**
@@ -129,6 +155,9 @@ class SyncSettingsViewModel
                             configValidationError(config)
                                 ?: secretProvisioningError(secret)
                                 ?: persistError(config)
+                        if (error == null) {
+                            scheduleAfterSave(scheduler, config)
+                        }
                         SaveResult(config, error, secretManager.hasSecret())
                     }
                 _uiState.update { state ->
@@ -251,6 +280,25 @@ class SyncSettingsViewModel
                 ERROR_CONFIG_STORAGE
             }
     }
+
+/**
+ * Refreshes both unique workers so they pick up the saved configuration
+ * immediately instead of keeping the previous input data.
+ *
+ * A scheduling failure does not invalidate the save: the configuration is
+ * already persisted and WorkManager is enqueued again on the next ride, so it
+ * is intentionally not surfaced as a save error.
+ */
+private fun scheduleAfterSave(
+    scheduler: SyncWorkScheduler,
+    config: HermesConfig,
+) {
+    try {
+        scheduler.schedule(config)
+    } catch (expected: Exception) {
+        // Retried on the next ride or periodic pass.
+    }
+}
 
 /**
  * Builds a [HermesConfig] from a snapshot of the form.

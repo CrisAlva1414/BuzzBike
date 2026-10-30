@@ -165,6 +165,41 @@ se envía: métricas agregadas y waypoints decimados, no el track GPS crudo. La
 confirmación por ride queda diferida. El usuario puede desconectar el sync en
 cualquier momento y al hacerlo se purga el outbox.
 
+### Ventana de desconexión
+
+`cancelUniqueWork` es cooperativo: un envío que ya está en vuelo puede
+completarse aunque el usuario desconecte. La ventana está acotada por los
+timeouts de conexión/lectura de 10 s y 20 s. Se acepta en v1 porque el
+beneficio de bloquear el hilo hasta confirmar la cancelación no compensa la
+complejidad; el secreto se borra y el outbox se purga inmediatamente, así que
+no queda material pendiente en el dispositivo.
+
+### Autofill/accesibilidad
+
+`FLAG_SECURE` protege contra screenshots y contra la miniatura de recientes,
+pero un servicio de accesibilidad o de autofill con permiso del usuario podría
+leer el contenido del campo del secreto. Es una limitación de la plataforma
+(no existe un opt-out de autofill soportado para `OutlinedTextField` en
+Compose) y se acepta en v1: el perfil de riesgo es el de un servicio ya
+instalado y autorizado por el usuario.
+
+### Pacing/Retry-After
+
+Un `429` corta el drenaje sin consumir intentos de las filas pendientes, pero
+v1 no parsea `Retry-After` ni implementa pacing fino entre envíos. Se acepta:
+WorkManager reintenta con backoff exponencial y el outbox no se pierde. Un
+`401`/`403` se trata como error terminal de configuración (no consume intento,
+deja las filas `PENDING`) porque el mismo secreto rechazado no puede tener
+éxito en un reintento.
+
+### Background location
+
+El permiso `ACCESS_BACKGROUND_LOCATION` se removió del manifiesto. Debe
+reincorporarse antes de habilitar trackeo real en background: hoy
+`TrackingService` no se inicia desde código, así que el trackeo continuo con
+la app en background no es una función activa. Se acepta como deuda explícita
+para el slice de trackeo.
+
 ## Fuentes
 
 | Fuente | Referencia |

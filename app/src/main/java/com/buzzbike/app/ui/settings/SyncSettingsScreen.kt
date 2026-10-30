@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,9 @@ private const val SYNC_CONSENT_TEXT =
     "Al activar el sync, cada ride enviará métricas agregadas y waypoints " +
         "decimados (cada 10 s, máximo 2000) al endpoint configurado. El track " +
         "GPS crudo no se envía. Podés desconectar en cualquier momento."
+private const val DISCONNECT_CONFIRM_TEXT =
+    "Se cancelará el sync, se borrarán los envíos pendientes y el secreto. " +
+        "Los rides locales no se borran."
 
 /**
  * Minimal sync configuration form.
@@ -82,6 +86,7 @@ fun SyncSettingsScreen(
 
     var secret by remember { mutableStateOf("") }
     var retryText by remember { mutableStateOf("") }
+    var showDisconnectConfirm by remember { mutableStateOf(false) }
 
     // Keep the numeric field in sync with loaded/persisted values.
     LaunchedEffect(state.retryCount) { retryText = state.retryCount.toString() }
@@ -222,17 +227,34 @@ fun SyncSettingsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(onClick = { viewModel.save(secret) }) { Text("Guardar") }
-                OutlinedButton(
+                OutlinedButton(onClick = { showDisconnectConfirm = true }) {
+                    Text("Desconectar")
+                }
+                TextButton(onClick = onBack) { Text("Volver") }
+            }
+        }
+    }
+
+    if (showDisconnectConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisconnectConfirm = false },
+            title = { Text("Desconectar sync") },
+            text = { Text(DISCONNECT_CONFIRM_TEXT) },
+            confirmButton = {
+                TextButton(
                     onClick = {
+                        showDisconnectConfirm = false
                         viewModel.disconnect()
                         secret = ""
                     },
                 ) {
                     Text("Desconectar")
                 }
-                TextButton(onClick = onBack) { Text("Volver") }
-            }
-        }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectConfirm = false }) { Text("Cancelar") }
+            },
+        )
     }
 }
 

@@ -133,6 +133,82 @@ class SyncSettingsViewModelTest {
         }
 
     @Test
+    fun given_validFormAndSecret_when_save_then_schedulesWorkersWithSavedConfig() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEndpointChange(SYNC_URL)
+            viewModel.onHealthCheckUrlChange(HEALTH_URL)
+
+            viewModel.save(VALID_SECRET)
+            advanceUntilIdle()
+
+            val expected = HermesConfig(endpoint = SYNC_URL, healthCheckUrl = HEALTH_URL)
+            assertEquals(expected, store.config)
+            assertEquals(listOf(expected), scheduler.scheduledConfigs)
+        }
+
+    @Test
+    fun given_rejectedForm_when_save_then_workersAreNotRescheduled() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.onEndpointChange("http://hermes.example/sync")
+            viewModel.onHealthCheckUrlChange(HEALTH_URL)
+
+            viewModel.save(VALID_SECRET)
+            advanceUntilIdle()
+
+            assertTrue(scheduler.scheduledConfigs.isEmpty())
+        }
+
+    @Test
+    fun given_okConnection_when_endpointEdited_then_connectionStatusIsIdle() =
+        runTest {
+            val viewModel = configuredViewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            connectivity.reachability = Reachability.Available
+            viewModel.testConnection()
+            advanceUntilIdle()
+            assertEquals(ConnectionStatus.OK, viewModel.uiState.value.connectionStatus)
+
+            viewModel.onEndpointChange("https://other.example/sync")
+
+            assertEquals(ConnectionStatus.IDLE, viewModel.uiState.value.connectionStatus)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun given_okConnection_when_healthCheckUrlEdited_then_connectionStatusIsIdle() =
+        runTest {
+            val viewModel = configuredViewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            connectivity.reachability = Reachability.Available
+            viewModel.testConnection()
+            advanceUntilIdle()
+            assertEquals(ConnectionStatus.OK, viewModel.uiState.value.connectionStatus)
+
+            viewModel.onHealthCheckUrlChange("https://other.example/health")
+
+            assertEquals(ConnectionStatus.IDLE, viewModel.uiState.value.connectionStatus)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun given_okConnection_when_retryCountEdited_then_connectionStatusIsIdle() =
+        runTest {
+            val viewModel = configuredViewModel()
+            secretManager.importSecret(VALID_SECRET.toByteArray(StandardCharsets.UTF_8))
+            connectivity.reachability = Reachability.Available
+            viewModel.testConnection()
+            advanceUntilIdle()
+            assertEquals(ConnectionStatus.OK, viewModel.uiState.value.connectionStatus)
+
+            viewModel.onRetryCountChange("5")
+
+            assertEquals(ConnectionStatus.IDLE, viewModel.uiState.value.connectionStatus)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
     fun given_validFormAndSecret_when_save_then_storeHasConfigAndSecretIsPresent() =
         runTest {
             val viewModel = viewModel()
@@ -379,8 +455,11 @@ class SyncSettingsViewModelTest {
     private class RecordingSyncWorkScheduler : SyncWorkScheduler {
         var cancelCalls: Int = 0
             private set
+        val scheduledConfigs: MutableList<HermesConfig> = mutableListOf()
 
-        override fun schedule(config: HermesConfig) = Unit
+        override fun schedule(config: HermesConfig) {
+            scheduledConfigs += config
+        }
 
         override fun cancel() {
             cancelCalls += 1
