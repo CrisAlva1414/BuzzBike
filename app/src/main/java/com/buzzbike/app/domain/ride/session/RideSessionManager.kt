@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
  */
 data class RideSessionUiState(
     val isTracking: Boolean = false,
+    val isPaused: Boolean = false,
     val activeRideId: String? = null,
     val distanceM: Double = 0.0,
     val movingTimeSeconds: Long = 0L,
@@ -94,16 +95,40 @@ class RideSessionManager(
         _uiState.value =
             RideSessionUiState(
                 isTracking = trackingStarted,
+                isPaused = false,
                 activeRideId = rideId,
             )
         return rideId
     }
 
     /**
+     * Pauses the active session without ending it: sensor collection stops but
+     * [RideSessionUiState.isTracking] stays `true` and the accumulated points
+     * are kept for [resumeRide].
+     */
+    suspend fun pauseRide() {
+        trackingManager.pauseTracking()
+        trackingManager.stopElevationTracking()
+        _uiState.update { it.copy(isPaused = true) }
+    }
+
+    /**
+     * Resumes the paused session for the current [RideSessionUiState.activeRideId].
+     * No-op when there is no active ride.
+     */
+    suspend fun resumeRide() {
+        val rideId = _uiState.value.activeRideId ?: return
+        trackingManager.resumeTracking(rideId)
+        trackingManager.startElevationTracking(rideId)
+        _uiState.update { it.copy(isPaused = false) }
+    }
+
+    /**
      * Stops tracking, persists the final descriptors of the active ride and
      * clears [RideSessionUiState.activeRideId].
      *
-     * A call with no active ride only clears the tracking flags.
+     * Works from both the running and the paused state. A call with no active
+     * ride only clears the tracking flags.
      */
     suspend fun stopRide() {
         val rideId = _uiState.value.activeRideId
@@ -134,7 +159,7 @@ class RideSessionManager(
             )
         }
 
-        _uiState.update { it.copy(isTracking = false, activeRideId = null) }
+        _uiState.update { it.copy(isTracking = false, isPaused = false, activeRideId = null) }
     }
 
     private fun startCollectors() {

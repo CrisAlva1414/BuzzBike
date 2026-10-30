@@ -1450,3 +1450,33 @@ U0: integrar tema/componentes del handoff y compilar.
 
 ### Próximo paso
 L1: servicio FGS + pausa/reanudación + no borrar puntos.
+
+---
+
+## Iteration 38 — 2026-10-30 — L1: sesión + FGS (COMPLETADO)
+
+### Resultado
+| Comando | Exit |
+|---|---|
+| test | 0 (272 tests, 0 failures) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+| assembleDebugAndroidTest | 0 |
+
+### Cambios
+- `TrackingManager`: `pauseTracking()`/`resumeTracking()` sin borrar puntos; `startTracking` limpia solo sesión nueva.
+- `RideSessionManager`: `pauseRide()`/`resumeRide()`, `isPaused` en el estado; stop desde pausa.
+- `RideServiceController` (puerto) + `AndroidRideServiceController`.
+- `RideViewModel`: arranca/detiene el FGS según tracking; pause/resume delegados.
+- `TrackingService`: restart con intent null entra en foreground; `onDestroy` limpia.
+- `AGENTS.md`: FGS location-only en v1; health cuando exista HR.
+- Tests: 272 (+8).
+
+### Notas
+- El servicio no posee los sensores todavía (los maneja el manager); recuperación tras muerte del proceso queda para U1.
+- v1 usa solo `foregroundServiceType="location"`, sin permiso HEALTH.
+
+### Próximo paso
+Push + verificación de CI; luego U1 (Ride en vivo) y resto de U2–U6.

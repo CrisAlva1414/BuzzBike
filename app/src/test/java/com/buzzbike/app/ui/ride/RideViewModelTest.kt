@@ -6,6 +6,7 @@ import com.buzzbike.app.domain.ride.engine.RideEngine
 import com.buzzbike.app.domain.ride.session.LocationPermissionChecker
 import com.buzzbike.app.domain.ride.session.LocationReading
 import com.buzzbike.app.domain.ride.session.LocationSensorPort
+import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionWriter
 import com.buzzbike.app.domain.ride.session.TrackPointWriter
@@ -103,7 +104,55 @@ class RideViewModelTest {
             assertFalse(viewModel.uiState.value.isTracking)
         }
 
-    private fun TestScope.viewModel(writer: RecordingRideSessionWriter): RideViewModel {
+    @Test
+    fun given_trackingStarts_when_startRide_thenServiceIsStarted() =
+        runTest {
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(service = service)
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertEquals(1, service.startCalls)
+            assertEquals(0, service.stopCalls)
+        }
+
+    @Test
+    fun given_activeSession_when_stopRide_thenServiceIsStopped() =
+        runTest {
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(service = service)
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            viewModel.stopRide()
+            advanceUntilIdle()
+
+            assertEquals(1, service.stopCalls)
+        }
+
+    @Test
+    fun given_activeSession_when_pauseAndResume_thenStateFlagsToggle() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            viewModel.pauseRide()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isPaused)
+            assertTrue(viewModel.uiState.value.isTracking)
+
+            viewModel.resumeRide()
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.isPaused)
+            assertTrue(viewModel.uiState.value.isTracking)
+        }
+
+    private fun TestScope.viewModel(
+        writer: RecordingRideSessionWriter = RecordingRideSessionWriter(),
+        service: RideServiceController = FakeRideServiceController(),
+    ): RideViewModel {
         val trackingManager =
             TrackingManager(
                 locationSensor = EmptyLocationSensor,
@@ -123,7 +172,23 @@ class RideViewModelTest {
                 enqueuer = UnusedOutboxEnqueuer,
                 scheduler = UnusedSyncWorkScheduler,
             )
-        return RideViewModel(manager, coordinator, FakeSyncConfigStore())
+        return RideViewModel(manager, coordinator, FakeSyncConfigStore(), service)
+    }
+
+    private class FakeRideServiceController : RideServiceController {
+        var startCalls: Int = 0
+            private set
+
+        var stopCalls: Int = 0
+            private set
+
+        override fun start() {
+            startCalls += 1
+        }
+
+        override fun stop() {
+            stopCalls += 1
+        }
     }
 
     private class RecordingRideSessionWriter :

@@ -14,6 +14,17 @@ import com.buzzbike.app.MainActivity
 import com.buzzbike.app.R
 import dagger.hilt.android.AndroidEntryPoint
 
+/**
+ * Foreground service that keeps the tracking session alive in the background.
+ *
+ * The service only owns the foreground notification and lifecycle. Sensor
+ * collection and persistence are driven by the ViewModel/session manager
+ * collaborators; this keeps the service replaceable and the session logic
+ * testable on the JVM.
+ *
+ * v1 declares only `foregroundServiceType="location"`. The `health` type will
+ * be added when HR/BLE support exists, together with its permission.
+ */
 @AndroidEntryPoint
 class TrackingService : Service() {
     companion object {
@@ -36,8 +47,16 @@ class TrackingService : Service() {
         when (intent?.action) {
             ACTION_START -> startTracking()
             ACTION_STOP -> stopTracking()
+            // START_STICKY restarts the service with a null intent; enter the
+            // foreground immediately so Android's 5 s window is respected.
+            null -> startTracking()
         }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 
     private fun startTracking() {

@@ -87,7 +87,7 @@ copyright ya está resuelto en el LICENSE (Cristian Alvarado, 2026).
 | Mapas | MapLibre Native Android (v13.x, BSD 2-Clause) | Muy activo, sin vendor lock-in. Ver ADR-002. |
 | Tiles | OpenFreeMap | Vector tiles, sin API key, sin límites de uso. Ver ADR-002. |
 | BLE futuro | Nordic Android BLE Library 2.11.x (`no.nordicsemi.android:ble`) | Estándar para HR strap / CSC / power. En v1 solo queda el hook de arquitectura. |
-| Foreground Service | types `health\|location` | Obligatorio en Android 14+ para trackeo continuo. |
+| Foreground Service | types `location` en v1 (`health` cuando exista HR/BLE) | Obligatorio en Android 14+ para trackeo continuo. |
 | Target | Android 15/16 (API 35/36) | Target actual de distribución. |
 | minSdk | 26 (Android 8) | Soporte de foreground services y BLE moderno. |
 | Lint/format | ktlint + detekt | Linters Kotlin estándar. |

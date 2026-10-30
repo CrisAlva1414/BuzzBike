@@ -68,6 +68,7 @@ open class TrackingManager(
 
     private var trackingJob: Job? = null
     private var elevationJob: Job? = null
+    private var paused = false
 
     /**
      * Starts collecting location readings for [rideId].
@@ -75,6 +76,9 @@ open class TrackingManager(
      * Returns `false` (and does not subscribe) when the fine location
      * permission is missing or [rideId] is blank. A second call while already
      * tracking is a no-op that returns `true`.
+     *
+     * Points are cleared only when this starts a genuinely new session. A
+     * resume (see [resumeTracking]) keeps the points accumulated so far.
      */
     @Synchronized
     open fun startTracking(rideId: String): Boolean {
@@ -82,7 +86,40 @@ open class TrackingManager(
             return false
         }
 
-        startCollectionIfIdle(rideId)
+        val resetPoints = !paused && trackingJob?.isActive != true
+        startCollectionIfIdle(rideId, resetPoints = resetPoints)
+        paused = false
+        return true
+    }
+
+    /**
+     * Pauses the sensor subscription without discarding the accumulated
+     * points. Call [resumeTracking] to continue the same session.
+     */
+    @Synchronized
+    open fun pauseTracking() {
+        trackingJob?.cancel()
+        trackingJob = null
+        paused = true
+    }
+
+    /**
+     * Resumes a paused session for [rideId].
+     *
+     * Returns `false` (and does not subscribe) when the fine location
+     * permission is missing or [rideId] is blank. Accumulated points are
+     * kept across the pause.
+     */
+    @Synchronized
+    open fun resumeTracking(rideId: String): Boolean {
+        if (rideId.isBlank() || !permissionChecker.hasFineLocationPermission()) {
+            return false
+        }
+
+        if (paused) {
+            startCollectionIfIdle(rideId, resetPoints = false)
+            paused = false
+        }
         return true
     }
 
@@ -91,6 +128,7 @@ open class TrackingManager(
     open fun stopTracking() {
         trackingJob?.cancel()
         trackingJob = null
+        paused = false
     }
 
     /**
@@ -134,10 +172,15 @@ open class TrackingManager(
             }
     }
 
-    private fun startCollectionIfIdle(rideId: String) {
+    private fun startCollectionIfIdle(
+        rideId: String,
+        resetPoints: Boolean,
+    ) {
         if (trackingJob?.isActive == true) return
 
-        _trackPoints.value = emptyList()
+        if (resetPoints) {
+            _trackPoints.value = emptyList()
+        }
         trackingJob =
             scope.launch {
                 locationSensor.locationUpdates().collect { reading ->

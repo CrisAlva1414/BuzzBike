@@ -133,6 +133,66 @@ class TrackingManagerTest {
             assertEquals(1, dao.inserted.size)
         }
 
+    @Test
+    fun given_pausedSession_when_resumeTracking_thenAccumulatedPointsAreKept() =
+        runTest {
+            val readings = MutableSharedFlow<LocationReading>(extraBufferCapacity = 8)
+            val dao = RecordingTrackPointDao()
+            val manager = manager(sensor = FakeLocationSensor(readings), dao = dao)
+
+            assertTrue(manager.startTracking(RIDE_ID))
+            runCurrent()
+            readings.emit(reading(1))
+            runCurrent()
+
+            manager.pauseTracking()
+            runCurrent()
+
+            assertTrue(manager.resumeTracking(RIDE_ID))
+            runCurrent()
+            readings.emit(reading(2))
+            runCurrent()
+
+            assertEquals(
+                listOf(NANOS_PER_SECOND, 2 * NANOS_PER_SECOND),
+                manager.trackPoints.first().map { it.timestampMonotonicNanos },
+            )
+            assertEquals(2, dao.inserted.size)
+        }
+
+    @Test
+    fun given_previousSession_when_startTrackingNewRide_thenPointsAreCleared() =
+        runTest {
+            val readings = MutableSharedFlow<LocationReading>(extraBufferCapacity = 8)
+            val manager = manager(sensor = FakeLocationSensor(readings))
+
+            assertTrue(manager.startTracking(RIDE_ID))
+            runCurrent()
+            readings.emit(reading(1))
+            runCurrent()
+            assertEquals(1, manager.trackPoints.first().size)
+
+            manager.stopTracking()
+            runCurrent()
+
+            assertTrue(manager.startTracking(NEW_RIDE_ID))
+            runCurrent()
+
+            assertTrue(manager.trackPoints.first().isEmpty())
+        }
+
+    @Test
+    fun given_noPermission_when_resumeTracking_thenReturnsFalse() =
+        runTest {
+            val manager =
+                manager(
+                    sensor = FakeLocationSensor(flowOf(reading(1))),
+                    permission = FakePermissionChecker(false),
+                )
+
+            assertFalse(manager.resumeTracking(RIDE_ID))
+        }
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun TestScope.manager(
         sensor: LocationSensorPort,
@@ -216,6 +276,7 @@ class TrackingManagerTest {
 
     private companion object {
         private const val RIDE_ID = "ride-1"
+        private const val NEW_RIDE_ID = "ride-2"
         private const val NANOS_PER_SECOND = 1_000_000_000L
         private const val BASE_LAT = -33.4489
         private const val BASE_LON = -70.6693

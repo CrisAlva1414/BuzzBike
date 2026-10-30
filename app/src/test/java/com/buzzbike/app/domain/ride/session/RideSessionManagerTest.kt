@@ -50,6 +50,63 @@ class RideSessionManagerTest {
         }
 
     @Test
+    fun given_activeRide_when_pauseAndResume_thenFlagsAndCollaboratorsAreUpdated() =
+        runTest {
+            val tracking = FakeTrackingManager()
+            val manager = manager(tracking = tracking)
+            manager.startRide()
+            runCurrent()
+
+            manager.pauseRide()
+
+            val paused = manager.uiState.first()
+            assertTrue(paused.isPaused)
+            assertTrue(paused.isTracking)
+            assertTrue(tracking.pauseCalled)
+            assertTrue(tracking.stopElevationCalled)
+
+            manager.resumeRide()
+
+            val resumed = manager.uiState.first()
+            assertFalse(resumed.isPaused)
+            assertTrue(resumed.isTracking)
+            assertEquals(RIDE_ID, tracking.resumedRideId)
+            assertEquals(RIDE_ID, tracking.elevationRideId)
+        }
+
+    @Test
+    fun given_pausedRide_when_stopRide_thenFinalDescriptorsArePersisted() =
+        runTest {
+            val writer = FakeRideSessionWriter()
+            val tracking = FakeTrackingManager()
+            val engine =
+                FakeRideEngine {
+                    processResult(
+                        distanceM = 500.0,
+                        movingSeconds = 30L,
+                        avgSpeedMps = 10.0,
+                        caloriesKcal = 50.0,
+                    )
+                }
+            val manager = manager(writer = writer, tracking = tracking, engine = engine)
+            manager.startRide()
+            runCurrent()
+            tracking.points.value = listOf(point(seconds = 0), point(seconds = 10))
+            runCurrent()
+
+            manager.pauseRide()
+            manager.stopRide()
+
+            assertEquals(RIDE_ID, writer.stoppedRideId)
+            val saved = writer.saved.single()
+            assertEquals(500.0, saved.descriptors.distanceM, TOLERANCE)
+            val state = manager.uiState.first()
+            assertFalse(state.isTracking)
+            assertFalse(state.isPaused)
+            assertNull(state.activeRideId)
+        }
+
+    @Test
     fun given_trackPoints_when_emitted_thenUiStateReflectsEngineResult() =
         runTest {
             val tracking = FakeTrackingManager()
@@ -328,6 +385,12 @@ class RideSessionManagerTest {
         var stopTrackingCalled: Boolean = false
             private set
 
+        var pauseCalled: Boolean = false
+            private set
+
+        var resumedRideId: String? = null
+            private set
+
         var stopElevationCalled: Boolean = false
             private set
 
@@ -344,6 +407,15 @@ class RideSessionManagerTest {
 
         override fun stopTracking() {
             stopTrackingCalled = true
+        }
+
+        override fun pauseTracking() {
+            pauseCalled = true
+        }
+
+        override fun resumeTracking(rideId: String): Boolean {
+            resumedRideId = rideId
+            return true
         }
 
         override fun startElevationTracking(rideId: String): Boolean {

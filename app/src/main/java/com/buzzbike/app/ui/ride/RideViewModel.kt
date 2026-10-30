@@ -2,6 +2,7 @@ package com.buzzbike.app.ui.ride
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionUiState
 import com.buzzbike.app.domain.sync.HermesConfig
@@ -10,6 +11,7 @@ import com.buzzbike.app.domain.sync.SyncConfigStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,6 +34,7 @@ class RideViewModel
         private val rideSessionManager: RideSessionManager,
         private val rideSyncCoordinator: RideSyncCoordinator,
         private val syncConfigStore: SyncConfigStore,
+        private val rideServiceController: RideServiceController,
     ) : ViewModel() {
         val uiState: StateFlow<RideSessionUiState> =
             rideSessionManager.uiState.stateIn(
@@ -57,6 +60,23 @@ class RideViewModel
         fun startRide() {
             viewModelScope.launch {
                 rideSessionManager.startRide()
+                // Read the manager directly: the exposed StateFlow may not have
+                // collected the new value yet in the same coroutine.
+                if (rideSessionManager.uiState.first().isTracking) {
+                    rideServiceController.start()
+                }
+            }
+        }
+
+        fun pauseRide() {
+            viewModelScope.launch {
+                rideSessionManager.pauseRide()
+            }
+        }
+
+        fun resumeRide() {
+            viewModelScope.launch {
+                rideSessionManager.resumeRide()
             }
         }
 
@@ -74,6 +94,7 @@ class RideViewModel
                     }
                 } finally {
                     stopInFlight = false
+                    rideServiceController.stop()
                 }
             }
         }

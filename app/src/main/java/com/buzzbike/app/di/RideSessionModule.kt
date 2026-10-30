@@ -2,12 +2,14 @@ package com.buzzbike.app.di
 
 import com.buzzbike.app.data.repository.RideRepository
 import com.buzzbike.app.domain.ride.engine.RideEngine
+import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.TrackingManager
 import com.buzzbike.app.sensor.location.AndroidLocationPermissionChecker
 import com.buzzbike.app.sensor.location.LocationSensor
 import com.buzzbike.app.sensor.motion.MotionSensor
 import com.buzzbike.app.sensor.pressure.PressureSensor
+import com.buzzbike.app.service.AndroidRideServiceController
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -53,4 +55,8 @@ object RideSessionModule {
             trackingManager = trackingManager,
             rideSessionWriter = rideSessionWriter,
         )
+
+    @Provides
+    @Singleton
+    fun provideRideServiceController(controller: AndroidRideServiceController): RideServiceController = controller
 }
