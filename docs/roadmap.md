@@ -2,58 +2,18 @@
 
 > Documento de trabajo, no marketing. Sirve para retomar el proyecto en cualquier
 > momento sin releer todo el repo. Fuente de verdad del *por qué*: `AGENTS.md` y
-> `docs/adr/`. Fuente de verdad del *estado real*: esta sección 1 + `docs/sessions/`.
-> Última actualización: **2026-10-26**.
+> `docs/adr/`. Fuente de verdad del *estado real*: `AGENTS.md` §0 y `docs/sessions/`.
+> Última actualización: **2026-10-30**.
 
 ---
 
-## 1. Estado actual (2026-10-26)
+## 1. Estado actual
 
-| Fase | Estado | Notas |
-|---|---|---|
-| **0 — Fundación** | ✅ **COMPLETA** | Investigación (3 informes), AGENTS.md, 4 ADRs, LICENSE, research index. Cerrada 2026-10-02/06. |
-| **1 — Scaffold** | 🚧 **EN CURSO — sin gate** | Archivos escritos y **commiteados** (`e54cce2`, 2026-10-26). Matriz de versiones resuelta (Camino A). Wrapper generado. **Pendiente: gate de verificación** (ver abajo) — `assembleDebug` interrumpido en `:app:compileDebugKotlin`, sin APK; `test`/`ktlintCheck`/`detekt`/`lint` **nunca se ejecutaron**. |
-| **2 — Dominio y datos** | ⬜ PENDIENTE | Slice 2 (schema Room) y slice 4 (descriptores). |
-| **3 — Captura** | ⬜ PENDIENTE | Slice 3 (FGS + GPS) y 3b opcional (IMU/barómetro). |
-| **4 — Cálculo** | ⬜ PENDIENTE | Slice 5 (calorías, ADR-001) y 6 (wear, ADR-004). |
-| **5 — Salida** | ⬜ PENDIENTE | Slice 7 (sync/export), 8 (mapas), CI + release. |
-| **6 — Release gate** | ⬜ PENDIENTE | Security review completo + tag + GitHub Release. |
-| **7 — Post-v1** | 🔵 NO COMPROMETIDO | BLE HR/potencia, PMTiles, F-Droid, import FIT. |
-
-### Gate pendiente del slice 1 (bloqueante para todo lo demás)
-
-En la máquina de desarrollo:
-
-```bash
-source /home/notebook01/tools/androidenv.sh
-cd /home/notebook01/Proyectos/BuzzBike
-./gradlew assembleDebug      # nunca completó: interrumpido en :app:compileDebugKotlin
-./gradlew test               # NUNCA ejecutado
-./gradlew ktlintCheck        # NUNCA ejecutado
-./gradlew detekt             # NUNCA ejecutado
-./gradlew lint               # NUNCA ejecutado
-```
-
-**No hay ningún resultado PASS ni APK.** Detalle del estado y de los candidatos
-de falla (DSL de AGP 9, KSP 2.3.12 vs Kotlin 2.4.21) en
-`docs/sessions/2026-10-26-sprint-01-toolchain-and-scaffold.md`.
-
-### Toolchain (instalado 2026-10-26, sin sudo)
-
-| Componente | Versión / ruta |
-|---|---|
-| JDK | Zulu 17.0.13 — `/home/notebook01/tools/zulu17.54.21-ca-jdk17.0.13-linux_x64` |
-| Gradle | 9.8.2 vía wrapper del proyecto (también 8.14.5 suelta en `~/tools/`, no se usa) |
-| Android SDK | 36 en `~/Android/Sdk` (platform-tools 37.0.1, platforms;android-36, build-tools;36.0.0, licencias aceptadas) |
-| Variables de entorno | `source /home/notebook01/tools/androidenv.sh` |
-| Matriz de versiones | **Camino A** — AGP 9.4.1 · Gradle 9.8.2 · Kotlin 2.4.21 (solo plugin Compose) · KSP 2.3.12 · Hilt 2.60.1 · Room 2.8.5 · Compose BOM 2026.09.00 · MapLibre 13.7.1 · ktlint 14.2.0 · detekt 1.23.8. Detalle y rationale en `gradle/libs.versions.toml`. |
-
-### Repo (verificado 2026-10-26)
-
-- Rama: `main`. HEAD al escribir esta sección: `4ceff37` (`docs: add roadmap and sprint 01 session log`). Para el HEAD real, `git log -1`.
-- Historial: `c7eddea` (docs base, 2026-10-06) → `820fd53` (gitignore + untrack transitorio de docs) → `e54cce2` (scaffold + re-track de todo) → `4ceff37` (roadmap + bitácora de la sesión 01).
-- Remoto: `origin` → `https://github.com/CrisAlva1414/BuzzBike.git` (cuenta `CrisAlva1414`, push por HTTPS).
-- Working tree limpio al cierre de la sesión 2026-10-26.
+> **Nota breve (2026-10-30).** El estado vigente del proyecto se mantiene en
+> **`AGENTS.md` §0**. A la fecha: **U0 (tema/componentes), L1 (pause/resume + FGS)
+> y U1 (Ride en vivo) están hechos**; el próximo slice es **U2 (historial/detalle
+> + GPX)**. El resto de este documento queda como **referencia de fases y
+> criterios**, no como estado real; si hay conflicto, manda `AGENTS.md` §0.
 
 ---
 

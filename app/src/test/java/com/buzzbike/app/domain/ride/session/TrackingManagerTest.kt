@@ -193,6 +193,49 @@ class TrackingManagerTest {
             assertFalse(manager.resumeTracking(RIDE_ID))
         }
 
+    @Test
+    fun given_activeTracking_when_startTrackingDifferentRide_thenReturnsFalseAndKeepsCurrentRide() =
+        runTest {
+            val readings = MutableSharedFlow<LocationReading>(extraBufferCapacity = 8)
+            val dao = RecordingTrackPointDao()
+            val sensor = FakeLocationSensor(readings)
+            val manager = manager(sensor = sensor, dao = dao)
+
+            assertTrue(manager.startTracking(RIDE_ID))
+            runCurrent()
+            readings.emit(reading(1))
+            runCurrent()
+
+            assertFalse(manager.startTracking(NEW_RIDE_ID))
+            runCurrent()
+            readings.emit(reading(2))
+            runCurrent()
+
+            assertEquals(listOf(RIDE_ID, RIDE_ID), dao.inserted.map { it.rideId })
+            assertEquals(1, sensor.collectionCount)
+        }
+
+    @Test
+    fun given_pausedSession_when_resumeTrackingDifferentRide_thenReturnsFalseAndKeepsCurrentRide() =
+        runTest {
+            val readings = MutableSharedFlow<LocationReading>(extraBufferCapacity = 8)
+            val dao = RecordingTrackPointDao()
+            val manager = manager(sensor = FakeLocationSensor(readings), dao = dao)
+
+            assertTrue(manager.startTracking(RIDE_ID))
+            runCurrent()
+            manager.pauseTracking()
+            runCurrent()
+
+            assertFalse(manager.resumeTracking(NEW_RIDE_ID))
+            assertTrue(manager.resumeTracking(RIDE_ID))
+            runCurrent()
+            readings.emit(reading(1))
+            runCurrent()
+
+            assertEquals(listOf(RIDE_ID), dao.inserted.map { it.rideId })
+        }
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun TestScope.manager(
         sensor: LocationSensorPort,
@@ -243,6 +286,8 @@ class TrackingManagerTest {
         override suspend fun getRideById(id: String): RideEntity? = null
 
         override fun getActiveRide(): Flow<RideEntity?> = flowOf(null)
+
+        override suspend fun getActiveRideId(): String? = null
 
         override suspend fun insertRide(ride: RideEntity) = Unit
 

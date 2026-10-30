@@ -46,7 +46,7 @@ import kotlin.math.abs
  *   manager lifecycle should pass their own scope; the default exists for
  *   simple use and is never cancelled automatically.
  */
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 open class TrackingManager(
     private val locationSensor: LocationSensorPort,
     private val trackPointWriter: TrackPointWriter,
@@ -69,27 +69,34 @@ open class TrackingManager(
     private var trackingJob: Job? = null
     private var elevationJob: Job? = null
     private var paused = false
+    private var rideIdInSession: String? = null
 
     /**
      * Starts collecting location readings for [rideId].
      *
      * Returns `false` (and does not subscribe) when the fine location
-     * permission is missing or [rideId] is blank. A second call while already
-     * tracking is a no-op that returns `true`.
+     * permission is missing or [rideId] is blank. A second call with the same
+     * [rideId] while already tracking is a no-op that returns `true`; a call
+     * with a *different* [rideId] while a session is still active returns
+     * `false` and leaves the current collection untouched, so points cannot be
+     * silently written under the previous ride.
      *
      * Points are cleared only when this starts a genuinely new session. A
      * resume (see [resumeTracking]) keeps the points accumulated so far.
      */
     @Synchronized
     open fun startTracking(rideId: String): Boolean {
-        if (rideId.isBlank() || !permissionChecker.hasFineLocationPermission()) {
-            return false
+        val canStart =
+            rideId.isNotBlank() &&
+                permissionChecker.hasFineLocationPermission() &&
+                !isTrackingDifferentRide(rideId)
+        if (canStart) {
+            val resetPoints = !paused && trackingJob?.isActive != true
+            rideIdInSession = rideId
+            startCollectionIfIdle(rideId, resetPoints = resetPoints)
+            paused = false
         }
-
-        val resetPoints = !paused && trackingJob?.isActive != true
-        startCollectionIfIdle(rideId, resetPoints = resetPoints)
-        paused = false
-        return true
+        return canStart
     }
 
     /**
@@ -107,20 +114,21 @@ open class TrackingManager(
      * Resumes a paused session for [rideId].
      *
      * Returns `false` (and does not subscribe) when the fine location
-     * permission is missing or [rideId] is blank. Accumulated points are
-     * kept across the pause.
+     * permission is missing, [rideId] is blank, or a different ride is still
+     * the active session. Accumulated points are kept across the pause.
      */
     @Synchronized
     open fun resumeTracking(rideId: String): Boolean {
-        if (rideId.isBlank() || !permissionChecker.hasFineLocationPermission()) {
-            return false
-        }
-
-        if (paused) {
+        val canResume =
+            rideId.isNotBlank() &&
+                permissionChecker.hasFineLocationPermission() &&
+                !isTrackingDifferentRide(rideId)
+        if (canResume && paused) {
+            rideIdInSession = rideId
             startCollectionIfIdle(rideId, resetPoints = false)
             paused = false
         }
-        return true
+        return canResume
     }
 
     /** Stops the sensor subscription. Accumulated points are kept. */
@@ -129,6 +137,7 @@ open class TrackingManager(
         trackingJob?.cancel()
         trackingJob = null
         paused = false
+        rideIdInSession = null
     }
 
     /**
@@ -153,6 +162,11 @@ open class TrackingManager(
         elevationJob?.cancel()
         elevationJob = null
     }
+
+    private fun isTrackingDifferentRide(rideId: String): Boolean =
+        rideIdInSession != null &&
+            rideIdInSession != rideId &&
+            (trackingJob?.isActive == true || paused)
 
     private fun startElevationCollectionIfIdle() {
         if (elevationJob?.isActive == true) return

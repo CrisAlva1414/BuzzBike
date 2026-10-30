@@ -5,7 +5,9 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
@@ -107,5 +109,118 @@ fun HoldToStopButton(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
+    }
+}
+
+/**
+ * Celda de la rejilla 2×2 de métricas: borde sólido, sin sombra y objetivo
+ * táctil mínimo. El valor va en Anton 44 sp; la etiqueta, en el cuerpo.
+ *
+ * TalkBack lee `"<label>, <value>"` como una sola unidad.
+ */
+@Composable
+fun MetricCell(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = BuzzTheme.colors
+    Column(
+        modifier =
+            modifier
+                .heightIn(min = BuzzDimens.MinTouch)
+                .background(colors.ground)
+                .border(BuzzDimens.Border, colors.ink)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .semantics { contentDescription = "$label, $value" },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.displaySmall,
+            color = colors.ink,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.ink,
+        )
+    }
+}
+
+/**
+ * Botón neobrutalista: esquinas rectas, borde de 3 dp, sin sombra.
+ *
+ * [primary] usa el acento; el secundario usa el panel. El texto va en Anton
+ * 24 sp y en mayúsculas mediante [BuzzDisplay].
+ */
+@Composable
+fun BuzzButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    primary: Boolean = true,
+) {
+    val colors = BuzzTheme.colors
+    val background = if (primary) colors.accent else colors.panel
+    val content = if (primary) colors.onAccent else colors.ink
+    Box(
+        modifier =
+            modifier
+                .heightIn(min = BuzzDimens.MinTouch)
+                .background(background)
+                .border(BuzzDimens.Border, colors.ink)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        BuzzDisplay(
+            text = text,
+            style = MaterialTheme.typography.titleLarge.copy(color = content),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Tono semántico de [StatusBanner]. */
+enum class StatusTone { WARNING, DANGER, INFO }
+
+/**
+ * Franja de estado con relleno sólido y texto contrastante.
+ *
+ * No comunica el estado solo con color: el texto se prefija con "AVISO",
+ * "ATENCIÓN" o "INFO" y ese prefijo también va en la descripción accesible.
+ * Sin animaciones.
+ */
+@Composable
+fun StatusBanner(
+    text: String,
+    tone: StatusTone,
+    modifier: Modifier = Modifier,
+) {
+    val colors = BuzzTheme.colors
+    val (background, content, prefix) =
+        when (tone) {
+            StatusTone.WARNING -> Triple(colors.accent, colors.onAccent, "AVISO")
+            StatusTone.DANGER -> Triple(colors.danger, colors.onDanger, "ATENCIÓN")
+            StatusTone.INFO -> Triple(colors.panel, colors.ink, "INFO")
+        }
+    val message = "$prefix: $text"
+    Box(
+        modifier =
+            modifier
+                .heightIn(min = BuzzDimens.MinTouch)
+                .background(background)
+                .border(BuzzDimens.Border, colors.ink)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .semantics { contentDescription = message },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = content,
+        )
     }
 }

@@ -11,10 +11,12 @@
 
 **¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
 elevación, calorías (nivel 3) y **backend/sync están cerrados**. El backend/sync
-cerró con gate PASS y **272 tests**; `test`, `ktlintCheck`, `detekt`,
+cerró con gate PASS y **322 tests**; `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
-compila. La UI de producto está en curso: **U0 (tema/componentes) y L1
-(pause/resume + FGS) están hechos**; el próximo slice es **U1 (Ride en vivo)**.
+compila. La UI de producto está en curso: **U0 (tema/componentes), L1
+(pause/resume + FGS) y U1 (Ride en vivo) están hechos**; el próximo slice es
+**U2 (historial/detalle + GPX)**. La UI de U1 vive en `ui/ride/` y su contrato
+en `domain/ride/session/RideSessionState.kt`.
 CI/CD vive en `.github/workflows/android.yml` (GitHub Actions): corre el gate,
 sube el artifact `buzzbike-debug-apk`, está **verde** y ya se publicó el release
 **`v0.1.0`** con el APK de debug.
@@ -47,9 +49,11 @@ causa raíz antes de dar el slice por cerrado.
    incertidumbre y modelo usado (§6, ADR-001).
 
 **Pendientes que dependen del usuario:** app id definitivo (hoy
-`com.buzzbike.app` es placeholder), nombre definitivo de la app, y validación
-E2E del sync contra un NAS real con Hermes Agent (ruta de webhook). El
-copyright ya está resuelto en el LICENSE (Cristian Alvarado, 2026).
+`com.buzzbike.app` es placeholder), nombre definitivo de la app, validación
+E2E del sync contra un NAS real con Hermes Agent (ruta de webhook), y
+**pedido de permiso de ubicación en runtime** (aprobación pendiente: U1 deja el
+botón deshabilitado con aviso en `Ready(NO_PERMISSION)`). El copyright ya está
+resuelto en el LICENSE (Cristian Alvarado, 2026).
 
 ---
 
@@ -130,7 +134,7 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**272 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**322 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
 > **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lintDebug`. Los instrumentados solo se compilan con `assembleDebugAndroidTest`.
 >

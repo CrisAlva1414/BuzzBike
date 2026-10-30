@@ -38,7 +38,7 @@ Verificado contra el código en `main`:
 - ✅ **Elevación:** fusión de barómetro + altitud GPS con suavizado e histéresis para desnivel positivo/negativo (ADR-006).
 - ✅ **Calculadora de calorías:** nivel 3 (Compendium) implementado; ACSM/Keytel quedan preparados para sensores futuros (ADR-001).
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
-- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**272 tests, 0 fallos**), `ktlintCheck`, `detekt`, `lintDebug` y `assembleDebug` (APK ~81 MB) pasan.
+- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**322 tests, 0 fallos**), `ktlintCheck`, `detekt`, `lintDebug` y `assembleDebug` (APK ~81 MB) pasan.
 
 **Todavía no:**
 

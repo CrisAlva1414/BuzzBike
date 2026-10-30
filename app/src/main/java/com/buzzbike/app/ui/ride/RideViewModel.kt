@@ -4,14 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
-import com.buzzbike.app.domain.ride.session.RideSessionUiState
+import com.buzzbike.app.domain.ride.session.RideSessionState
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
 import com.buzzbike.app.domain.sync.SyncConfigStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -36,11 +35,11 @@ class RideViewModel
         private val syncConfigStore: SyncConfigStore,
         private val rideServiceController: RideServiceController,
     ) : ViewModel() {
-        val uiState: StateFlow<RideSessionUiState> =
-            rideSessionManager.uiState.stateIn(
+        val state: StateFlow<RideSessionState> =
+            rideSessionManager.state.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.Eagerly,
-                initialValue = RideSessionUiState(),
+                initialValue = RideSessionState.Idle,
             )
 
         private var syncConfig: HermesConfig? = null
@@ -52,18 +51,35 @@ class RideViewModel
          */
         private var stopInFlight = false
 
+        /**
+         * Synchronous guard against a double start: the first tap flips it
+         * before the coroutine is launched, so a second tap in the same frame
+         * cannot dispatch a second `startRide`.
+         */
+        private var startInFlight = false
+
+        init {
+            viewModelScope.launch {
+                rideSessionManager.restore()
+            }
+        }
+
         /** Enables or disables sync for subsequent rides; `null` means off. */
         fun configureSync(config: HermesConfig?) {
             syncConfig = config
         }
 
         fun startRide() {
+            if (startInFlight) return
+            startInFlight = true
             viewModelScope.launch {
-                rideSessionManager.startRide()
-                // Read the manager directly: the exposed StateFlow may not have
-                // collected the new value yet in the same coroutine.
-                if (rideSessionManager.uiState.first().isTracking) {
-                    rideServiceController.start()
+                try {
+                    val rideId = rideSessionManager.startRide()
+                    if (rideId != null) {
+                        rideServiceController.start()
+                    }
+                } finally {
+                    startInFlight = false
                 }
             }
         }
@@ -81,15 +97,14 @@ class RideViewModel
         }
 
         fun stopRide() {
-            if (!uiState.value.isTracking || stopInFlight) return
+            val rideId = activeRideId() ?: return
+            if (stopInFlight) return
             stopInFlight = true
             viewModelScope.launch {
                 try {
-                    // Capture the id before the manager clears the active state.
-                    val rideId = uiState.value.activeRideId
                     rideSessionManager.stopRide()
                     val config = syncConfig ?: syncConfigStore.current()
-                    if (rideId != null && config != null) {
+                    if (config != null) {
                         rideSyncCoordinator.onRideFinished(rideId, config)
                     }
                 } finally {
@@ -98,4 +113,36 @@ class RideViewModel
                 }
             }
         }
+
+        fun discardRide() {
+            viewModelScope.launch {
+                try {
+                    rideSessionManager.discardRide()
+                } finally {
+                    rideServiceController.stop()
+                }
+            }
+        }
+
+        fun acknowledgeFinished() {
+            rideSessionManager.acknowledgeFinished()
+        }
+
+        /**
+         * Closes an interrupted ride: the manager processes the persisted
+         * points and publishes [RideSessionState.Finished]. The foreground
+         * service is not started because the ride is ending, not recording.
+         */
+        fun salvageRecoverableRide() {
+            viewModelScope.launch {
+                rideSessionManager.salvageRecoverableRide()
+            }
+        }
+
+        private fun activeRideId(): String? =
+            when (val current = state.value) {
+                is RideSessionState.Recording -> current.rideId
+                is RideSessionState.Paused -> current.rideId
+                else -> null
+            }
     }

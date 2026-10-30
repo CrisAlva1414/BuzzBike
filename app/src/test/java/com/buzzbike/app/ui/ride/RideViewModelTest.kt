@@ -3,11 +3,13 @@ package com.buzzbike.app.ui.ride
 import com.buzzbike.app.domain.model.RideDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
 import com.buzzbike.app.domain.ride.engine.RideEngine
+import com.buzzbike.app.domain.ride.session.GpsStatus
 import com.buzzbike.app.domain.ride.session.LocationPermissionChecker
 import com.buzzbike.app.domain.ride.session.LocationReading
 import com.buzzbike.app.domain.ride.session.LocationSensorPort
 import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
+import com.buzzbike.app.domain.ride.session.RideSessionState
 import com.buzzbike.app.domain.ride.session.RideSessionWriter
 import com.buzzbike.app.domain.ride.session.TrackPointWriter
 import com.buzzbike.app.domain.ride.session.TrackingManager
@@ -18,8 +20,10 @@ import com.buzzbike.app.domain.sync.RideSyncDataSource
 import com.buzzbike.app.domain.sync.RideSyncInput
 import com.buzzbike.app.domain.sync.SyncConfigStore
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -58,38 +62,119 @@ class RideViewModelTest {
     }
 
     @Test
-    fun given_idleSession_when_startRide_thenStateIsTracking() =
+    fun given_permission_when_startRide_thenRecordingAndServiceStarted() =
         runTest {
             val writer = RecordingRideSessionWriter()
-            val viewModel = viewModel(writer = writer)
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service)
 
             viewModel.startRide()
             advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value.isTracking)
-            assertEquals(RIDE_ID, viewModel.uiState.value.activeRideId)
+            assertTrue(viewModel.state.value is RideSessionState.Recording)
+            assertEquals(RIDE_ID, (viewModel.state.value as RideSessionState.Recording).rideId)
             assertEquals(RIDE_ID, writer.startedRideId)
+            assertEquals(1, service.startCalls)
+            assertEquals(0, service.stopCalls)
         }
 
     @Test
-    fun given_activeSession_when_stopRide_thenStateIsClearedAndDescriptorsSaved() =
+    fun given_noPermission_when_startRide_thenReadyAndServiceNotStarted() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service, permissionChecker = DeniedPermissionChecker)
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state is RideSessionState.Ready)
+            assertEquals(GpsStatus.NO_PERMISSION, (state as RideSessionState.Ready).gps)
+            assertNull(writer.startedRideId)
+            assertEquals(0, service.startCalls)
+        }
+
+    @Test
+    fun given_viewModelConstruction_when_restoreRuns_thenStateLeavesIdle() =
         runTest {
             val writer = RecordingRideSessionWriter()
             val viewModel = viewModel(writer = writer)
+
+            advanceUntilIdle()
+
+            assertEquals(1, writer.findActiveRideCalls)
+            assertTrue(viewModel.state.value is RideSessionState.Ready)
+        }
+
+    @Test
+    fun given_persistedRide_when_salvageRecoverableRide_thenDelegatesAndFinishes() =
+        runTest {
+            val writer =
+                RecordingRideSessionWriter(initialActiveRideId = RIDE_ID).apply {
+                    loadedPoints =
+                        listOf(
+                            TrackPoint(timestampMonotonicNanos = 0L, lat = BASE_LAT, lon = BASE_LON, speedMps = 5.0),
+                            TrackPoint(
+                                timestampMonotonicNanos = NANOS_PER_SECOND,
+                                lat = BASE_LAT + LAT_STEP,
+                                lon = BASE_LON,
+                                speedMps = 5.0,
+                            ),
+                        )
+                }
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value is RideSessionState.Recoverable)
+
+            viewModel.salvageRecoverableRide()
+            advanceUntilIdle()
+
+            val state = viewModel.state.value
+            assertTrue(state is RideSessionState.Finished)
+            assertEquals(RIDE_ID, (state as RideSessionState.Finished).rideId)
+            assertTrue(writer.savedDescriptors)
+            assertEquals(1, writer.stopCalls)
+            assertEquals(0, service.startCalls)
+        }
+
+    @Test
+    fun given_idle_when_startRideTwiceInSameFrame_thenStartsOnlyOnce() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service)
+
+            viewModel.startRide()
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertEquals(1, writer.startCalls)
+            assertEquals(1, service.startCalls)
+            assertTrue(viewModel.state.value is RideSessionState.Recording)
+        }
+
+    @Test
+    fun given_recordingSession_when_stopRide_thenFinishedAndDescriptorsSaved() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service)
             viewModel.startRide()
             advanceUntilIdle()
 
             viewModel.stopRide()
             advanceUntilIdle()
 
-            assertFalse(viewModel.uiState.value.isTracking)
-            assertNull(viewModel.uiState.value.activeRideId)
+            assertTrue(viewModel.state.value is RideSessionState.Finished)
             assertEquals(RIDE_ID, writer.stoppedRideId)
             assertTrue(writer.savedDescriptors)
+            assertEquals(1, service.stopCalls)
         }
 
     @Test
-    fun given_activeSession_when_stopRideTwice_thenStopsOnlyOnce() =
+    fun given_recordingSession_when_stopRideTwice_thenStopsOnlyOnce() =
         runTest {
             val writer = RecordingRideSessionWriter()
             val viewModel = viewModel(writer = writer)
@@ -101,38 +186,11 @@ class RideViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, writer.stopCalls)
-            assertFalse(viewModel.uiState.value.isTracking)
+            assertTrue(viewModel.state.value is RideSessionState.Finished)
         }
 
     @Test
-    fun given_trackingStarts_when_startRide_thenServiceIsStarted() =
-        runTest {
-            val service = FakeRideServiceController()
-            val viewModel = viewModel(service = service)
-
-            viewModel.startRide()
-            advanceUntilIdle()
-
-            assertEquals(1, service.startCalls)
-            assertEquals(0, service.stopCalls)
-        }
-
-    @Test
-    fun given_activeSession_when_stopRide_thenServiceIsStopped() =
-        runTest {
-            val service = FakeRideServiceController()
-            val viewModel = viewModel(service = service)
-            viewModel.startRide()
-            advanceUntilIdle()
-
-            viewModel.stopRide()
-            advanceUntilIdle()
-
-            assertEquals(1, service.stopCalls)
-        }
-
-    @Test
-    fun given_activeSession_when_pauseAndResume_thenStateFlagsToggle() =
+    fun given_recordingSession_when_pauseAndResume_thenStateToggles() =
         runTest {
             val viewModel = viewModel()
             viewModel.startRide()
@@ -140,31 +198,74 @@ class RideViewModelTest {
 
             viewModel.pauseRide()
             advanceUntilIdle()
-            assertTrue(viewModel.uiState.value.isPaused)
-            assertTrue(viewModel.uiState.value.isTracking)
+            assertTrue(viewModel.state.value is RideSessionState.Paused)
 
             viewModel.resumeRide()
             advanceUntilIdle()
-            assertFalse(viewModel.uiState.value.isPaused)
-            assertTrue(viewModel.uiState.value.isTracking)
+            assertTrue(viewModel.state.value is RideSessionState.Recording)
+        }
+
+    @Test
+    fun given_recordingSession_when_discardRide_thenRideDeletedAndReady() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service)
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            viewModel.discardRide()
+            advanceUntilIdle()
+
+            assertEquals(RIDE_ID, writer.deletedRideId)
+            assertTrue(viewModel.state.value is RideSessionState.Ready)
+            assertFalse(writer.savedDescriptors)
+            assertEquals(1, service.stopCalls)
+        }
+
+    @Test
+    fun given_deleteFails_when_discardRide_thenServiceIsStoppedAnyway() =
+        runTest {
+            val writer =
+                RecordingRideSessionWriter().apply {
+                    // Cancellation keeps the failure scoped to the
+                    // viewModelScope coroutine (a RuntimeException would be
+                    // reported as uncaught by runTest) while still exercising
+                    // the same try/finally cleanup path of discardRide.
+                    deleteFailure = kotlinx.coroutines.CancellationException("simulated delete failure")
+                }
+            val service = FakeRideServiceController()
+            val viewModel = viewModel(writer = writer, service = service)
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            viewModel.discardRide()
+            advanceUntilIdle()
+
+            assertTrue(writer.deleteAttempted)
+            // The FGS must be stopped by the try/finally even when the delete
+            // transaction fails.
+            assertEquals(1, service.stopCalls)
         }
 
     private fun TestScope.viewModel(
         writer: RecordingRideSessionWriter = RecordingRideSessionWriter(),
         service: RideServiceController = FakeRideServiceController(),
+        permissionChecker: LocationPermissionChecker = GrantedPermissionChecker,
     ): RideViewModel {
         val trackingManager =
             TrackingManager(
                 locationSensor = EmptyLocationSensor,
                 trackPointWriter = writer,
-                permissionChecker = GrantedPermissionChecker,
+                permissionChecker = permissionChecker,
             )
         val manager =
             RideSessionManager(
                 rideEngine = RideEngine(),
                 trackingManager = trackingManager,
                 rideSessionWriter = writer,
-                scope = backgroundScope,
+                permissionChecker = permissionChecker,
+                scope = CoroutineScope(SupervisorJob() + dispatcher),
             )
         val coordinator =
             RideSyncCoordinator(
@@ -191,13 +292,25 @@ class RideViewModelTest {
         }
     }
 
-    private class RecordingRideSessionWriter :
-        RideSessionWriter,
+    private class RecordingRideSessionWriter(
+        initialActiveRideId: String? = null,
+    ) : RideSessionWriter,
         TrackPointWriter {
         var startedRideId: String? = null
             private set
 
+        var startCalls: Int = 0
+            private set
+
         var stoppedRideId: String? = null
+            private set
+
+        var deletedRideId: String? = null
+            private set
+
+        var deleteFailure: Throwable? = null
+
+        var deleteAttempted: Boolean = false
             private set
 
         var stopCalls: Int = 0
@@ -206,14 +319,38 @@ class RideViewModelTest {
         var savedDescriptors: Boolean = false
             private set
 
+        var findActiveRideCalls: Int = 0
+            private set
+
+        var loadedPoints: List<TrackPoint> = emptyList()
+
+        private var activeRideId: String? = initialActiveRideId
+
         override suspend fun startRide(): String {
+            startCalls += 1
             startedRideId = RIDE_ID
+            activeRideId = RIDE_ID
             return RIDE_ID
         }
+
+        override suspend fun findActiveRideId(): String? {
+            findActiveRideCalls += 1
+            return activeRideId
+        }
+
+        override suspend fun loadTrackPoints(rideId: String): List<TrackPoint> = loadedPoints
 
         override suspend fun stopRide(rideId: String) {
             stopCalls += 1
             stoppedRideId = rideId
+            activeRideId = null
+        }
+
+        override suspend fun deleteRide(rideId: String) {
+            deleteAttempted = true
+            deleteFailure?.let { throw it }
+            deletedRideId = rideId
+            activeRideId = null
         }
 
         override suspend fun saveRideDescriptors(
@@ -241,6 +378,10 @@ class RideViewModelTest {
 
     private object GrantedPermissionChecker : LocationPermissionChecker {
         override fun hasFineLocationPermission(): Boolean = true
+    }
+
+    private object DeniedPermissionChecker : LocationPermissionChecker {
+        override fun hasFineLocationPermission(): Boolean = false
     }
 
     private object UnusedRideSyncDataSource : RideSyncDataSource {
@@ -278,5 +419,9 @@ class RideViewModelTest {
 
     private companion object {
         private const val RIDE_ID = "ride-1"
+        private const val NANOS_PER_SECOND = 1_000_000_000L
+        private const val BASE_LAT = -33.45
+        private const val BASE_LON = -70.66
+        private const val LAT_STEP = 0.00001
     }
 }

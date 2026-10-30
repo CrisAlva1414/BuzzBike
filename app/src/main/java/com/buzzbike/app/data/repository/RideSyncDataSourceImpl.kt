@@ -77,7 +77,7 @@ class RideSyncDataSourceImpl
         }
     }
 
-private fun TrackPointEntity.toTrackPoint(): TrackPoint =
+internal fun TrackPointEntity.toTrackPoint(): TrackPoint =
     TrackPoint(
         timestampMonotonicNanos = timestampNanos,
         lat = lat,

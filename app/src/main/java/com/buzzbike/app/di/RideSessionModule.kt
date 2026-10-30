@@ -49,11 +49,13 @@ object RideSessionModule {
         rideEngine: RideEngine,
         trackingManager: TrackingManager,
         rideSessionWriter: RideRepository,
+        permissionChecker: AndroidLocationPermissionChecker,
     ): RideSessionManager =
         RideSessionManager(
             rideEngine = rideEngine,
             trackingManager = trackingManager,
             rideSessionWriter = rideSessionWriter,
+            permissionChecker = permissionChecker,
         )
 
     @Provides

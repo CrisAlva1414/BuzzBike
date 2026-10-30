@@ -15,7 +15,7 @@ import javax.inject.Singleton
 
 // Single façade for ride persistence. Outbox writes live in
 // RoomOutboxEnqueuer so this class stays focused on ride/track-point storage.
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 @Singleton
 class RideRepository
     @Inject
@@ -37,7 +37,6 @@ class RideRepository
         suspend fun getRideWithDescriptors(rideId: String): RideEntity? = rideDao.getRideById(rideId)
 
         override suspend fun startRide(): String {
-            rideDao.deactivateAllRides()
             val rideId = UUID.randomUUID().toString()
             val ride =
                 RideEntity(
@@ -45,9 +44,14 @@ class RideRepository
                     startTimeMillis = System.currentTimeMillis(),
                     isActive = true,
                 )
-            rideDao.insertRide(ride)
+            rideDao.replaceActiveRide(ride)
             return rideId
         }
+
+        override suspend fun findActiveRideId(): String? = rideDao.getActiveRideId()
+
+        override suspend fun loadTrackPoints(rideId: String): List<TrackPoint> =
+            trackPointDao.getPointsForRideSync(rideId).map(TrackPointEntity::toTrackPoint)
 
         override suspend fun stopRide(rideId: String) {
             val ride = rideDao.getRideById(rideId) ?: return
@@ -110,8 +114,7 @@ class RideRepository
 
         suspend fun getTrackPoints(rideId: String): List<TrackPointEntity> = trackPointDao.getPointsForRideSync(rideId)
 
-        suspend fun deleteRide(rideId: String) {
-            trackPointDao.deletePointsForRide(rideId)
-            rideDao.deleteRide(rideId)
+        override suspend fun deleteRide(rideId: String) {
+            rideDao.deleteRideWithPoints(rideId, trackPointDao)
         }
     }

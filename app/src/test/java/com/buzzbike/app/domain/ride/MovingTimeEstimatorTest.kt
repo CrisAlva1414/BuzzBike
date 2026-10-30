@@ -2,6 +2,9 @@ package com.buzzbike.app.domain.ride
 
 import com.buzzbike.app.domain.model.TrackPoint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -114,6 +117,75 @@ class MovingTimeEstimatorTest {
 
         assertEquals(120.0, movingSeconds(state), 2.0)
         assertTrue(state.stopDurationsSeconds.isEmpty())
+    }
+
+    @Test
+    fun given_movingTrace_when_estimated_thenStoppedSinceIsNull() {
+        val state = MovingTimeEstimator.estimate(trace(List(20) { 5.0 }))
+
+        assertTrue(state.isMoving)
+        assertNull(state.stoppedSinceNanos)
+    }
+
+    @Test
+    fun given_confirmedStop_when_estimated_thenStoppedSinceIsExposed() {
+        val speeds = List(20) { 5.0 } + List(15) { 0.0 }
+
+        val state = MovingTimeEstimator.estimate(trace(speeds))
+
+        assertFalse(state.isMoving)
+        assertNotNull(state.stoppedSinceNanos)
+        assertEquals(1, state.stopDurationsSeconds.size)
+    }
+
+    @Test
+    fun given_stopCandidateShorterThanTStop_when_estimated_thenStoppedSinceIsNull() {
+        // Stop candidate confirmed only after T_STOP_SECONDS (10 s from ADR-005).
+        val speeds = List(20) { 5.0 } + List(5) { 0.0 }
+
+        val state = MovingTimeEstimator.estimate(trace(speeds))
+
+        assertTrue(state.isMoving)
+        assertNull(state.stoppedSinceNanos)
+    }
+
+    @Test
+    fun given_stationaryFromStart_when_estimated_thenNoAutoPauseWindow() {
+        // A ride that never confirmed movement must not auto-pause.
+        val state = MovingTimeEstimator.estimate(trace(List(15) { 0.0 }))
+
+        assertFalse(state.isMoving)
+        assertNull(state.stoppedSinceNanos)
+    }
+
+    @Test
+    fun given_segmentBreakGap_when_estimated_thenGapDoesNotConfirmAStop() {
+        // Gaps > GAP_CUT_SECONDS cut the segment; ADR-005 says that is not a
+        // confirmed stop, so auto-pause must not be inferred from the gap.
+        val speeds = List(20) { 5.0 } + List(2) { 0.0 }
+
+        val state =
+            MovingTimeEstimator.estimate(
+                trace(
+                    speedsMps = speeds,
+                    gapAfterIndex = 19,
+                    gapSeconds = 70,
+                ),
+            )
+
+        assertFalse(state.isMoving)
+        assertNull(state.stoppedSinceNanos)
+    }
+
+    @Test
+    fun given_stopThenResume_when_estimated_thenStoppedSinceIsCleared() {
+        val speeds = List(20) { 5.0 } + List(15) { 0.0 } + List(20) { 5.0 }
+
+        val state = MovingTimeEstimator.estimate(trace(speeds))
+
+        assertTrue(state.isMoving)
+        assertNull(state.stoppedSinceNanos)
+        assertEquals(1, state.stopDurationsSeconds.size)
     }
 
     @Test

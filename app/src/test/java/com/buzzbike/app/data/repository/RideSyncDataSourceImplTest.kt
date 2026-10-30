@@ -117,6 +117,8 @@ class RideSyncDataSourceImplTest {
 
         override fun getActiveRide(): Flow<RideEntity?> = emptyFlow()
 
+        override suspend fun getActiveRideId(): String? = null
+
         override suspend fun insertRide(ride: RideEntity) = Unit
 
         override suspend fun updateRide(ride: RideEntity) = Unit

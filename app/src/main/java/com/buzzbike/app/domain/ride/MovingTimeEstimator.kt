@@ -18,10 +18,18 @@ data class TimeInterval(
  * [movingIntervals] contains the confirmed moving intervals with backdated
  * boundaries. [stopDurationsSeconds] contains the confirmed stop durations in
  * whole seconds, in chronological order.
+ *
+ * [isMoving] and [stoppedSinceNanos] describe the state at the last sample, so
+ * the session layer can derive auto-pause without re-implementing the
+ * hysteresis from ADR-005 §4. [stoppedSinceNanos] is the backdated start of the
+ * stop currently in progress, and stays `null` while moving or while the stop
+ * is still an unconfirmed candidate (< `T_STOP_SECONDS`).
  */
 data class MovingState(
     val movingIntervals: List<TimeInterval>,
     val stopDurationsSeconds: List<Long>,
+    val isMoving: Boolean,
+    val stoppedSinceNanos: Long?,
 )
 
 private enum class MotionState { MOVING, STOPPED }
@@ -67,7 +75,12 @@ object MovingTimeEstimator {
     ): MovingState {
         val sorted = points.sortedBy { it.timestampMonotonicNanos }
         if (sorted.isEmpty()) {
-            return MovingState(emptyList(), emptyList())
+            return MovingState(
+                movingIntervals = emptyList(),
+                stopDurationsSeconds = emptyList(),
+                isMoving = false,
+                stoppedSinceNanos = null,
+            )
         }
 
         val accumulator = MovingTimeAccumulator(distance)
@@ -177,7 +190,12 @@ private class MovingTimeAccumulator(
                 }
             }
         }
-        return MovingState(intervals.toList(), stops.toList())
+        return MovingState(
+            movingIntervals = intervals.toList(),
+            stopDurationsSeconds = stops.toList(),
+            isMoving = state == MotionState.MOVING,
+            stoppedSinceNanos = if (state == MotionState.STOPPED) stopStartNanos else null,
+        )
     }
 
     private fun updateStopCandidate(

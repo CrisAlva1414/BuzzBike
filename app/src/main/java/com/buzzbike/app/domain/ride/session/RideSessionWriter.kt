@@ -1,6 +1,7 @@
 package com.buzzbike.app.domain.ride.session
 
 import com.buzzbike.app.domain.model.RideDescriptors
+import com.buzzbike.app.domain.model.TrackPoint
 
 /**
  * Domain port for the ride session lifecycle and its final aggregate.
@@ -20,7 +21,21 @@ import com.buzzbike.app.domain.model.RideDescriptors
 interface RideSessionWriter {
     suspend fun startRide(): String
 
+    /** Returns the id of the persisted active ride, if any, for recovery. */
+    suspend fun findActiveRideId(): String?
+
+    /**
+     * Loads the persisted points of [rideId] in ascending timestamp order.
+     *
+     * Used by recovery to rebuild the aggregate after the in-memory trace was
+     * lost to a process death; it must not substitute a local recomputation.
+     */
+    suspend fun loadTrackPoints(rideId: String): List<TrackPoint>
+
     suspend fun stopRide(rideId: String)
+
+    /** Deletes a ride and its track points (discard / orphan cleanup). */
+    suspend fun deleteRide(rideId: String)
 
     @Suppress("LongParameterList")
     suspend fun saveRideDescriptors(
