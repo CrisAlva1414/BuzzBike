@@ -11,13 +11,14 @@
 
 **¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
 elevación, calorías (nivel 3) y **backend/sync están cerrados**. El backend/sync
-cerró con gate PASS; hoy el gate acumula **335 tests**. `test`, `ktlintCheck`, `detekt`,
+cerró con gate PASS; hoy el gate acumula **394 tests**. `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
 compila. La UI de producto está en curso: **U0 (tema/componentes), L1
-(pause/resume + FGS), U1 (Ride en vivo) y U1.1 (permiso de ubicación en runtime)
-están hechos**; el próximo slice es **U2 (historial/detalle + GPX)**. La UI de U1
-vive en `ui/ride/` y su contrato en
-`domain/ride/session/RideSessionState.kt`.
+(pause/resume + FGS), U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime)
+y U2 (historial/detalle + GPX) están hechos**; el próximo slice es
+**U3 (Ajustes y perfil)**. La UI de U1 vive en `ui/ride/` y su contrato en
+`domain/ride/session/RideSessionState.kt`; la de U2 vive en `ui/history/`, con
+dominio en `domain/history/` y `domain/export/`.
 CI/CD vive en `.github/workflows/android.yml` (GitHub Actions): corre el gate,
 sube el artifact `buzzbike-debug-apk`, está **verde** y ya se publicó el release
 **`v0.1.0`** con el APK de debug.
@@ -35,7 +36,7 @@ causa raíz antes de dar el slice por cerrado.
 
 **Orden de lectura para un agente nuevo:**
 `AGENTS.md` (este archivo) → `docs/roadmap.md` →
-`docs/sessions/2026-10-30-u1.1-permiso-ubicacion.md` →
+`docs/sessions/2026-10-30-u2-historial-detalle-gpx.md` →
 `state/loop-state.md` (solo lectura) para el detalle fino.
 **Si estás en una máquina nueva:** `docs/setup-entorno.md` va primero
 (toolchain sin sudo, verificación y pitfalls).
@@ -57,7 +58,16 @@ copyright ya está resuelto en el LICENSE (Cristian Alvarado, 2026).
 **Permiso de ubicación en runtime:** **U1.1 está hecho y cerrado el 2026-10-30**
 con `tester: PASS` y `security-reviewer: PASS` (0 hallazgos) sobre **335 tests**.
 La pantalla de ride ofrece "DAR PERMISO" en `Ready(NO_PERMISSION)` y re-evalúa la
-sesión al volver del diálogo. El próximo slice es **U2 (historial/detalle + GPX)**.
+sesión al volver del diálogo. Sobre ese cierre se construyó U2.
+
+**Historial, detalle y GPX:** **U2 está hecho y cerrado el 2026-10-30** con
+`tester: PASS` y `security-reviewer: PASS` (0 hallazgos abiertos) sobre **394
+tests**. La lista y la franja semanal viven en `ui/history/`; el detalle usa
+`RideTrace` y exporta GPX 1.1 + `TrackPointExtension` por SAF (`content://`).
+Decisiones: sin migración Room (nombre derivado de `startTimeMillis`; la bici
+queda para U4), sin barra inferior (botón HISTORIAL desde `Ready`) y
+`hasProfile = false` hasta U3. **Próximo slice: U3 — Ajustes y perfil**
+(DataStore + perfil corporal; dependencia nueva → Heavy).
 
 ---
 
@@ -138,7 +148,7 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**335 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**394 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
 > **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lintDebug`. Los instrumentados solo se compilan con `assembleDebugAndroidTest`.
 >

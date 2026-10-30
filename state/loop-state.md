@@ -7,88 +7,97 @@
 
 ---
 
-## Tarea encolada — U2: historial y detalle + GPX
+## Tarea — U2: historial, detalle y export GPX
 
 ### Estado
-**pendiente de plan** (`iteracion: 0` · `max_iteraciones: 4`).
-No se arrancó: el próximo paso es leer el handoff §5, armar el plan y
-clasificarlo (triage) antes de delegar en `builder`.
+**completada** (`iteracion: 2` de `max_iteraciones: 4`) · clase **Heavy**.
+Cerrada el 2026-10-30 con `tester: PASS` y `security-reviewer: PASS`.
 
-### Alcance conocido (handoff §5)
-- Lista de rides desde `RideDao.getAllRides()`.
-- Franja semanal calculada (no persistida).
-- Detalle de ride con traza y las 8 métricas.
-- Exportación **GPX 1.1 + `TrackPointExtension`**.
-- Aquí se cierra la laguna §5.5: paso de reloj monotónico → reloj de pared para
-  los timestamps del GPX.
-- Probablemente requiere: decidir formato de exportación y destino (Storage
-  Access Framework, sin permiso de almacenamiento), y una columna/derivación de
-  nombre del ride (ver deuda).
+### Criterio de aceptación (cumplido)
+1. Lista de historial desde `RideDao.getAllRides()` (`Flow`), sin rides activos,
+   orden descendente, con estados Loading / Empty / Content / Error.
+2. Franja semanal calculada, no persistida, semana lunes 00:00 → lunes siguiente
+   exclusivo en la zona local; singular/plural.
+3. Detalle con traza (`RideTrace`), fecha y las 8 métricas; banda calórica con
+   modelo, nunca un número exacto.
+4. GPX 1.1 + `TrackPointExtension` v2 válido, con `trkseg` cortado por gaps
+   > 60 s y reloj de pared (`start + (nanos − firstValidNanos)/1e6`), exportado
+   por SAF sin permisos de almacenamiento.
+5. Gate verde con `tester: PASS` y `security-reviewer: PASS`.
 
-### Clase de triage (a confirmar al planificar)
-Probablemente **Standard**: lectura de DB + UI + escritura de un archivo que el
-usuario elige (SAF). Subir a **Heavy** si aparece tocar esquema Room (migración),
-permisos, o el formato de datos exportados. Ante la duda, subir de clase.
+### Iteraciones
+| Iter | Fecha | Slice | Resultado | Notas |
+|---|---|---|---|---|
+| 0 | 2026-10-30 | U2 | plan | clase Heavy; research de XSD GPX 1.1 + TPE v2 + SAF |
+| 1 | 2026-10-30 | S1 GPX | **FAIL → PASS** | `tester` encontró `course=360.00` y code points ilegales; corregidos en `GpxWriter` |
+| — | 2026-10-30 | S2a/S2b | PASS | dominio/datos de historial + UI/navegación |
+| — | 2026-10-30 | S3a/S3b | PASS | detalle + exportador + SAF + hardening `content://` |
+| 2 | 2026-10-30 | U2 cleanup | **PASS** | puerto `GpxExporter` movido a `domain/export`; serialización a `Dispatchers.IO`; `Uri.encode` en la ruta |
 
-### Antes de tocar código
-- Leer `docs/sessions/2026-10-30-u1-ride-en-vivo.md` (lagunas §5.4/§5.5) y
-  `docs/sessions/2026-10-30-u1.1-permiso-ubicacion.md`.
-- Confirmar el contrato de `RideDao`/`RideRepository` y si `getAllRides()`
-  devuelve lo necesario para la franja semanal y las 8 métricas sin N+1.
-- Si el export necesita un `ActivityResultContracts.CreateDocument`, verificar
-  que `activity-compose` (ya presente) alcance; no agregar dependencias sin
-  justificar.
-- GPX: validar contra fixtures (estructura 1.1 + extensión Garmin
-  `TrackPointExtension` v2), sin red.
+### Verificación final
+- `./gradlew test ktlintCheck detekt assembleDebug lintDebug --console=plain` → **verde**.
+- `./gradlew assembleDebugAndroidTest --console=plain` → **compila**.
+- `test` = **394 tests, 0 fallos, 0 skipped** (335 previos + 59 de U2).
+- `security-reviewer`: **PASS**, 0 hallazgos abiertos (se cerraron 2 LOW de S1,
+  2 LOW de S2a/S2b y 2 LOW de S3a; más 1 LOW de tester).
+
+### Archivos principales
+- Dominio: `domain/export/{GpxWriter,GpxExporter}.kt`,
+  `domain/history/{RideRecord,WeeklySummary,RideHistorySource,RideDetail,RideDetailSource}.kt`.
+- Datos: `data/export/AndroidGpxExporter.kt`,
+  `data/repository/{RideRecordMapper,RideRepository}.kt`, `di/HistoryModule.kt`.
+- UI: `ui/history/*`, `ui/components/RideMetrics.kt`,
+  `ui/navigation/NavGraph.kt`, `ui/ride/RideScreen.kt`.
+- Tests nuevos: 59 (GPX, historial, mapper, VM de historial/detalle, exportador
+  Robolectric, integración repo→detalle→XML).
+
+### Deuda abierta (baja, no bloqueante)
+- `RideDetailScreen` usa `hasProfile = false`: en v1 no existe perfil; cuando U3
+  persista `calHasProfile`, el detalle debe leerlo.
+- `AndroidGpxExporter` usa `runCatching`, que captura `CancellationException`
+  (higiene de corrutinas; no es un problema de seguridad).
+- `HistoryViewModel` usa `System.currentTimeMillis()` no inyectable: el test
+  semanal puede volverse flaky en el borde domingo/lunes (la calculadora pura sí
+  está cubierta con reloj inyectado).
+- `WeeklySummaryTest` no cubre `+Infinity` (misma rama que `NaN`).
+- `refreshReady()` sigue escribiendo fuera del `lifecycleMutex`.
+- `TrackingManager.stopTracking()` no hace `join()`.
+- `stopRide` del ViewModel puede salir temprano si el `StateFlow` no propagó.
+- TalkBack: posible anuncio duplicado en `MetricCell`/`StatusBanner`.
+- Lagunas del handoff §5.4 (reproceso a 1 Hz sin medir en dispositivo).
+- Sin dispositivo/emulador: la UI y el SAF real quedan pendientes de la
+  verificación manual de `docs/sessions/2026-10-30-u2-historial-detalle-gpx.md`.
+
+### Nota de harness
+- `doc-writer` sigue con un modelo inexistente
+  (`opencode-go/longcat-2.5-preview-free`): la documentación de cierre se delegó
+  a `builder` con alcance solo-docs.
+- `builder`/`tester` pueden devolver respuesta vacía con prompts largos; el
+  trabajo sí queda hecho. Verificar el árbol (`git status`, tests) después.
 
 ---
 
 ## Contexto para retomar (leer antes de tocar código)
 
-- **Últimos commits:** `ca024fd` (`feat(ui): request location permission at
-  runtime`) y el commit de cierre de estado/documentación de U1.1.
-- **Gate actual:** **335 tests**, 0 fallos; `ktlintCheck`, `detekt`,
+- **Últimos commits:** pendiente de commit de cierre de U2 (código + docs).
+- **Gate actual:** **394 tests**, 0 fallos; `ktlintCheck`, `detekt`,
   `assembleDebug`, `lintDebug` y `assembleDebugAndroidTest` en verde.
-- **Contrato de sesión:** `domain/ride/session/RideSessionState.kt`
-  (`Idle / Ready(gps, hasBarometer) / Recording / Paused / Finished / Recoverable`).
-- **Permiso de ubicación:** `ui/ride/LocationPermissionUi.kt` (helper puro) +
-  `RideViewModel.onLocationPermissionResult()` (no-op fuera de `Ready`).
+- **Contrato de sesión:** `domain/ride/session/RideSessionState.kt`.
+- **Historial:** `domain/history/` (modelos y puertos) + `ui/history/`.
+- **GPX:** `domain/export/GpxWriter.kt` (serializador puro) +
+  `data/export/AndroidGpxExporter.kt` (SAF, `content://`, `"wt"`, IO).
 - **Auto-pausa:** `MovingTimeEstimator` — ADR-005, sin umbrales nuevos.
 - **Calorías:** siempre banda `≈ min–max kcal` + modelo (ADR-001).
-- **Handoff de diseño:**
-  `/home/pc01/Escritorio/buzzbike-handoff/android-handoff/ANDROID_HANDOFF.md`.
+- **Próximo slice:** **U3 — Ajustes y perfil** (DataStore + perfil corporal;
+  dependencia nueva → Heavy). Después U4 Garaje, U5 mapa, U6 accesibilidad.
 
-### Deuda abierta (baja, no bloqueante — no la arregles salvo que el slice la toque)
-- `TrackingManager.stopTracking()` no hace `join()` del `trackingJob` → un
-  `saveTrackPoint` en vuelo podría dejar un punto huérfano tras `discard`
-  (fix acotado sugerido: `stopTrackingAndJoin()`).
-- `refreshReady()` escribe estado fuera del `lifecycleMutex`. El call-site nuevo
-  de U1.1 ya tiene guard `is Ready`, pero el método sigue público sin guard
-  interno; un guard dentro del método (o moverlo bajo el mutex) eliminaría la
-  clase de bug.
-- `stopRide` del ViewModel puede salir temprano si el `StateFlow` no propagó →
-  FGS vivo hasta el siguiente toque.
-- Cobertura: falta test manager-level de parada <10 s y de "stop lanza
-  excepción → `service.stop()`"; y no-op de `onLocationPermissionResult()` en
-  `Paused`/`Recoverable`/`Finished` (hoy cubierto estructuralmente por `is Ready`).
+### Deuda heredada (no bloqueante — no la arregles salvo que el slice la toque)
+- `TrackingManager.stopTracking()` sin `join()` → posible punto huérfano.
+- `refreshReady()` / `acknowledgeFinished()` escriben fuera del `lifecycleMutex`.
+- `stopRide` del ViewModel puede salir temprano si el `StateFlow` no propagó.
+- Faltan tests manager-level de parada <10 s y de "stop lanza excepción".
 - TalkBack: posible anuncio duplicado en `MetricCell`/`StatusBanner`.
-- `RideFormat`: faltan casos negativos/NaN en distancia, `low == high`, locale
-  default hostil.
-- Atomicidad real de `@Transaction` en default methods de DAO no ejercitada con
-  Room in-memory (sin emulador).
-- Lagunas del handoff §5.4 (reproceso a 1 Hz sin medir en dispositivo) y §5.5
-  (monotónico → reloj de pared para GPX, **es de U2**).
+- `RideFormat`: casos negativos/NaN, `low == high`, locale hostil.
+- Atomicidad real de `@Transaction` en DAOs no ejercitada con Room in-memory.
 - U1.1 follow-ups: "Abrir Ajustes" tras denegación permanente; refresh en
   `ON_RESUME`; `ACCESS_BACKGROUND_LOCATION` (requiere ADR).
-
-### Nota de harness
-- `doc-writer` está configurado con un modelo inexistente
-  (`opencode-go/longcat-2.5-preview-free`) y **no arranca**. La documentación de
-  cierre se delegó a `builder` con alcance solo-docs. Arreglar la config del
-  subagente antes de la próxima sesión que dependa de él.
-
-## Iteraciones
-
-| Iter | Fecha | Slice | Resultado | Notas |
-|---|---|---|---|---|
-| — | — | — | pendiente | U2 arranca en 0 |
