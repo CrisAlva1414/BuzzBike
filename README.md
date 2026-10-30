@@ -187,6 +187,7 @@ Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Conve
 | Convenciones de código | [`docs/format/`](docs/format/) |
 | Guía de entorno | [`docs/setup-entorno.md`](docs/setup-entorno.md) |
 | Bitácora de sesiones | [`docs/sessions/`](docs/sessions/) |
+| Fuentes | Anton, Darker Grotesque y JetBrains Mono bajo OFL — licencias en [`docs/licenses/`](docs/licenses/) |
 
 ---
 

@@ -1426,3 +1426,27 @@ Resolver merge de licencia/README, crear CI/CD con APK descargable y corregir in
 
 ### Próximo paso
 U0: integrar tema/componentes del handoff y compilar.
+
+---
+
+## Iteration 37 — 2026-10-30 — U0: tema y componentes del handoff (COMPLETADO)
+
+### Resultado
+| Comando | Exit |
+|---|---|
+| compileDebugKotlin + test compile | 0 |
+| test | 0 (264 tests) |
+| ktlintCheck | 0 |
+| detekt | 0 |
+| assembleDebug | 0 |
+| lintDebug | 0 |
+| assembleDebugAndroidTest | 0 |
+
+### Cambios
+- `ui/theme/Color.kt`, `Type.kt`, `Theme.kt` reemplazados por el handoff (Sol/Noche, Anton/Darker Grotesque/JetBrains Mono, bordes 3 dp, targets 56/84).
+- `ui/components/BuzzComponents.kt` agregado (BuzzDisplay, HoldToStopButton).
+- Fuentes OFL en `res/font` y licencias en `docs/licenses`.
+- README: atribución de fuentes.
+
+### Próximo paso
+L1: servicio FGS + pausa/reanudación + no borrar puntos.

@@ -1,59 +1,111 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.buzzbike.app.ui.theme
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Color schemes — Material 3 defaults.
+ * Tokens de color de BuzzBike (fuente: prototipo web, src/index.css).
  *
- * TODO(design): replace with the BuzzBike brand palette once design exists
- * (AGENTS.md §11). Scaffold uses stock M3 light/dark schemes: no invented
- * brand colors, no hardcoded image assets.
- *
- * Wear alerts (80%/100%, ADR-004) will need distinguishable colors that do
- * not rely on hue alone (accessibility, estilo §7) — that belongs to the
- * wear UI slice, not this scaffold.
+ * Reglas:
+ * - Amarillo ([BuzzColors.accent]) SOLO como relleno con [BuzzColors.onAccent]. Nunca como texto
+ *   sobre fondo claro (no pasa contraste). Negro sobre amarillo: ~12:1.
+ * - Ningún estado depende solo del color: alertas 80 %/100 % llevan icono + texto (ADR-004, estilo §7).
+ * - Sin dynamic color de Material You: chocaría con la identidad de marca.
  */
+@Immutable
+data class BuzzColors(
+    val ground: Color,
+    val ink: Color,
+    val accent: Color,
+    val onAccent: Color,
+    val panel: Color,
+    val danger: Color,
+    val onDanger: Color,
+    val mapLand: Color,
+    val mapPark: Color,
+    val mapWater: Color,
+    val mapRoad: Color,
+)
 
-internal val LightColorScheme =
-    lightColorScheme(
-        primary = Color(0xFF2E7D32),
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFB9F6CA),
-        onPrimaryContainer = Color(0xFF0B3D12),
-        secondary = Color(0xFF4E6E51),
-        secondaryContainer = Color(0xFFD0F1D5),
-        onSecondaryContainer = Color(0xFF0C1F10),
-        background = Color(0xFFFBFDF7),
-        onBackground = Color(0xFF1A1C1A),
-        surface = Color(0xFFFBFDF7),
-        onSurface = Color(0xFF1A1C1A),
-        surfaceVariant = Color(0xFFDDE5DA),
-        onSurfaceVariant = Color(0xFF424940),
-        error = Color(0xFFBA1A1A),
-        onError = Color.White,
-        errorContainer = Color(0xFFFFDAD6),
-        onErrorContainer = Color(0xFF410002),
+/** "Sol": claro, alto contraste, pensado para pedalear a pleno día. Tema por defecto. */
+val SolColors =
+    BuzzColors(
+        ground = Color(0xFFF6F4EC),
+        ink = Color(0xFF111111),
+        accent = Color(0xFFFFC400),
+        onAccent = Color(0xFF111111),
+        panel = Color(0xFFE6E2D2),
+        danger = Color(0xFFC1121F),
+        onDanger = Color(0xFFFFFFFF),
+        mapLand = Color(0xFFE6E2D2),
+        mapPark = Color(0xFFCBDDAE),
+        mapWater = Color(0xFFA8CBE2),
+        mapRoad = Color(0xFFFFFFFF),
     )
 
-internal val DarkColorScheme =
-    darkColorScheme(
-        primary = Color(0xFF9DD69F),
-        onPrimary = Color(0xFF0B3D12),
-        primaryContainer = Color(0xFF1B5E20),
-        onPrimaryContainer = Color(0xFFB9F6CA),
-        secondary = Color(0xFFB4D8B8),
-        secondaryContainer = Color(0xFF365239),
-        onSecondaryContainer = Color(0xFFD0F1D5),
-        background = Color(0xFF111410),
-        onBackground = Color(0xFFE2E3DE),
-        surface = Color(0xFF111410),
-        onSurface = Color(0xFFE2E3DE),
-        surfaceVariant = Color(0xFF424940),
-        onSurfaceVariant = Color(0xFFC2C9BE),
-        error = Color(0xFFFFB4AB),
-        onError = Color(0xFF690005),
-        errorContainer = Color(0xFF93000A),
-        onErrorContainer = Color(0xFFFFDAD6),
+/** "Noche": mismo acento sobre fondo casi negro. */
+val NocheColors =
+    BuzzColors(
+        ground = Color(0xFF0B0B0B),
+        ink = Color(0xFFF6F4EC),
+        accent = Color(0xFFFFC400),
+        onAccent = Color(0xFF111111),
+        panel = Color(0xFF1D1D1B),
+        danger = Color(0xFFD62839),
+        onDanger = Color(0xFFFFFFFF),
+        mapLand = Color(0xFF1D1D1B),
+        mapPark = Color(0xFF26331F),
+        mapWater = Color(0xFF15293A),
+        mapRoad = Color(0xFF3B3B36),
     )
+
+/** Mapeo a Material 3 para que los componentes M3 hereden la marca sin tintes de superficie. */
+internal fun BuzzColors.toM3(dark: Boolean): ColorScheme =
+    if (dark) {
+        darkColorScheme(
+            primary = accent,
+            onPrimary = onAccent,
+            secondary = ink,
+            onSecondary = ground,
+            background = ground,
+            onBackground = ink,
+            surface = ground,
+            onSurface = ink,
+            surfaceVariant = panel,
+            onSurfaceVariant = ink,
+            surfaceContainerLowest = ground,
+            surfaceContainerLow = panel,
+            surfaceContainer = panel,
+            surfaceContainerHigh = panel,
+            surfaceContainerHighest = panel,
+            outline = ink,
+            error = danger,
+            onError = onDanger,
+        )
+    } else {
+        lightColorScheme(
+            primary = accent,
+            onPrimary = onAccent,
+            secondary = ink,
+            onSecondary = ground,
+            background = ground,
+            onBackground = ink,
+            surface = ground,
+            onSurface = ink,
+            surfaceVariant = panel,
+            onSurfaceVariant = ink,
+            surfaceContainerLowest = ground,
+            surfaceContainerLow = panel,
+            surfaceContainer = panel,
+            surfaceContainerHigh = panel,
+            surfaceContainerHighest = panel,
+            outline = ink,
+            error = danger,
+            onError = onDanger,
+        )
+    }
