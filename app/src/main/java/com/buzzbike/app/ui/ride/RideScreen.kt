@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.buzzbike.app.domain.calories.CalorieSummary
 import com.buzzbike.app.domain.ride.session.GpsStatus
 import com.buzzbike.app.domain.ride.session.LiveMetrics
 import com.buzzbike.app.domain.ride.session.RideSessionState
@@ -52,9 +50,12 @@ import com.buzzbike.app.domain.ride.session.RideSummary
 import com.buzzbike.app.ui.components.BuzzButton
 import com.buzzbike.app.ui.components.BuzzDisplay
 import com.buzzbike.app.ui.components.HoldToStopButton
-import com.buzzbike.app.ui.components.MetricCell
+import com.buzzbike.app.ui.components.MetricCellData
+import com.buzzbike.app.ui.components.MetricGrid
+import com.buzzbike.app.ui.components.RideMetricLabels
 import com.buzzbike.app.ui.components.StatusBanner
 import com.buzzbike.app.ui.components.StatusTone
+import com.buzzbike.app.ui.components.calorieMetricCell
 import com.buzzbike.app.ui.theme.BuzzDimens
 import com.buzzbike.app.ui.theme.BuzzTheme
 import java.util.Locale
@@ -62,20 +63,9 @@ import java.util.Locale
 private const val TRACE_HEIGHT_DP = 230
 private const val CONTENT_PADDING_DP = 16
 private const val SECTION_GAP_DP = 16
-private const val GRID_GAP_DP = 8
 private const val DIALOG_PADDING_DP = 20
 private const val LOADING_TOP_PADDING_DP = 32
-private const val METRIC_COLUMNS = 2
 private const val PAUSED_SPEED_MPS = 0.0
-private const val CALORIES_LABEL = "Calorías"
-private const val DISTANCE_LABEL = "Distancia"
-private const val MOVING_TIME_LABEL = "En movimiento"
-private const val STOPPED_TIME_LABEL = "Detenido"
-private const val ELEVATION_LABEL = "Desnivel"
-private const val ELEVATION_GAIN_LABEL = "Desnivel +"
-private const val ELEVATION_LOSS_LABEL = "Desnivel −"
-private const val AVG_SPEED_LABEL = "Velocidad media"
-private const val MAX_SPEED_LABEL = "Velocidad máxima"
 private const val LOADING_TEXT = "Cargando…"
 private const val START_LABEL = "INICIAR RIDE"
 private const val PAUSE_LABEL = "PAUSA"
@@ -86,6 +76,7 @@ private const val CONFIRM_DISCARD_LABEL = "DESCARTAR DEFINITIVAMENTE"
 private const val CANCEL_LABEL = "CANCELAR"
 private const val RECOVER_LABEL = "RECUPERAR"
 private const val SETTINGS_LABEL = "Ajustes de sync"
+private const val HISTORY_LABEL = "HISTORIAL"
 private const val AUTO_PAUSE_TEXT = "Pausa automática"
 private const val PAUSED_TEXT = "En pausa"
 private const val FINISHED_TITLE = "RIDE TERMINADO"
@@ -104,6 +95,7 @@ private const val DISCARD_RECOVERABLE_MESSAGE =
 @Composable
 fun RideScreen(
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     viewModel: RideViewModel = hiltViewModel(),
 ) {
     val sessionState by viewModel.state.collectAsState()
@@ -137,6 +129,7 @@ fun RideScreen(
         permissionResult = permissionResult,
         onRequestPermission = onRequestPermission,
         onOpenSettings = onOpenSettings,
+        onOpenHistory = onOpenHistory,
         onStart = viewModel::startRide,
         onPause = viewModel::pauseRide,
         onResume = viewModel::resumeRide,
@@ -166,6 +159,7 @@ private fun RideContent(
     permissionResult: LocationPermissionRequestResult,
     onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -203,6 +197,7 @@ private fun RideContent(
                     onRequestPermission = onRequestPermission,
                     onStart = onStart,
                     onOpenSettings = onOpenSettings,
+                    onOpenHistory = onOpenHistory,
                 )
             is RideSessionState.Recording ->
                 ActiveRideContent(
@@ -286,6 +281,7 @@ private fun ReadyContent(
     onRequestPermission: () -> Unit,
     onStart: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
 ) {
     val colors = BuzzTheme.colors
     val hasPermission = state.gps != GpsStatus.NO_PERMISSION
@@ -331,6 +327,12 @@ private fun ReadyContent(
     BuzzButton(
         text = SETTINGS_LABEL,
         onClick = onOpenSettings,
+        modifier = Modifier.fillMaxWidth(),
+        primary = false,
+    )
+    BuzzButton(
+        text = HISTORY_LABEL,
+        onClick = onOpenHistory,
         modifier = Modifier.fillMaxWidth(),
         primary = false,
     )
@@ -401,32 +403,6 @@ private fun FinishedContent(
         onClick = onDiscardRequest,
         modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
     )
-}
-
-@Composable
-private fun MetricGrid(cells: List<MetricCellData>) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
-    ) {
-        cells.chunked(METRIC_COLUMNS).forEach { rowCells ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),
-            ) {
-                rowCells.forEach { cell ->
-                    MetricCell(
-                        label = cell.label,
-                        value = cell.value,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (rowCells.size < METRIC_COLUMNS) {
-                    Box(Modifier.weight(1f))
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -561,10 +537,10 @@ private fun liveMetricCells(
     locale: Locale,
 ): List<MetricCellData> =
     listOf(
-        MetricCellData(DISTANCE_LABEL, RideFormat.distanceKm(live.distanceM, locale)),
-        MetricCellData(MOVING_TIME_LABEL, RideFormat.duration(live.movingSeconds)),
-        MetricCellData(ELEVATION_LABEL, RideFormat.elevationM(live.elevationGainM, locale)),
-        calorieCell(live.calories, live.hasProfile, locale),
+        MetricCellData(RideMetricLabels.DISTANCE, RideFormat.distanceKm(live.distanceM, locale)),
+        MetricCellData(RideMetricLabels.MOVING_TIME, RideFormat.duration(live.movingSeconds)),
+        MetricCellData(RideMetricLabels.ELEVATION, RideFormat.elevationM(live.elevationGainM, locale)),
+        calorieMetricCell(live.calories, live.hasProfile, locale),
     )
 
 private fun finishedMetricCells(
@@ -574,35 +550,13 @@ private fun finishedMetricCells(
     val descriptors = summary.descriptors
     val elevation = summary.elevation
     return listOf(
-        MetricCellData(DISTANCE_LABEL, RideFormat.distanceKm(descriptors.distanceM, locale)),
-        MetricCellData(MOVING_TIME_LABEL, RideFormat.duration(descriptors.movingSeconds)),
-        MetricCellData(STOPPED_TIME_LABEL, RideFormat.duration(descriptors.stoppedSeconds)),
-        MetricCellData(ELEVATION_GAIN_LABEL, RideFormat.elevationM(elevation.gainM, locale)),
-        MetricCellData(ELEVATION_LOSS_LABEL, RideFormat.elevationM(elevation.lossM, locale)),
-        MetricCellData(AVG_SPEED_LABEL, RideFormat.speedKmh(descriptors.avgSpeedMps, locale)),
-        MetricCellData(MAX_SPEED_LABEL, RideFormat.speedKmh(descriptors.maxSpeedMps, locale)),
-        calorieCell(summary.calories, summary.hasProfile, locale),
+        MetricCellData(RideMetricLabels.DISTANCE, RideFormat.distanceKm(descriptors.distanceM, locale)),
+        MetricCellData(RideMetricLabels.MOVING_TIME, RideFormat.duration(descriptors.movingSeconds)),
+        MetricCellData(RideMetricLabels.STOPPED_TIME, RideFormat.duration(descriptors.stoppedSeconds)),
+        MetricCellData(RideMetricLabels.ELEVATION_GAIN, RideFormat.elevationM(elevation.gainM, locale)),
+        MetricCellData(RideMetricLabels.ELEVATION_LOSS, RideFormat.elevationM(elevation.lossM, locale)),
+        MetricCellData(RideMetricLabels.AVG_SPEED, RideFormat.speedKmh(descriptors.avgSpeedMps, locale)),
+        MetricCellData(RideMetricLabels.MAX_SPEED, RideFormat.speedKmh(descriptors.maxSpeedMps, locale)),
+        calorieMetricCell(summary.calories, summary.hasProfile, locale),
     )
 }
-
-/**
- * La banda y el modelo se muestran juntos (ADR-001, AGENTS.md §6.4). Si no hay
- * estimación usable, la celda degrada a [RideFormat.UNKNOWN].
- */
-private fun calorieCell(
-    calories: CalorieSummary?,
-    hasProfile: Boolean,
-    locale: Locale,
-): MetricCellData {
-    val band = RideFormat.caloriesBand(calories, hasProfile, locale)
-    return if (band == null) {
-        MetricCellData(CALORIES_LABEL, RideFormat.UNKNOWN)
-    } else {
-        MetricCellData("$CALORIES_LABEL · ${band.model}", band.value)
-    }
-}
-
-private data class MetricCellData(
-    val label: String,
-    val value: String,
-)

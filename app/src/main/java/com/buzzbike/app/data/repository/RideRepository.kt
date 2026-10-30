@@ -4,11 +4,16 @@ import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
+import com.buzzbike.app.domain.history.RideDetail
+import com.buzzbike.app.domain.history.RideDetailSource
+import com.buzzbike.app.domain.history.RideHistorySource
+import com.buzzbike.app.domain.history.RideRecord
 import com.buzzbike.app.domain.model.RideDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
 import com.buzzbike.app.domain.ride.session.RideSessionWriter
 import com.buzzbike.app.domain.ride.session.TrackPointWriter
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,12 +28,27 @@ class RideRepository
         private val rideDao: RideDao,
         private val trackPointDao: TrackPointDao,
     ) : TrackPointWriter,
-        RideSessionWriter {
+        RideSessionWriter,
+        RideHistorySource,
+        RideDetailSource {
         fun getAllRides(): Flow<List<RideEntity>> = rideDao.getAllRides()
+
+        override fun observeCompletedRides(): Flow<List<RideRecord>> =
+            rideDao.getAllRides().map { rides -> rides.filterNot { it.isActive }.map { it.toRideRecord() } }
 
         fun getActiveRide(): Flow<RideEntity?> = rideDao.getActiveRide()
 
         suspend fun getRideById(id: String): RideEntity? = rideDao.getRideById(id)
+
+        override suspend fun getRideDetail(rideId: String): RideDetail? {
+            val entity = rideDao.getRideById(rideId) ?: return null
+            // The ride still being recorded is not history yet.
+            return if (entity.isActive) {
+                null
+            } else {
+                RideDetail(ride = entity.toRideRecord(), points = loadTrackPoints(rideId))
+            }
+        }
 
         /**
          * Returns the full persisted ride, including every final descriptor
