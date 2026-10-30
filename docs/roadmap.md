@@ -10,9 +10,10 @@
 ## 1. Estado actual
 
 > **Nota breve (2026-10-30).** El estado vigente del proyecto se mantiene en
-> **`AGENTS.md` §0**. A la fecha: **U0 (tema/componentes), L1 (pause/resume + FGS)
-> y U1 (Ride en vivo) están hechos**; el próximo slice es **U2 (historial/detalle
-> + GPX)**. El resto de este documento queda como **referencia de fases y
+> **`AGENTS.md` §0**. A la fecha: **U0 (tema/componentes), L1 (pause/resume + FGS),
+> U1 (Ride en vivo) y U1.1 (permiso de ubicación en runtime) están hechos**; el
+> próximo slice es **U2 (historial/detalle + GPX)**. El resto de este documento
+> queda como **referencia de fases y
 > criterios**, no como estado real; si hay conflicto, manda `AGENTS.md` §0.
 
 ---
