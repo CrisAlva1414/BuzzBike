@@ -42,7 +42,7 @@ androidxTestExtJunit = "1.2.1" # AndroidJUnit4 runner for instrumented tests
 androidxTestRunner = "1.6.2"   # AndroidJUnitRunner (androidTest)
 androidxTestRules = "1.6.1"    # JUnit rules for instrumented tests
 workManager = "2.10.5"        # background outbox sync with network constraint
-sqlcipher = "4.9.0"           # Room database encryption at rest (S2)
+sqlcipher = "4.19.1"          # Room database encryption at rest (S2)
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

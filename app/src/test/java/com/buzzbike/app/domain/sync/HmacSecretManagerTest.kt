@@ -32,7 +32,7 @@ class HmacSecretManagerTest {
         val stored = storage.readSealed()
         assertNotNull(stored)
         assertFalse(stored.contentEquals(original))
-        assertTrue(stored.contentEquals(sealer.seal(original)))
+        assertTrue(stored.contentEquals(sealer.seal(original, SecretSealer.PURPOSE_HMAC_SECRET)))
     }
 
     @Test
@@ -73,7 +73,11 @@ class HmacSecretManagerTest {
 
         val stored = storage.readSealed()
         assertNotNull(stored)
-        assertTrue(stored.contentEquals(sealer.seal(secretOf(SECRET_BYTES, SECOND_BYTE))))
+        assertTrue(
+            stored.contentEquals(
+                sealer.seal(secretOf(SECRET_BYTES, SECOND_BYTE), SecretSealer.PURPOSE_HMAC_SECRET),
+            ),
+        )
     }
 
     @Test
@@ -100,10 +104,15 @@ class HmacSecretManagerTest {
 
 /** Reversible fake: `seal` and `unseal` both invert every byte. */
 private class InvertingSecretSealer : SecretSealer {
-    override fun seal(plaintext: ByteArray): ByteArray =
-        plaintext.map { byte -> (byte.toInt() xor XOR_MASK).toByte() }.toByteArray()
+    override fun seal(
+        plaintext: ByteArray,
+        purpose: String,
+    ): ByteArray = plaintext.map { byte -> (byte.toInt() xor XOR_MASK).toByte() }.toByteArray()
 
-    override fun unseal(sealed: ByteArray): ByteArray = seal(sealed)
+    override fun unseal(
+        sealed: ByteArray,
+        purpose: String,
+    ): UnsealedSecret = UnsealedSecret(seal(sealed, purpose), wasLegacy = false)
 
     private companion object {
         const val XOR_MASK = 0xFF

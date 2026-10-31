@@ -10,6 +10,7 @@ import com.buzzbike.app.domain.sync.SecretSealer
 import com.buzzbike.app.domain.sync.SecretStorage
 import com.buzzbike.app.domain.sync.SyncConfigStore
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
+import com.buzzbike.app.domain.sync.UnsealedSecret
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -415,9 +416,15 @@ class SyncSettingsViewModelTest {
 
     /** Reversible passthrough: enough for presence checks in these tests. */
     private class IdentitySecretSealer : SecretSealer {
-        override fun seal(plaintext: ByteArray): ByteArray = plaintext.copyOf()
+        override fun seal(
+            plaintext: ByteArray,
+            purpose: String,
+        ): ByteArray = plaintext.copyOf()
 
-        override fun unseal(sealed: ByteArray): ByteArray = sealed.copyOf()
+        override fun unseal(
+            sealed: ByteArray,
+            purpose: String,
+        ): UnsealedSecret = UnsealedSecret(sealed.copyOf(), wasLegacy = false)
     }
 
     private class InMemorySecretStorage : SecretStorage {

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import com.buzzbike.app.domain.sync.SecretSealer
+import com.buzzbike.app.domain.sync.UnsealedSecret
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -64,7 +65,7 @@ class DatabasePassphraseProviderTest {
         assertArrayEquals(
             "stored blob must unseal to the generated passphrase",
             passphrase,
-            sealer.unseal(sealed),
+            sealer.unseal(sealed, SecretSealer.PURPOSE_DATABASE_PASSPHRASE).plaintext,
         )
     }
 
@@ -100,6 +101,42 @@ class DatabasePassphraseProviderTest {
 
         assertEquals(
             "a failed unseal must not replace the stored blob",
+            encoded,
+            preferences.getString(KEY_SEALED_PASSPHRASE, null),
+        )
+    }
+
+    @Test
+    fun given_legacyBlobWithoutPurposeAad_when_getPassphrase_thenReturnsItAndReseals() {
+        val sealer = XorSecretSealer()
+        val passphrase = ByteArray(PASSPHRASE_BYTES) { index -> (index + 1).toByte() }
+        val legacy = Base64.encodeToString(sealer.sealLegacy(passphrase), Base64.NO_WRAP)
+        preferences.edit().putString(KEY_SEALED_PASSPHRASE, legacy).commit()
+
+        val result = DatabasePassphraseProvider(context, sealer).getPassphrase()
+
+        assertArrayEquals(passphrase, result)
+        val resealed = Base64.decode(requireNotNull(preferences.getString(KEY_SEALED_PASSPHRASE, null)), Base64.NO_WRAP)
+        val unsealed = sealer.unseal(resealed, SecretSealer.PURPOSE_DATABASE_PASSPHRASE)
+        assertFalse("legacy blob must be re-sealed with purpose AAD", unsealed.wasLegacy)
+        assertArrayEquals(passphrase, unsealed.plaintext)
+    }
+
+    @Test
+    fun given_hmacPurposeBlob_when_getPassphrase_thenFailsClosed() {
+        val sealer = XorSecretSealer()
+        val encoded =
+            Base64.encodeToString(
+                sealer.seal(ByteArray(PASSPHRASE_BYTES), SecretSealer.PURPOSE_HMAC_SECRET),
+                Base64.NO_WRAP,
+            )
+        preferences.edit().putString(KEY_SEALED_PASSPHRASE, encoded).commit()
+        val provider = DatabasePassphraseProvider(context, sealer)
+
+        assertThrows(IllegalStateException::class.java) { provider.getPassphrase() }
+
+        assertEquals(
+            "a cross-purpose blob must not be replaced",
             encoded,
             preferences.getString(KEY_SEALED_PASSPHRASE, null),
         )
@@ -169,21 +206,67 @@ class DatabasePassphraseProviderTest {
     }
 }
 
-/** Reversible fake: `seal` and `unseal` both XOR every byte with the same mask. */
+/**
+ * Reversible fake that binds the purpose into the blob, mimicking AES-GCM AAD.
+ *
+ * Current layout: `[1][purposeLength][purpose][xor plaintext]`.
+ * Legacy layout: `[0][xor plaintext]`, i.e. a blob written before this change.
+ */
 private class XorSecretSealer : SecretSealer {
-    override fun seal(plaintext: ByteArray): ByteArray =
-        ByteArray(plaintext.size) { index -> (plaintext[index].toInt() xor XOR_MASK).toByte() }
+    override fun seal(
+        plaintext: ByteArray,
+        purpose: String,
+    ): ByteArray {
+        val purposeBytes = purpose.toByteArray(Charsets.UTF_8)
+        return byteArrayOf(CURRENT_MARKER, purposeBytes.size.toByte()) +
+            purposeBytes +
+            xor(plaintext)
+    }
 
-    override fun unseal(sealed: ByteArray): ByteArray = seal(sealed)
+    override fun unseal(
+        sealed: ByteArray,
+        purpose: String,
+    ): UnsealedSecret {
+        require(sealed.isNotEmpty()) { "corrupt blob" }
+        return when (sealed[0]) {
+            CURRENT_MARKER -> {
+                val purposeLength = sealed[1].toInt()
+                val purposeEnd = CURRENT_HEADER_BYTES + purposeLength
+                require(purposeEnd <= sealed.size) { "corrupt blob" }
+                val storedPurpose = sealed.copyOfRange(CURRENT_HEADER_BYTES, purposeEnd).toString(Charsets.UTF_8)
+                require(storedPurpose == purpose) { "blob was sealed for another purpose" }
+                UnsealedSecret(xor(sealed.copyOfRange(purposeEnd, sealed.size)), wasLegacy = false)
+            }
+
+            LEGACY_MARKER -> UnsealedSecret(xor(sealed.copyOfRange(1, sealed.size)), wasLegacy = true)
+
+            else -> throw IllegalArgumentException("corrupt blob")
+        }
+    }
+
+    /** Builds a pre-AAD blob, as an old app version would have written it. */
+    fun sealLegacy(plaintext: ByteArray): ByteArray = byteArrayOf(LEGACY_MARKER) + xor(plaintext)
+
+    private fun xor(bytes: ByteArray): ByteArray =
+        ByteArray(bytes.size) { index -> (bytes[index].toInt() xor XOR_MASK).toByte() }
 
     private companion object {
         const val XOR_MASK = 0x5A
+        const val CURRENT_HEADER_BYTES = 2
+        const val CURRENT_MARKER: Byte = 1
+        const val LEGACY_MARKER: Byte = 0
     }
 }
 
 /** Mimics a blob sealed with a different (lost) key. */
 private class RejectingSecretSealer : SecretSealer {
-    override fun seal(plaintext: ByteArray): ByteArray = plaintext.copyOf()
+    override fun seal(
+        plaintext: ByteArray,
+        purpose: String,
+    ): ByteArray = plaintext.copyOf()
 
-    override fun unseal(sealed: ByteArray): ByteArray = throw IllegalArgumentException("corrupt blob")
+    override fun unseal(
+        sealed: ByteArray,
+        purpose: String,
+    ): UnsealedSecret = throw IllegalArgumentException("corrupt blob")
 }

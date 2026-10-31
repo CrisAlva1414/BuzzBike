@@ -41,7 +41,9 @@ val keystoreProperties =
     }
 val hasReleaseSigning =
     keystorePropertiesFile.exists() &&
-        keystoreProperties.getProperty("storeFile") != null
+        listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
+            !keystoreProperties.getProperty(it).isNullOrBlank()
+        }
 
 android {
     namespace = "com.buzzbike.app"
@@ -80,6 +82,10 @@ android {
 
     buildTypes {
         release {
+            // Release artifacts must never be debuggable, even though this is
+            // also AGP's default: make it explicit so a future build-type
+            // change cannot silently publish a debuggable APK.
+            isDebuggable = false
             // No minify/shrink in the scaffold — enable once proguard rules exist.
             isMinifyEnabled = false
             isShrinkResources = false

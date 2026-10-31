@@ -6,7 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           # Install only platform-tools: the action's default package list still
           # references the legacy `tools` package, which no longer exists in the
@@ -34,26 +34,81 @@ jobs:
           # that expose it, and fall back to the currently published package.
           sdkmanager --install "platform-tools" "platforms;android-37" "build-tools;36.0.0" \
             || sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
       - name: Gate
         run: ./gradlew test ktlintCheck detekt lintDebug assembleDebug --stacktrace
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+      # Build artifact only: this is deliberately NOT published as a release.
+      # A debug APK is debuggable and signed with the shared debug key, so it
+      # must never be handed out as a production artifact.
+      - name: Upload debug APK (build artifact only)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: buzzbike-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      # This publishes the DEBUG APK (signed with the debug keystore and
-      # installable via sideload). A production-signed release requires a
-      # real keystore plus signing secrets, which are intentionally not
-      # configured in this repository yet.
-      - name: Publish release APK on tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+
+  release:
+    # Tag pushes only. The release build must be signed with the production
+    # keystore; if the signing secrets are absent this job fails instead of
+    # publishing anything (a debug-signed APK is not a release).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
-          files: app/build/outputs/apk/debug/app-debug.apk
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          packages: "platform-tools"
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-37" "build-tools;36.0.0" \
+            || sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - name: Configure release signing
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "${RELEASE_KEYSTORE_BASE64}" ] || \
+             [ -z "${RELEASE_KEYSTORE_PASSWORD}" ] || \
+             [ -z "${RELEASE_KEY_ALIAS}" ] || \
+             [ -z "${RELEASE_KEY_PASSWORD}" ]; then
+            echo "::error::release signing not configured: define RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD"
+            exit 1
+          fi
+
+          umask 077
+          printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/release.keystore"
+          cat > keystore.properties <<EOF
+          storeFile=${RUNNER_TEMP}/release.keystore
+          storePassword=${RELEASE_KEYSTORE_PASSWORD}
+          keyAlias=${RELEASE_KEY_ALIAS}
+          keyPassword=${RELEASE_KEY_PASSWORD}
+          EOF
+      - name: Build release APK
+        run: ./gradlew assembleRelease --stacktrace
+      - name: Generate SHA-256 checksum
+        run: |
+          cd app/build/outputs/apk/release
+          sha256sum app-release.apk > app-release.apk.sha256
+          cat app-release.apk.sha256
+      - name: Publish release APK on tag
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/app-release.apk.sha256
           name: BuzzBike ${{ github.ref_name }}
           body: |
-            APK de debug firmado con la clave de debug (instalable con sideload).
-            Requiere habilitar "Instalar apps desconocidas" para el navegador/gestor de archivos.
-            La release firmada de producción requiere keystore y secrets (pendiente).
+            APK de release firmado con la keystore de producción.
+            Verificá la integridad con el archivo `.sha256` adjunto:
+            `sha256sum -c app-release.apk.sha256`.

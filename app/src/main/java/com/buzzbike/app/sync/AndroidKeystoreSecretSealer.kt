@@ -3,6 +3,8 @@ package com.buzzbike.app.sync
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.buzzbike.app.domain.sync.SecretSealer
+import com.buzzbike.app.domain.sync.UnsealedSecret
+import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -19,6 +21,11 @@ import javax.inject.Singleton
  * sealed blob is persisted. The AES key itself can never be read out of the
  * keystore, so copying the blob to another device does not reveal the secret.
  *
+ * The caller-supplied purpose is authenticated as AES-GCM associated data, so
+ * a blob sealed for the database passphrase cannot be opened as the HMAC
+ * secret, or vice versa. Both purposes can share the same keystore key because
+ * the AAD — not the key — separates them.
+ *
  * Blob layout: `[ivLen:1 byte][iv][ciphertext+tag]`. The random IV is the one
  * the cipher generates for each [seal] call — never reused.
  *
@@ -31,9 +38,13 @@ import javax.inject.Singleton
 class AndroidKeystoreSecretSealer
     @Inject
     constructor() : SecretSealer {
-        override fun seal(plaintext: ByteArray): ByteArray {
+        override fun seal(
+            plaintext: ByteArray,
+            purpose: String,
+        ): ByteArray {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+            cipher.updateAAD(associatedData(purpose))
             val iv = cipher.iv
             require(iv.size <= MAX_IV_BYTES) { "GCM IV does not fit the length prefix" }
             val encrypted = cipher.doFinal(plaintext)
@@ -44,25 +55,66 @@ class AndroidKeystoreSecretSealer
             return sealed
         }
 
-        override fun unseal(sealed: ByteArray): ByteArray {
+        override fun unseal(
+            sealed: ByteArray,
+            purpose: String,
+        ): UnsealedSecret {
             val ivLength =
                 ivLengthOrNull(sealed)
                     ?: throw IllegalArgumentException(CORRUPT_MESSAGE)
             val iv = sealed.copyOfRange(IV_LENGTH_PREFIX_BYTES, IV_LENGTH_PREFIX_BYTES + ivLength)
             val ciphertext = sealed.copyOfRange(IV_LENGTH_PREFIX_BYTES + ivLength, sealed.size)
-            return try {
-                val cipher = Cipher.getInstance(TRANSFORMATION)
-                cipher.init(
-                    Cipher.DECRYPT_MODE,
-                    getOrCreateKey(),
-                    GCMParameterSpec(TAG_LENGTH_BITS, iv),
-                )
-                cipher.doFinal(ciphertext)
-            } catch (expected: Exception) {
-                // Never include the blob, the IV or the underlying cause in the
-                // message: it reaches callers and potentially logs.
-                throw IllegalArgumentException(CORRUPT_MESSAGE)
+            val aad = associatedData(purpose)
+
+            // Current format: the purpose is authenticated. If that fails, the
+            // blob predates purpose AAD and is decrypted through the legacy
+            // path; the caller then re-seals it with AAD.
+            val current =
+                try {
+                    decrypt(iv, ciphertext, aad)
+                } catch (expected: Exception) {
+                    null
+                }
+            if (current != null) return UnsealedSecret(current, wasLegacy = false)
+
+            val legacy =
+                try {
+                    decrypt(iv, ciphertext, associatedData = null)
+                } catch (expected: Exception) {
+                    // Never include the blob, the IV or the underlying cause in
+                    // the message: it reaches callers and potentially logs.
+                    throw IllegalArgumentException(CORRUPT_MESSAGE)
+                }
+            return UnsealedSecret(legacy, wasLegacy = true)
+        }
+
+        private fun decrypt(
+            iv: ByteArray,
+            ciphertext: ByteArray,
+            associatedData: ByteArray?,
+        ): ByteArray {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                getOrCreateKey(),
+                GCMParameterSpec(TAG_LENGTH_BITS, iv),
+            )
+            if (associatedData != null) cipher.updateAAD(associatedData)
+            return cipher.doFinal(ciphertext)
+        }
+
+        /**
+         * Converts [purpose] into AAD bytes.
+         *
+         * Purposes are internal constants, but reject a blank or oversized
+         * value so a future caller cannot accidentally seal with no binding or
+         * unbound AAD growth.
+         */
+        private fun associatedData(purpose: String): ByteArray {
+            require(purpose.isNotBlank() && purpose.length <= MAX_PURPOSE_CHARS) {
+                "invalid secret purpose"
             }
+            return purpose.toByteArray(StandardCharsets.UTF_8)
         }
 
         /**
@@ -131,6 +183,7 @@ class AndroidKeystoreSecretSealer
             const val TAG_LENGTH_BITS = 128
             const val TAG_LENGTH_BYTES = TAG_LENGTH_BITS / 8
 
+            const val MAX_PURPOSE_CHARS = 64
             const val CORRUPT_MESSAGE = "sealed secret is corrupt"
             val KEYSTORE_LOCK = Any()
         }

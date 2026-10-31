@@ -29,6 +29,12 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object SecretModule {
+    /**
+     * A single keystore-backed sealer serves both secrets: every
+     * [SecretSealer.seal]/[SecretSealer.unseal] call authenticates its purpose
+     * as AAD, so a database-passphrase blob cannot be opened as the HMAC
+     * secret (or vice versa) even though they share the keystore key.
+     */
     @Provides
     @Singleton
     fun provideSecretSealer(): SecretSealer = AndroidKeystoreSecretSealer()

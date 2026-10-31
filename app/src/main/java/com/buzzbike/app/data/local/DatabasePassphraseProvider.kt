@@ -47,7 +47,7 @@ class DatabasePassphraseProvider
         private fun generateAndPersist(): ByteArray {
             val passphrase = ByteArray(PASSPHRASE_BYTES)
             SECURE_RANDOM.nextBytes(passphrase)
-            val encoded = Base64.encodeToString(sealer.seal(passphrase), Base64.NO_WRAP)
+            val encoded = Base64.encodeToString(seal(passphrase), Base64.NO_WRAP)
             check(preferences.edit().putString(KEY_SEALED_PASSPHRASE, encoded).commit()) {
                 "failed to persist the sealed database passphrase"
             }
@@ -61,12 +61,23 @@ class DatabasePassphraseProvider
                 } catch (expected: IllegalArgumentException) {
                     throw IllegalStateException(CORRUPT_MESSAGE)
                 }
-            return try {
-                sealer.unseal(sealed)
-            } catch (expected: IllegalArgumentException) {
-                throw IllegalStateException(CORRUPT_MESSAGE)
+            val unsealed =
+                try {
+                    sealer.unseal(sealed, SecretSealer.PURPOSE_DATABASE_PASSPHRASE)
+                } catch (expected: IllegalArgumentException) {
+                    throw IllegalStateException(CORRUPT_MESSAGE)
+                }
+            if (unsealed.wasLegacy) {
+                val resealed = Base64.encodeToString(seal(unsealed.plaintext), Base64.NO_WRAP)
+                check(preferences.edit().putString(KEY_SEALED_PASSPHRASE, resealed).commit()) {
+                    "failed to persist the re-sealed database passphrase"
+                }
             }
+            return unsealed.plaintext
         }
+
+        private fun seal(plaintext: ByteArray): ByteArray =
+            sealer.seal(plaintext, SecretSealer.PURPOSE_DATABASE_PASSPHRASE)
 
         private companion object {
             const val PREFERENCES_NAME = "db_secrets_v1"

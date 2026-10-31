@@ -60,7 +60,7 @@ class HmacSecretManager(
 
     private fun persist(secret: ByteArray): ImportResult =
         try {
-            storage.writeSealed(sealer.seal(secret))
+            storage.writeSealed(sealer.seal(secret, SecretSealer.PURPOSE_HMAC_SECRET))
             ImportResult.Success
         } catch (expected: Exception) {
             ImportResult.Failure

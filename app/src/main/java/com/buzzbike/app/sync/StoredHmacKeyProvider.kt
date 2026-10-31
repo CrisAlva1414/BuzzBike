@@ -27,7 +27,13 @@ class StoredHmacKeyProvider(
         val sealed =
             storage.readSealed()
                 ?: throw HmacSecretMissingException()
-        val secretBytes = sealer.unseal(sealed)
+        val unsealed = sealer.unseal(sealed, SecretSealer.PURPOSE_HMAC_SECRET)
+        if (unsealed.wasLegacy) {
+            // Transparent migration: blobs written before purpose AAD existed
+            // are re-sealed (and re-persisted) as soon as they are read.
+            storage.writeSealed(sealer.seal(unsealed.plaintext, SecretSealer.PURPOSE_HMAC_SECRET))
+        }
+        val secretBytes = unsealed.plaintext
         try {
             // SecretKeySpec copies the array internally, so zeroing it below
             // does not corrupt the key.
