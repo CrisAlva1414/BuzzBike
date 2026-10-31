@@ -11,6 +11,9 @@ import com.buzzbike.app.domain.sync.OutboxEnqueuer
 import com.buzzbike.app.domain.sync.OutboxStore
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
 import com.buzzbike.app.domain.sync.RideSyncDataSource
+import com.buzzbike.app.domain.sync.SyncConsentGate
+import com.buzzbike.app.domain.sync.SyncGatekeeper
+import com.buzzbike.app.domain.sync.SyncMutationGate
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
 import com.buzzbike.app.sync.HmacSha256Signer
 import com.buzzbike.app.sync.HttpConnectivityChecker
@@ -56,11 +59,32 @@ object SyncModule {
     @Singleton
     fun provideSyncWorkScheduler(impl: WorkManagerSyncScheduler): SyncWorkScheduler = impl
 
+    /**
+     * One gate for the whole process: the settings view-model and the ride
+     * enqueue path must share the same lock and revocation epoch, otherwise a
+     * disconnect in one instance cannot invalidate a save or enqueue in
+     * another.
+     */
+    @Provides
+    @Singleton
+    fun provideSyncMutationGate(): SyncMutationGate = SyncMutationGate()
+
+    @Provides
+    @Singleton
+    fun provideSyncConsentGate(gatekeeper: SyncGatekeeper): SyncConsentGate = gatekeeper
+
     @Provides
     @Singleton
     fun provideRideSyncCoordinator(
         dataSource: RideSyncDataSource,
         enqueuer: OutboxEnqueuer,
         scheduler: SyncWorkScheduler,
-    ): RideSyncCoordinator = RideSyncCoordinator(dataSource, enqueuer, scheduler)
+        gatekeeper: SyncConsentGate,
+    ): RideSyncCoordinator =
+        RideSyncCoordinator(
+            dataSource = dataSource,
+            enqueuer = enqueuer,
+            scheduler = scheduler,
+            gatekeeper = gatekeeper,
+        )
 }

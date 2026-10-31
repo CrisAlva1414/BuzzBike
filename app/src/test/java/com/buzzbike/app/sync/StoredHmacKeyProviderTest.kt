@@ -10,10 +10,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlin.concurrent.thread
 
 /**
  * JVM tests for [StoredHmacKeyProvider].
@@ -78,6 +82,31 @@ class StoredHmacKeyProviderTest {
         assertThrows(IllegalArgumentException::class.java) { provider.getOrCreateKey() }
     }
 
+    @Test
+    fun given_concurrentClearDuringLegacyMigration_when_migrationFinishes_thenDeletedSecretIsNotResurrected() {
+        val secret = secretOf(SECRET_BYTES)
+        val blockingStorage = BlockingReadSecretStorage(sealer.sealLegacy(secret))
+        val migratingProvider = StoredHmacKeyProvider(sealer, blockingStorage)
+        val clearingManager = HmacSecretManager(sealer, blockingStorage)
+
+        val migration = thread(name = "legacy-migration") { migratingProvider.getOrCreateKey() }
+        assertTrue("migration must reach the storage read", blockingStorage.awaitReadEntered())
+
+        val clear = thread(name = "secret-clear") { clearingManager.clear() }
+        // The migration holds the shared lock between its read and write. A
+        // clear that races it must wait, otherwise it could delete the secret
+        // only for the migration to write the legacy blob back.
+        clear.join(CLEAR_BLOCK_WAIT_MILLIS)
+        assertTrue("clear must wait for the in-flight migration to finish", clear.isAlive)
+
+        blockingStorage.allowReadToReturn()
+        migration.join(THREAD_JOIN_MILLIS)
+        clear.join(THREAD_JOIN_MILLIS)
+
+        assertFalse("clear must complete after the migration", clear.isAlive)
+        assertFalse("a migration must not resurrect a concurrently deleted secret", clearingManager.hasSecret())
+    }
+
     private fun hmac(
         key: javax.crypto.SecretKey,
         data: ByteArray,
@@ -90,6 +119,8 @@ class StoredHmacKeyProviderTest {
     private companion object {
         const val ALGORITHM = "HmacSHA256"
         const val SECRET_BYTES = 32
+        const val CLEAR_BLOCK_WAIT_MILLIS = 1_000L
+        const val THREAD_JOIN_MILLIS = 5_000L
 
         val DATA = """{"rideId":"ride-123","distanceM":1234.5}""".toByteArray(StandardCharsets.UTF_8)
 
@@ -165,5 +196,43 @@ private class InMemorySecretStorage : SecretStorage {
 
     override fun clear() {
         sealed = null
+    }
+}
+
+/**
+ * In-memory [SecretStorage] whose first read blocks until the test releases it,
+ * so a migration can be paused between its read and write.
+ */
+private class BlockingReadSecretStorage(
+    initial: ByteArray,
+) : SecretStorage {
+    private val readEntered = CountDownLatch(1)
+    private val allowReadReturn = CountDownLatch(1)
+    private var sealed: ByteArray? = initial.copyOf()
+
+    fun awaitReadEntered(): Boolean = readEntered.await(THREAD_JOIN_MILLIS, TimeUnit.MILLISECONDS)
+
+    fun allowReadToReturn() {
+        allowReadReturn.countDown()
+    }
+
+    override fun readSealed(): ByteArray? {
+        readEntered.countDown()
+        check(allowReadReturn.await(THREAD_JOIN_MILLIS, TimeUnit.MILLISECONDS)) {
+            "test did not release the blocked read"
+        }
+        return sealed?.copyOf()
+    }
+
+    override fun writeSealed(sealed: ByteArray) {
+        this.sealed = sealed.copyOf()
+    }
+
+    override fun clear() {
+        sealed = null
+    }
+
+    private companion object {
+        const val THREAD_JOIN_MILLIS = 5_000L
     }
 }

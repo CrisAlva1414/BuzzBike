@@ -205,9 +205,12 @@ Cuando el gate de verificación esté verde, corré el resto (detalle en
 - **`local.properties` no se commitea** (está en `.gitignore`). Con
   `ANDROID_HOME` exportado vía `androidenv.sh` **no hace falta generarlo**: el
   AGP lo detecta del entorno.
-- **Sin emulador ni dispositivo**: `connectedDebugAndroidTest` **no corre**
-  (y no hay instrumented tests en el proyecto). Todo lo verificable en esta
-  máquina es JVM: `test`, `ktlintCheck`, `detekt`, `lint`.
+- **Emulador disponible**: AVD **`tester36`** (system image
+  `android-36;google_apis;x86_64`) instalado en `~/android-sdk/emulator`.
+  `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest`
+  **corre** sobre ese AVD (**6/6 PASS** verificado). Para levantarlo:
+  `~/android-sdk/emulator/emulator -avd tester36`. El gate JVM sigue
+  siendo `test`, `ktlintCheck`, `detekt`, `lint`.
 - **`build-tools/36.0.0.broken`**: en la máquina original quedó un directorio
   así, resto de una instalación fallida. Es **inofensivo**; el directorio
   funcional es `36.0.0`. Si lo ves en una máquina nueva, simplemente borrálo.

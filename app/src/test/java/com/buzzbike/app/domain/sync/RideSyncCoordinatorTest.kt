@@ -2,28 +2,38 @@ package com.buzzbike.app.domain.sync
 
 import com.buzzbike.app.domain.model.RideDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * JVM-pure tests for [RideSyncCoordinator].
  *
- * The coordinator is the privacy gate for sync: with no configuration it must
- * not even read the ride. No Android, Room or WorkManager is involved.
+ * The coordinator is the privacy gate for sync: with no configuration or no
+ * stored secret it must not even read the ride. No Android, Room or
+ * WorkManager is involved.
  */
 class RideSyncCoordinatorTest {
     private val dataSource = FakeRideSyncDataSource(input())
     private val enqueuer = RecordingOutboxEnqueuer()
     private val scheduler = RecordingSyncWorkScheduler()
-    private val coordinator = RideSyncCoordinator(dataSource, enqueuer, scheduler)
+    private val configStore = FakeSyncConfigStore(CONFIG)
+    private val secretStorage = FakeSecretStorage(byteArrayOf(1))
+    private val coordinator = coordinator()
 
     @Test
     fun given_nullConfig_when_onRideFinished_thenDisabledAndDataNotLoaded() =
         runTest {
-            val outcome = coordinator.onRideFinished(RIDE_ID, null)
+            configStore.config = null
+
+            val outcome = coordinator.onRideFinished(RIDE_ID)
 
             assertEquals(RideSyncOutcome.Disabled, outcome)
             assertEquals(0, dataSource.loadCalls)
@@ -32,9 +42,68 @@ class RideSyncCoordinatorTest {
         }
 
     @Test
+    fun given_missingSecret_when_onRideFinished_thenDisabledAndDataNotLoaded() =
+        runTest {
+            secretStorage.clear()
+
+            val outcome = coordinator.onRideFinished(RIDE_ID)
+
+            assertEquals(RideSyncOutcome.Disabled, outcome)
+            assertEquals(0, dataSource.loadCalls)
+            assertTrue(enqueuer.enqueued.isEmpty())
+            assertTrue(scheduler.configs.isEmpty())
+        }
+
+    @Test
+    fun given_disconnectWinsSharedGate_when_coordinatorResumes_thenDisabledAndNothingEnqueued() =
+        runBlocking {
+            val gate = SyncMutationGate()
+            val gatekeeper =
+                SyncGatekeeper(
+                    configStore = configStore,
+                    secretManager = HmacSecretManager(IdentitySecretSealer, secretStorage),
+                    gate = gate,
+                )
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val pausingGate =
+                object : SyncConsentGate {
+                    override suspend fun <T> withConsent(block: suspend (HermesConfig) -> T): T? {
+                        entered.countDown()
+                        check(release.await(GATE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                            "pausing gate was never released"
+                        }
+                        return gatekeeper.withConsent(block)
+                    }
+                }
+            val racingCoordinator = RideSyncCoordinator(dataSource, enqueuer, scheduler, pausingGate)
+
+            val job = async(Dispatchers.IO) { racingCoordinator.onRideFinished(RIDE_ID) }
+            assertTrue(
+                "coordinator never reached the consent gate",
+                entered.await(GATE_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+            )
+
+            // Simulated disconnect wins the shared gate and revokes everything
+            // while the coordinator is still waiting to enter it.
+            gate.withLock {
+                gate.revoke()
+                secretStorage.clear()
+                configStore.config = null
+            }
+
+            release.countDown()
+            val outcome = job.await()
+
+            assertEquals(RideSyncOutcome.Disabled, outcome)
+            assertTrue(enqueuer.enqueued.isEmpty())
+            assertTrue(scheduler.configs.isEmpty())
+        }
+
+    @Test
     fun given_blankRideId_when_onRideFinished_thenFailed() =
         runTest {
-            val outcome = coordinator.onRideFinished("   ", CONFIG)
+            val outcome = coordinator.onRideFinished("   ")
 
             assertEquals(RideSyncOutcome.Failed, outcome)
             assertEquals(0, dataSource.loadCalls)
@@ -44,13 +113,9 @@ class RideSyncCoordinatorTest {
     fun given_missingRideData_when_onRideFinished_thenNoData() =
         runTest {
             val missingDataCoordinator =
-                RideSyncCoordinator(
-                    FakeRideSyncDataSource(null),
-                    enqueuer,
-                    scheduler,
-                )
+                coordinator(dataSource = FakeRideSyncDataSource(null))
 
-            val outcome = missingDataCoordinator.onRideFinished(RIDE_ID, CONFIG)
+            val outcome = missingDataCoordinator.onRideFinished(RIDE_ID)
 
             assertEquals(RideSyncOutcome.NoData, outcome)
             assertTrue(enqueuer.enqueued.isEmpty())
@@ -60,7 +125,7 @@ class RideSyncCoordinatorTest {
     @Test
     fun given_validRide_when_onRideFinished_thenEnqueuesPayloadAndSchedules() =
         runTest {
-            val outcome = coordinator.onRideFinished(RIDE_ID, CONFIG)
+            val outcome = coordinator.onRideFinished(RIDE_ID)
 
             assertEquals(RideSyncOutcome.Enqueued, outcome)
             assertEquals(1, enqueuer.enqueued.size)
@@ -73,9 +138,9 @@ class RideSyncCoordinatorTest {
     @Test
     fun given_retryCountInConfig_when_onRideFinished_thenEnqueuerReceivesItAsMaxAttempts() =
         runTest {
-            val config = CONFIG.copy(retryCount = 7)
+            configStore.config = CONFIG.copy(retryCount = 7)
 
-            coordinator.onRideFinished(RIDE_ID, config)
+            coordinator.onRideFinished(RIDE_ID)
 
             assertEquals(listOf(7), enqueuer.maxAttemptsRequested)
         }
@@ -83,9 +148,9 @@ class RideSyncCoordinatorTest {
     @Test
     fun given_zeroRetryCount_when_onRideFinished_thenCoercedToAtLeastOneAttempt() =
         runTest {
-            val config = CONFIG.copy(retryCount = 0)
+            configStore.config = CONFIG.copy(retryCount = 0)
 
-            coordinator.onRideFinished(RIDE_ID, config)
+            coordinator.onRideFinished(RIDE_ID)
 
             assertEquals(listOf(1), enqueuer.maxAttemptsRequested)
         }
@@ -94,9 +159,9 @@ class RideSyncCoordinatorTest {
     fun given_enqueuerFailure_when_onRideFinished_thenFailedAndNotScheduled() =
         runTest {
             val failingEnqueuer = RecordingOutboxEnqueuer(failure = IllegalStateException("outbox down"))
-            val failingCoordinator = RideSyncCoordinator(dataSource, failingEnqueuer, scheduler)
+            val failingCoordinator = coordinator(enqueuer = failingEnqueuer)
 
-            val outcome = failingCoordinator.onRideFinished(RIDE_ID, CONFIG)
+            val outcome = failingCoordinator.onRideFinished(RIDE_ID)
 
             assertEquals(RideSyncOutcome.Failed, outcome)
             assertTrue(scheduler.configs.isEmpty())
@@ -106,9 +171,9 @@ class RideSyncCoordinatorTest {
     fun given_schedulerFailure_when_onRideFinished_thenFailedButRowStaysEnqueued() =
         runTest {
             val failingScheduler = RecordingSyncWorkScheduler(failure = IllegalStateException("no workmanager"))
-            val failingCoordinator = RideSyncCoordinator(dataSource, enqueuer, failingScheduler)
+            val failingCoordinator = coordinator(scheduler = failingScheduler)
 
-            val outcome = failingCoordinator.onRideFinished(RIDE_ID, CONFIG)
+            val outcome = failingCoordinator.onRideFinished(RIDE_ID)
 
             assertEquals(RideSyncOutcome.Failed, outcome)
             // The payload is already durable; the next worker pass delivers it.
@@ -118,12 +183,31 @@ class RideSyncCoordinatorTest {
     @Test
     fun given_validRide_when_onRideFinished_thenEnqueuedPayloadContainsRideId() =
         runTest {
-            coordinator.onRideFinished(RIDE_ID, CONFIG)
+            coordinator.onRideFinished(RIDE_ID)
 
             val json = String(enqueuer.enqueued.single().second, Charsets.UTF_8)
             assertTrue(json.contains("\"rideId\":\"$RIDE_ID\""))
             assertFalse(json.isBlank())
         }
+
+    private fun coordinator(
+        dataSource: RideSyncDataSource = this.dataSource,
+        enqueuer: OutboxEnqueuer = this.enqueuer,
+        scheduler: SyncWorkScheduler = this.scheduler,
+        configStore: SyncConfigStore = this.configStore,
+        secretStorage: SecretStorage = this.secretStorage,
+    ): RideSyncCoordinator =
+        RideSyncCoordinator(
+            dataSource = dataSource,
+            enqueuer = enqueuer,
+            scheduler = scheduler,
+            gatekeeper =
+                SyncGatekeeper(
+                    configStore = configStore,
+                    secretManager = HmacSecretManager(IdentitySecretSealer, secretStorage),
+                    gate = SyncMutationGate(),
+                ),
+        )
 
     private fun input(rideId: String = RIDE_ID): RideSyncInput =
         RideSyncInput(
@@ -199,11 +283,52 @@ class RideSyncCoordinatorTest {
         override fun cancel() = Unit
     }
 
+    private class FakeSyncConfigStore(
+        var config: HermesConfig?,
+    ) : SyncConfigStore {
+        override fun current(): HermesConfig? = config
+
+        override fun save(config: HermesConfig) {
+            this.config = config
+        }
+
+        override fun clear() {
+            config = null
+        }
+    }
+
+    private class FakeSecretStorage(
+        private var sealed: ByteArray?,
+    ) : SecretStorage {
+        override fun readSealed(): ByteArray? = sealed?.copyOf()
+
+        override fun writeSealed(sealed: ByteArray) {
+            this.sealed = sealed.copyOf()
+        }
+
+        override fun clear() {
+            sealed = null
+        }
+    }
+
+    private object IdentitySecretSealer : SecretSealer {
+        override fun seal(
+            plaintext: ByteArray,
+            purpose: String,
+        ): ByteArray = plaintext.copyOf()
+
+        override fun unseal(
+            sealed: ByteArray,
+            purpose: String,
+        ): UnsealedSecret = UnsealedSecret(sealed.copyOf(), wasLegacy = false)
+    }
+
     private companion object {
         private const val RIDE_ID = "ride-1"
         private const val START_MILLIS = 1_700_000_000_000L
         private const val DURATION_MILLIS = 600_000L
         private const val START_NANOS = 5_000_000_000L
+        private const val GATE_TIMEOUT_SECONDS = 5L
         private val CONFIG = HermesConfig(endpoint = "https://hermes.example.test/webhook")
     }
 }

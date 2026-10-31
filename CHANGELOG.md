@@ -40,6 +40,20 @@ y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 - La instalación limpia dejaba «INICIAR RIDE» deshabilitado para siempre
   porque nadie solicitaba el permiso de ubicación.
 
+### Seguridad
+
+- Los releases ya no publican APKs debug; el job de release exige firma y
+  publica checksum SHA-256. SQLCipher actualizado a 4.19.1. Secretos sellados
+  con AAD de propósito.
+- El job de release exige `RELEASE_CERT_SHA256` y rechaza APKs con
+  `android:debuggable` o certificados `CN=Android Debug`.
+- Gate de mutación de sync compartido (`SyncMutationGate` + `SyncGatekeeper`)
+  con revocación por epoch: cierra la carrera save/disconnect entre pantallas
+  y con el ride.
+- Lockfile de dependencias para builds reproducibles.
+- `testConnection` descarta resultados obsoletos por generación (evita
+  aplicar respuestas viejas del health check).
+
 ---
 
 ## [0.1.0] - 2026-10-30

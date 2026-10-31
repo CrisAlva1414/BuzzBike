@@ -28,6 +28,20 @@
 | **5 — U6 Accesibilidad y pulido** | TalkBack, contraste, deuda de corrutinas (p. ej. `runCatching` que captura `CancellationException`) y tests de borde. | `tester: PASS` + `security-reviewer: PASS`. |
 | **6 — Release** | Keystore + secrets, **release firmada**, **E2E del sync contra un Hermes real**, `security-reviewer` final sobre el diff acumulado, docs `PRIVACY`/`SECURITY`/`CONTRIBUTING`/guía de usuario/inventario de datos y `CHANGELOG` **v1.0.0**. | `security-reviewer` final PASS + tag + GitHub Release firmada. |
 
+> **Nota sobre Fase 6 (2026-10-31):** el pipeline de **release firmado ya está
+> preparado en CI** (`.github/workflows/android.yml`, job `release` en tags `v*`:
+> `assembleRelease` + `app-release.apk.sha256`, fail-closed sin secrets,
+> permisos acotados al job y acciones pinnadas por SHA). Solo falta que la
+> persona configure el keystore y los **5 secrets**: los 4 de firma
+> `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`,
+> `RELEASE_KEY_PASSWORD`, más **`RELEASE_CERT_SHA256`** (SHA-256 del certificado
+> de firma; obligatorio — si falta o no coincide, el job falla antes de publicar;
+> obtenerlo con `apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`
+> y tomar el «certificate SHA-256 digest» sin `:`). El job además **rechaza**
+> APKs con `android:debuggable` y certificados `CN=Android Debug`.
+> El job `build` ya no publica APKs de debug; solo quedan como artifact
+> `buzzbike-debug-apk`.
+
 ---
 
 ## 1. Estado actual
@@ -60,7 +74,7 @@
 **Slice 1 — build Gradle + Compose + Hilt + Room + ktlint/detekt.**
 Archivos escritos y commiteados (`e54cce2`). **Gate de verificación en verde**
 (`assembleDebug`, `test`, `ktlintCheck`, `detekt`, `lintDebug`) — cerrado; el
-gate acumulado hoy es de **394 tests, 0 fallos** (ver `AGENTS.md` §0).
+gate acumulado hoy es de **415 tests, 0 fallos** (ver `AGENTS.md` §0).
 
 ### Fase 2 — Dominio y datos (COMPLETA)
 
@@ -108,6 +122,9 @@ gate acumulado hoy es de **394 tests, 0 fallos** (ver `AGENTS.md` §0).
 - **CI + release workflow** en GitHub (lint + unit tests en JVM; APK). ✅ **COMPLETA** —
   `.github/workflows/android.yml` verde: gate `test ktlintCheck detekt lintDebug
   assembleDebug`, artifact `buzzbike-debug-apk` y Release en tags `v*` (existe `v0.1.0`).
+  El job `release` exige **5 secrets** (los 4 de firma + `RELEASE_CERT_SHA256`),
+  falla closed sin ellos y además **rechaza** APKs `android:debuggable` y
+  certificados `CN=Android Debug`.
 
 ### Fase 6 — Release gate (PENDIENTE)
 

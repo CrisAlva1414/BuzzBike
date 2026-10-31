@@ -50,6 +50,7 @@ private const val SYNC_CONSENT_TEXT =
 private const val DISCONNECT_CONFIRM_TEXT =
     "Se cancelará el sync, se borrarán los envíos pendientes y el secreto. " +
         "Los rides locales no se borran."
+private const val REVOCATION_FAILED_TEXT = "No se pudo revocar el sync; reintentá."
 
 /**
  * Minimal sync configuration form.
@@ -101,7 +102,7 @@ fun SyncSettingsScreen(
             TopAppBar(
                 title = { Text("Sync") },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Atrás") }
+                    TextButton(onClick = onBack, enabled = !state.isBusy) { Text("Atrás") }
                 },
             )
         },
@@ -172,24 +173,42 @@ fun SyncSettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
 
-            state.error?.let { error ->
+            if (state.revocationFailed) {
                 Text(
-                    text = error,
+                    text = state.error ?: REVOCATION_FAILED_TEXT,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            } else {
+                state.error?.let { error ->
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
-            if (state.isSaved) {
+            if (state.isSaved && !state.revocationFailed) {
                 Text(
                     text = "Configuración guardada.",
                     color = SAVED_COLOR,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+            if (state.isSaved && !state.hasSecret && !state.revocationFailed) {
+                Text(
+                    text = "Sync inactivo: no hay secreto configurado.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
 
             OutlinedButton(
                 onClick = viewModel::testConnection,
-                enabled = state.connectionStatus != ConnectionStatus.CHECKING,
+                enabled =
+                    state.connectionStatus != ConnectionStatus.CHECKING &&
+                        !state.isBusy &&
+                        !state.revocationFailed,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
@@ -226,8 +245,14 @@ fun SyncSettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = { viewModel.save(secret) }) { Text("Guardar") }
-                OutlinedButton(onClick = { showDisconnectConfirm = true }) {
+                Button(
+                    onClick = { viewModel.save(secret) },
+                    enabled = !state.isBusy,
+                ) { Text("Guardar") }
+                OutlinedButton(
+                    onClick = { showDisconnectConfirm = true },
+                    enabled = !state.isBusy,
+                ) {
                     Text("Desconectar")
                 }
                 TextButton(onClick = onBack) { Text("Volver") }
@@ -242,6 +267,7 @@ fun SyncSettingsScreen(
             text = { Text(DISCONNECT_CONFIRM_TEXT) },
             confirmButton = {
                 TextButton(
+                    enabled = !state.isBusy,
                     onClick = {
                         showDisconnectConfirm = false
                         viewModel.disconnect()

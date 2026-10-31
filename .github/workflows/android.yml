@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
@@ -36,7 +38,7 @@ jobs:
             || sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
       - name: Gate
-        run: ./gradlew test ktlintCheck detekt lintDebug assembleDebug --stacktrace
+        run: ./gradlew test ktlintCheck detekt lintDebug assembleDebug assembleDebugAndroidTest --stacktrace
       # Build artifact only: this is deliberately NOT published as a release.
       # A debug APK is debuggable and signed with the shared debug key, so it
       # must never be handed out as a production artifact.
@@ -51,6 +53,14 @@ jobs:
     # Tag pushes only. The release build must be signed with the production
     # keystore; if the signing secrets are absent this job fails instead of
     # publishing anything (a debug-signed APK is not a release).
+    #
+    # RELEASE_CERT_SHA256 is mandatory: it is the SHA-256 digest of the
+    # production signing certificate, so a release signed with the debug key
+    # (or any other key) can never be published. Obtain it from a trusted
+    # build with:
+    #   apksigner verify --print-certs app-release.apk
+    # and copy the "certificate SHA-256 digest" value into the repository
+    # secret. If the secret is missing the verification step fails.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
@@ -59,6 +69,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
@@ -88,14 +100,72 @@ jobs:
 
           umask 077
           printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/release.keystore"
-          cat > keystore.properties <<EOF
-          storeFile=${RUNNER_TEMP}/release.keystore
-          storePassword=${RELEASE_KEYSTORE_PASSWORD}
-          keyAlias=${RELEASE_KEY_ALIAS}
-          keyPassword=${RELEASE_KEY_PASSWORD}
-          EOF
+
+          # java.util.Properties interprets backslashes as escape sequences, so
+          # a password containing `\` would be corrupted (or truncated). Double
+          # every backslash before writing each value.
+          escape_property() {
+            printf '%s' "$1" | sed 's/\\/\\\\/g'
+          }
+          {
+            printf 'storeFile=%s\n' "$(escape_property "${RUNNER_TEMP}/release.keystore")"
+            printf 'storePassword=%s\n' "$(escape_property "${RELEASE_KEYSTORE_PASSWORD}")"
+            printf 'keyAlias=%s\n' "$(escape_property "${RELEASE_KEY_ALIAS}")"
+            printf 'keyPassword=%s\n' "$(escape_property "${RELEASE_KEY_PASSWORD}")"
+          } > keystore.properties
       - name: Build release APK
         run: ./gradlew assembleRelease --stacktrace
+      - name: Verify release APK
+        env:
+          RELEASE_CERT_SHA256: ${{ secrets.RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          # Pin the same build-tools version installed above instead of
+          # silently verifying with whatever version happens to be newest.
+          build_tools="${ANDROID_HOME}/build-tools/36.0.0"
+          aapt="${build_tools}/aapt"
+          apksigner="${build_tools}/apksigner"
+
+          if [ -z "${RELEASE_CERT_SHA256:-}" ]; then
+            echo "::error::RELEASE_CERT_SHA256 is required: store the production signing certificate fingerprint before publishing"
+            exit 1
+          fi
+
+          badging=$("${aapt}" dump badging "${apk}")
+          if printf '%s' "${badging}" | grep -q "application-debuggable"; then
+            echo "::error::release APK is debuggable"
+            exit 1
+          fi
+
+          cert_info=$("${apksigner}" verify --print-certs "${apk}")
+
+          # Version-independent parse: build-tools 36 prints
+          # "Signer #1 certificate SHA-256 digest: ..." while newer versions
+          # print "V2 Signer: certificate SHA-256 digest: ...". The digest is
+          # always the last field, so use $NF instead of a fixed position.
+          cert_sha256=$(
+            printf '%s\n' "${cert_info}" \
+              | awk -F': ' '/certificate SHA-256 digest/ { print $NF; exit }'
+          )
+          if [ -z "${cert_sha256}" ]; then
+            echo "::error::could not read the release APK signing certificate"
+            exit 1
+          fi
+
+          # apksigner prints the DN as "Subject:" on some versions and
+          # "certificate DN:" on others; both expose the debug CN.
+          if printf '%s' "${cert_info}" | grep -Eq '(Subject:|certificate DN:).*CN=Android Debug'; then
+            echo "::error::release APK is signed with the Android debug certificate"
+            exit 1
+          fi
+
+          expected=$(printf '%s' "${RELEASE_CERT_SHA256}" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          actual=$(printf '%s' "${cert_sha256}" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          if [ "${expected}" != "${actual}" ]; then
+            echo "::error::release APK signing certificate does not match RELEASE_CERT_SHA256"
+            exit 1
+          fi
       - name: Generate SHA-256 checksum
         run: |
           cd app/build/outputs/apk/release

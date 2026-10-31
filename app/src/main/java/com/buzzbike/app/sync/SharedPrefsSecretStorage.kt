@@ -28,18 +28,25 @@ class SharedPrefsSecretStorage
         private val preferences =
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
-        override fun readSealed(): ByteArray? = preferences.getString(KEY_SEALED_SECRET, null)?.let(::decodeOrNull)
+        override fun readSealed(): ByteArray? =
+            synchronized(SecretStorage.lock) {
+                preferences.getString(KEY_SEALED_SECRET, null)?.let(::decodeOrNull)
+            }
 
         override fun writeSealed(sealed: ByteArray) {
-            val encoded = Base64.encodeToString(sealed, Base64.NO_WRAP)
-            check(preferences.edit().putString(KEY_SEALED_SECRET, encoded).commit()) {
-                "failed to persist the sealed HMAC secret"
+            synchronized(SecretStorage.lock) {
+                val encoded = Base64.encodeToString(sealed, Base64.NO_WRAP)
+                check(preferences.edit().putString(KEY_SEALED_SECRET, encoded).commit()) {
+                    "failed to persist the sealed HMAC secret"
+                }
             }
         }
 
         override fun clear() {
-            check(preferences.edit().remove(KEY_SEALED_SECRET).commit()) {
-                "failed to clear the sealed HMAC secret"
+            synchronized(SecretStorage.lock) {
+                check(preferences.edit().remove(KEY_SEALED_SECRET).commit()) {
+                    "failed to clear the sealed HMAC secret"
+                }
             }
         }
 

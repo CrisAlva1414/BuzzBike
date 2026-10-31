@@ -11,7 +11,7 @@
 
 **¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
 elevación, calorías (nivel 3) y **backend/sync están cerrados**. El backend/sync
-cerró con gate PASS; hoy el gate acumula **394 tests**. `test`, `ktlintCheck`, `detekt`,
+cerró con gate PASS; hoy el gate acumula **415 tests**. `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
 compila. La UI de producto está en curso: **U0 (tema/componentes), L1
 (pause/resume + FGS), U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime)
@@ -61,7 +61,7 @@ La pantalla de ride ofrece "DAR PERMISO" en `Ready(NO_PERMISSION)` y re-evalúa 
 sesión al volver del diálogo. Sobre ese cierre se construyó U2.
 
 **Historial, detalle y GPX:** **U2 está hecho y cerrado el 2026-10-30** con
-`tester: PASS` y `security-reviewer: PASS` (0 hallazgos abiertos) sobre **394
+`tester: PASS` y `security-reviewer: PASS` (0 hallazgos abiertos) sobre **400
 tests**. La lista y la franja semanal viven en `ui/history/`; el detalle usa
 `RideTrace` y exporta GPX 1.1 + `TrackPointExtension` por SAF (`content://`).
 Decisiones: sin migración Room (nombre derivado de `startTimeMillis`; la bici
@@ -148,11 +148,11 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**394 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**415 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
-> **Sin emulador ni dispositivo Android conectado** en esta máquina: `connectedDebugAndroidTest` **no se puede correr acá**. Todo lo verificable localmente es JVM: `test`, `ktlintCheck`, `detekt`, `lintDebug`. Los instrumentados solo se compilan con `assembleDebugAndroidTest`.
+> **Emulador local disponible** vía AVD **`tester36`** (`~/android-sdk/emulator`, system image `android-36;google_apis;x86_64`): `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en ese AVD (**6/6 PASS**). El gate JVM local sigue siendo `test`, `ktlintCheck`, `detekt`, `lintDebug`.
 >
-> **CI:** `.github/workflows/android.yml` corre el gate en cada push/PR con JDK 21 y SDK 37, sube el artifact `buzzbike-debug-apk` y publica un Release con `app-debug.apk` en tags `v*`. La release firmada de producción requiere keystore + secrets (pendiente).
+> **CI:** `.github/workflows/android.yml` corre el gate en cada push/PR con JDK 21 y SDK 37 y sube el APK de debug **solo como artifact** `buzzbike-debug-apk` — nunca como release. El job `release` corre **solo en tags `v*`**: construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256`; exige **5 secrets**: los 4 de firma `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS` y `RELEASE_KEY_PASSWORD`, más **`RELEASE_CERT_SHA256`** (SHA-256 del certificado de firma; si falta o no coincide, el job falla antes de publicar — obtenerlo con `apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk` y tomar el «certificate SHA-256 digest» sin `:`). Si faltan los 4 de firma **falla** con «release signing not configured» sin publicar nada. El job además **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`. Permisos: `contents: read` a nivel global, `contents: write` solo en el job release; acciones pinnadas por SHA. La release firmada de producción requiere configurar esos 5 secrets en el repo (pendiente).
 
 ```bash
 # Build

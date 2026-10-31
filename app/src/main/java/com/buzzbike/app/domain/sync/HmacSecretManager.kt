@@ -44,7 +44,7 @@ class HmacSecretManager(
             when {
                 secret.size > MAX_SECRET_BYTES -> ImportResult.TooLong
                 secret.size < MIN_SECRET_BYTES -> ImportResult.TooShort
-                else -> persist(secret)
+                else -> synchronized(SecretStorage.lock) { persist(secret) }
             }
         } finally {
             secret.fill(0)
@@ -55,7 +55,7 @@ class HmacSecretManager(
 
     /** Removes the stored secret, disabling authenticated sync. */
     fun clear() {
-        storage.clear()
+        synchronized(SecretStorage.lock) { storage.clear() }
     }
 
     private fun persist(secret: ByteArray): ImportResult =

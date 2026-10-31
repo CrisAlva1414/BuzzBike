@@ -5,9 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionState
-import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
-import com.buzzbike.app.domain.sync.SyncConfigStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,9 +20,9 @@ import javax.inject.Inject
  * ViewModel only scopes that state to the screen and forwards the user
  * actions, so the UI never talks to persistence directly.
  *
- * Optional Hermes sync is off by default (AGENTS.md §7): [syncConfig] starts
- * `null` and the persisted [SyncConfigStore] is consulted on stop. A call to
- * [configureSync] overrides the store for tests or future per-ride toggles.
+ * Optional Hermes sync is off by default (AGENTS.md §7): the coordinator
+ * re-reads the persisted configuration and secret under the shared mutation
+ * gate when a ride stops.
  */
 @HiltViewModel
 class RideViewModel
@@ -32,7 +30,6 @@ class RideViewModel
     constructor(
         private val rideSessionManager: RideSessionManager,
         private val rideSyncCoordinator: RideSyncCoordinator,
-        private val syncConfigStore: SyncConfigStore,
         private val rideServiceController: RideServiceController,
     ) : ViewModel() {
         val state: StateFlow<RideSessionState> =
@@ -41,8 +38,6 @@ class RideViewModel
                 started = SharingStarted.Eagerly,
                 initialValue = RideSessionState.Idle,
             )
-
-        private var syncConfig: HermesConfig? = null
 
         /**
          * Synchronous guard against a double stop: the first tap flips it
@@ -62,11 +57,6 @@ class RideViewModel
             viewModelScope.launch {
                 rideSessionManager.restore()
             }
-        }
-
-        /** Enables or disables sync for subsequent rides; `null` means off. */
-        fun configureSync(config: HermesConfig?) {
-            syncConfig = config
         }
 
         fun startRide() {
@@ -103,10 +93,7 @@ class RideViewModel
             viewModelScope.launch {
                 try {
                     rideSessionManager.stopRide()
-                    val config = syncConfig ?: syncConfigStore.current()
-                    if (config != null) {
-                        rideSyncCoordinator.onRideFinished(rideId, config)
-                    }
+                    rideSyncCoordinator.onRideFinished(rideId)
                 } finally {
                     stopInFlight = false
                     rideServiceController.stop()

@@ -11,6 +11,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -19,6 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.security.KeyStoreException
 
 /**
  * JVM tests for [DatabasePassphraseProvider] and [LegacyDatabaseCleaner].
@@ -66,6 +68,21 @@ class DatabasePassphraseProviderTest {
             "stored blob must unseal to the generated passphrase",
             passphrase,
             sealer.unseal(sealed, SecretSealer.PURPOSE_DATABASE_PASSPHRASE).plaintext,
+        )
+    }
+
+    @Test
+    fun given_sealFails_when_getPassphrase_then_generatedPassphraseIsZeroedAndNothingPersisted() {
+        val sealer = CapturingThrowingSealer()
+        val provider = DatabasePassphraseProvider(context, sealer)
+
+        assertThrows(KeyStoreException::class.java) { provider.getPassphrase() }
+
+        val captured = requireNotNull(sealer.captured)
+        assertTrue("a failed seal must wipe the generated passphrase", captured.all { it == 0.toByte() })
+        assertNull(
+            "a failed seal must not persist a blob",
+            preferences.getString(KEY_SEALED_PASSPHRASE, null),
         )
     }
 
@@ -120,6 +137,40 @@ class DatabasePassphraseProviderTest {
         val unsealed = sealer.unseal(resealed, SecretSealer.PURPOSE_DATABASE_PASSPHRASE)
         assertFalse("legacy blob must be re-sealed with purpose AAD", unsealed.wasLegacy)
         assertArrayEquals(passphrase, unsealed.plaintext)
+    }
+
+    @Test
+    fun given_legacyBlob_when_resealedBlobFailsRoundTrip_thenReturnsPlaintextAndKeepsOriginalBlob() {
+        val sealer = BrokenRoundTripSecretSealer()
+        val passphrase = ByteArray(PASSPHRASE_BYTES) { index -> (index + 1).toByte() }
+        val legacy = Base64.encodeToString(sealer.sealLegacy(passphrase), Base64.NO_WRAP)
+        preferences.edit().putString(KEY_SEALED_PASSPHRASE, legacy).commit()
+
+        val result = DatabasePassphraseProvider(context, sealer).getPassphrase()
+
+        assertArrayEquals("the already-decrypted legacy passphrase must stay usable", passphrase, result)
+        assertEquals(
+            "a re-seal that does not round-trip must not replace the stored blob",
+            legacy,
+            preferences.getString(KEY_SEALED_PASSPHRASE, null),
+        )
+    }
+
+    @Test
+    fun given_legacyBlob_when_resealThrowsKeystoreException_thenReturnsPlaintextAndKeepsOriginalBlob() {
+        val sealer = ThrowingSealSecretSealer()
+        val passphrase = ByteArray(PASSPHRASE_BYTES) { index -> (index + 1).toByte() }
+        val legacy = Base64.encodeToString(sealer.sealLegacy(passphrase), Base64.NO_WRAP)
+        preferences.edit().putString(KEY_SEALED_PASSPHRASE, legacy).commit()
+
+        val result = DatabasePassphraseProvider(context, sealer).getPassphrase()
+
+        assertArrayEquals("the already-decrypted legacy passphrase must stay usable", passphrase, result)
+        assertEquals(
+            "a Keystore failure while re-sealing must not replace the stored blob",
+            legacy,
+            preferences.getString(KEY_SEALED_PASSPHRASE, null),
+        )
     }
 
     @Test
@@ -258,6 +309,33 @@ private class XorSecretSealer : SecretSealer {
     }
 }
 
+/**
+ * Seals each blob after flipping the first plaintext byte, so a re-sealed blob
+ * never unseals back to the original value. Legacy blobs still round-trip.
+ */
+private class BrokenRoundTripSecretSealer : SecretSealer {
+    private val delegate = XorSecretSealer()
+
+    override fun seal(
+        plaintext: ByteArray,
+        purpose: String,
+    ): ByteArray {
+        val corrupted = plaintext.copyOf()
+        if (corrupted.isNotEmpty()) {
+            corrupted[0] = (corrupted[0].toInt() xor 0xFF).toByte()
+        }
+        return delegate.seal(corrupted, purpose)
+    }
+
+    override fun unseal(
+        sealed: ByteArray,
+        purpose: String,
+    ): UnsealedSecret = delegate.unseal(sealed, purpose)
+
+    /** Builds a pre-AAD blob, as an old app version would have written it. */
+    fun sealLegacy(plaintext: ByteArray): ByteArray = delegate.sealLegacy(plaintext)
+}
+
 /** Mimics a blob sealed with a different (lost) key. */
 private class RejectingSecretSealer : SecretSealer {
     override fun seal(
@@ -269,4 +347,43 @@ private class RejectingSecretSealer : SecretSealer {
         sealed: ByteArray,
         purpose: String,
     ): UnsealedSecret = throw IllegalArgumentException("corrupt blob")
+}
+
+/**
+ * Legacy blobs still unseal, but any attempt to re-seal fails with a Keystore
+ * exception, as a locked or reset Android Keystore would.
+ */
+private class ThrowingSealSecretSealer : SecretSealer {
+    private val delegate = XorSecretSealer()
+
+    override fun seal(
+        plaintext: ByteArray,
+        purpose: String,
+    ): ByteArray = throw KeyStoreException("keystore unavailable")
+
+    override fun unseal(
+        sealed: ByteArray,
+        purpose: String,
+    ): UnsealedSecret = delegate.unseal(sealed, purpose)
+
+    /** Builds a pre-AAD blob, as an old app version would have written it. */
+    fun sealLegacy(plaintext: ByteArray): ByteArray = delegate.sealLegacy(plaintext)
+}
+
+/** Captures the generated passphrase and fails while sealing it. */
+private class CapturingThrowingSealer : SecretSealer {
+    var captured: ByteArray? = null
+
+    override fun seal(
+        plaintext: ByteArray,
+        purpose: String,
+    ): ByteArray {
+        captured = plaintext
+        throw KeyStoreException("keystore unavailable")
+    }
+
+    override fun unseal(
+        sealed: ByteArray,
+        purpose: String,
+    ): UnsealedSecret = throw IllegalArgumentException("not used")
 }

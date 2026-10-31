@@ -7,6 +7,65 @@
 
 ---
 
+## Tarea — Fase 0: saneamiento del proyecto y cierre del pase de seguridad
+
+### Estado
+**completada** (`iteracion: 8` de `max_iteraciones: 8`) · clase **Heavy**.
+Cerrada con `tester: PASS` (415 tests) y `security-reviewer: PASS` (0 hallazgos
+altos/críticos; 2 LOW residuales). Sin escalado.
+
+### Criterio de aceptación (cumplido)
+1. Docs alineados con el estado real (conteos, toolchain, CI, emulador).
+2. Hallazgos del pase de seguridad cerrados por causa raíz, sin `@Suppress`
+   ni thresholds relajados.
+3. Gate formal completo en verde + instrumentados compilando.
+4. Conteo de tests y claims de entorno verificados contra ejecución real.
+
+### Iteraciones
+| Iter | Slice | Resultado | Notas |
+|---|---|---|---|
+| 0 | plan + macros | PASS | macroplan Fases 0–6 en `docs/roadmap.md` §0 |
+| 1 | CI/release + SQLCipher + AAD | **PASS** (commit `9bf3aa1`) | ALTO: se publicaba APK debug; SQLCipher 4.9.0 → 4.19.1 |
+| 2 | keystore.properties + verificaciones de release | PASS | `printf` + escape de backslashes; `aapt`/`apksigner` |
+| 3 | detekt `ThrowsCount` + re-sellado fail-safe | PASS | sin `@Suppress`; `fill(0)`; fail-closed solo en unseal original |
+| 4 | `load()` idempotente + `disconnect()` atómico | PASS | `loaded`+`generation`; `NonCancellable`; orden secret→config→outbox→scheduler |
+| 5 | `SyncMutationGate` + epoch de revocación | PASS (código) | cierra ALTO de revocación por instancia |
+| 6 | refactor detekt (`SyncGatekeeper`, `SyncSettingsOperations`) | **FAIL detekt → PASS** | `LongParameterList` + `LabeledExpression`, corregidos sin suprimir |
+| 7 | cobertura exigida por tester + fix `testConnection` | **FAIL → PASS** | 2 tests faltantes (2 VMs, coordinador vs revoke) + resultado obsoleto por generación |
+| 8 | verificación final + docs | **PASS** | 415 tests, detekt 0, instrumentados compilan |
+
+### Verificación final
+- `./gradlew test ktlintCheck detekt assembleDebug lintDebug --console=plain` → **verde**.
+- `./gradlew assembleDebugAndroidTest --console=plain` → **compila**.
+- `test` = **415 tests, 0 fallos, 0 errores, 0 skipped** (46 suites); `detekt` 0.
+- Mutaciones de no-vacuidad ejecutadas y restauradas sobre los 3 tests nuevos.
+- `security-reviewer`: **PASS** — ALTO de revocación cerrado; sin bypass por el
+  seam `SyncConsentGate` (binding Hilt = `SyncGatekeeper`).
+- Afirmación "sin emulador" corregida en README/AGENTS/testing/setup-entorno:
+  AVD **`tester36`** existe y `connectedDebugAndroidTest` corrió **6/6 PASS**.
+
+### Deuda abierta (baja, no bloqueante)
+- Ventana transitoria entre el último chequeo de epoch y `scheduleAfterSave` en
+  `SyncSaveRunner.commit` (neutralizada por el cleanup de `disconnect()`).
+- Entrega del worker no toma el gate: riesgo de una entrega en vuelo tras
+  revocar, ya aceptado en ADR-003 ("Ventana de desconexión").
+- Autofill opt-out de Compose (limitación de plataforma, documentada).
+- Regex `CN=Android Debug` sin anclar (fail-closed igual).
+
+### Archivos principales
+- Seguridad: `sync/AndroidKeystoreSecretSealer.kt`,
+  `data/local/DatabasePassphraseProvider.kt`, `domain/sync/{SecretStorage,
+  SyncMutationGate,SyncGatekeeper,RideSyncCoordinator}.kt`,
+  `sync/{SharedPrefsSecretStorage,StoredHmacKeyProvider}.kt`,
+  `ui/settings/{SyncSettingsViewModel,SyncSettingsOperations,SyncSettingsScreen}.kt`,
+  `di/SyncModule.kt`.
+- CI: `.github/workflows/android.yml`, `app/build.gradle.kts`,
+  `app/gradle.lockfile`, `gradle/libs.versions.toml`.
+- Docs: `AGENTS.md`, `README.md`, `CHANGELOG.md`, `docs/roadmap.md`,
+  `docs/testing.md`, `docs/setup-entorno.md`.
+
+---
+
 ## Tarea — U2: historial, detalle y export GPX
 
 ### Estado

@@ -27,11 +27,12 @@ Reporte HTML: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
 ## 2. Qué requiere dispositivo o emulador (`app/src/androidTest`)
 
-El source set instrumentado ya existe, pero **no hay emulador en esta
-máquina** (ver §6): los tests compilan localmente y quedan como deuda de
-hardware hasta que se ejecuten en CI con emulador o en un dispositivo
-físico. Además de los dos tests nuevos de §3, los siguientes
-comportamientos solo se pueden validar con hardware/emulador real:
+El source set instrumentado ya existe y **corre en el emulador local**
+(AVD `tester36`, system image `android-36;google_apis;x86_64`, en
+`~/android-sdk/emulator`; ver §6). `connectedDebugAndroidTest` se ejecuta
+con **6/6 PASS** sobre ese AVD. Además de los dos tests nuevos de §3, los
+siguientes comportamientos solo se pueden validar con hardware/emulador
+real:
 
 - **SQLCipher real:** apertura, cifrado en reposo y `PRAGMA key` sobre una
   base física. Robolectric usa una implementación in-memory que no ejercita
@@ -86,10 +87,16 @@ librería nativa de SQLCipher y Android Keystore.
 ./gradlew assembleDebugAndroidTest
 ```
 
-**No hay emulador ni dispositivo en esta máquina**, así que
-`connectedDebugAndroidTest` no se puede correr localmente. Que
-`assembleDebugAndroidTest` compile es el gate actual; ejecutar los tests
-es la deuda de hardware pre-release (ver §6).
+**Hay emulador local:** el AVD `tester36` (system image
+`android-36;google_apis;x86_64`) está instalado en
+`~/android-sdk/emulator`. `connectedDebugAndroidTest` corre sobre él
+(**6/6 PASS** verificado). Para levantarlo antes de correr los tests:
+
+```bash
+~/android-sdk/emulator/emulator -avd tester36
+```
+
+`assembleDebugAndroidTest` compila sin necesidad de dispositivo (ver §6).
 
 ## 4. Comandos
 
@@ -133,12 +140,16 @@ Robolectric; no se empaqueta en la app. Verificar con:
 
 ## 6. Riesgo aceptado
 
-No hay emulador ni dispositivo Android en esta máquina. Por eso:
+El emulador local está instalado: AVD **`tester36`** (system image
+`android-36;google_apis;x86_64`) en `~/android-sdk/emulator`. Por eso:
 
-- `connectedDebugAndroidTest` no se puede ejecutar localmente.
-- Los puntos de §2 quedan como **deuda pre-release**: deben cubrirse antes
-  de publicar una release, idealmente en CI con un emulador headless o en
-  un dispositivo físico.
+- `connectedDebugAndroidTest` **sí se puede ejecutar localmente** sobre
+  `tester36` (**6/6 PASS** verificado). Para levantarlo:
+  `~/android-sdk/emulator/emulator -avd tester36`.
+- Los puntos de §2 que requieren hardware real (Keystore físico,
+  WorkManager en background, FGS) **siguen siendo deuda pre-release**:
+  deben cubrirse antes de publicar una release, idealmente en un
+  dispositivo físico.
 - El resto del pipeline (compilación, `test`, `ktlintCheck`, `detekt`,
   `lintDebug`, `assembleDebug`) sí se valida en JVM y es el gate actual.
 

@@ -44,8 +44,8 @@ Verificado contra el código en `main` (2026-10-30):
 - ✅ **Historial, detalle y GPX (U2):** lista de rides con franja semanal, detalle con traza y 8 métricas, exportación **GPX 1.1 + `TrackPointExtension`** a destino `content://` vía Storage Access Framework.
 - ✅ **Sync a Hermes Agent:** outbox en Room + WorkManager, firma HMAC V2 con secret en Android Keystore, SQLCipher, data minimization y dedupe por `ride.id` (ADR-003). *La validación E2E contra un NAS real sigue pendiente.*
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
-- ✅ **CI:** `.github/workflows/android.yml` verde en cada push/PR (gate `test ktlintCheck detekt lintDebug assembleDebug`), artifact `buzzbike-debug-apk` y Release automática en tags `v*` (existe la release **`v0.1.0`**).
-- ✅ **Gate verde:** `test` (**394 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **84.5 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila; **no hay dispositivo ni emulador** en esta máquina, así que `connectedDebugAndroidTest` no se corre acá.
+- ✅ **CI:** `.github/workflows/android.yml` verde en cada push/PR (gate `test ktlintCheck detekt lintDebug assembleDebug`) y sube el APK de debug **solo como artifact** `buzzbike-debug-apk`. En tags `v*` corre el job `release`, que construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256` **solo** si están los **5 secrets** (los 4 de firma + `RELEASE_CERT_SHA256`); sin los de firma falla («release signing not configured») y no publica nada; además **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`. La release **`v0.1.0`** (2026-10-30) se publicó con APK de debug, antes de este cambio.
+- ✅ **Gate verde:** `test` (**415 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **84.5 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **6/6 PASS**).
 
 **Todavía no:**
 
@@ -53,11 +53,11 @@ Verificado contra el código en `main` (2026-10-30):
 - 🚧 **U4 — Garaje y desgaste:** existe ADR-004, pero no hay `domain/wear/` ni tablas `bikes`/`components`/`component_events` (Room hoy tiene 3 tablas: `rides`, `outbox`, `track_points`).
 - 🚧 **U5 — Mapa:** MapLibre 13.7.1 + OpenFreeMap están declarados en el build, con **cero usos en Kotlin**.
 - 🚧 **U6 — Accesibilidad:** TalkBack, contraste y tests de borde sin hacer.
-- ❌ **Release firmada de producción:** sin `keystore.properties` ni secrets; solo builds de debug.
+- ❌ **Release firmada de producción:** el pipeline de release en CI ya está preparado, pero falta el keystore y los 5 secrets (`RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` y `RELEASE_CERT_SHA256`); sin ellos el job `release` falla y no publica nada.
 - ❌ **E2E del sync con Hermes real:** nunca validado contra un NAS con Hermes Agent (la spec está implementada y testeada contra mock).
 - ❌ **BLE** (frecuencia cardíaca / potenciómetro): fuera de v1.
 
-O sea: **el ciclo de un ride ya está cubierto en código** — capturar, ver en historial, abrir el detalle y exportar GPX — y todo eso está testeado en JVM, pero **falta verificarlo en un dispositivo real** (imposible en esta máquina: sin emulador/conectado) y aún no hay perfil, garaje, mapa ni release firmada. Prefiero decirlo antes de que alguien clone y se decepcione. El macroplan con fases y gate: [`docs/roadmap.md`](docs/roadmap.md).
+O sea: **el ciclo de un ride ya está cubierto en código** — capturar, ver en historial, abrir el detalle y exportar GPX — y todo eso está testeado en JVM; el emulador local (**AVD `tester36`**, system image `android-36;google_apis;x86_64`) ya corre los instrumentados con **6/6 PASS**, pero aún no hay perfil, garaje, mapa ni release firmada. Prefiero decirlo antes de que alguien clone y se decepcione. El macroplan con fases y gate: [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
 
@@ -150,14 +150,14 @@ Guía paso a paso desde una máquina vacía (Linux, sin sudo), con los pitfalls 
 
 ## Descargar / instalar
 
-Todavía **no hay release firmada de producción**: el CI publica builds de debug.
+Todavía **no hay release firmada de producción**: el CI dejó de publicar APKs de debug y el job de release necesita los 5 secrets de firma (pendientes de configurar).
 
-- **Release `v0.1.0` (APK debug):** descarga directa en [github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0](https://github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0).
+- **Release `v0.1.0` (APK debug, 2026-10-30):** descarga directa en [github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0](https://github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0). Fue la última release publicada con APK de debug: los tags nuevos ya no publican debug.
 - **Historial de releases:** [github.com/CrisAlva1414/BuzzBike/releases](https://github.com/CrisAlva1414/BuzzBike/releases).
-- **Cada push a `main` y cada PR:** el APK queda como artifact `buzzbike-debug-apk` en la pestaña **Actions** del workflow.
-- **Tags `v*`:** se publica un GitHub Release con `app-debug.apk`.
-- Instalación: `adb install -r app-debug.apk` o sideload (habilitar "Instalar apps desconocidas" para el navegador/gestor de archivos).
-- Es un APK de **debug**, firmado con la clave de debug: sirve para probar, no para distribución de producción. La release firmada requiere keystore y secrets (pendiente).
+- **Cada push a `main` y cada PR:** el APK de debug queda como artifact `buzzbike-debug-apk` en la pestaña **Actions** del workflow; ya no se publica como release.
+- **Tags `v*`:** corre el job `release`, que construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256`. Exige los 5 secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` y `RELEASE_CERT_SHA256` (SHA-256 del certificado de firma; obtenerlo con `apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk`, «certificate SHA-256 digest» sin `:`); si faltan los 4 de firma, el job falla («release signing not configured») y no publica nada, y si falta o no coincide `RELEASE_CERT_SHA256` falla antes de publicar. El job también **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`.
+- Instalación: `adb install -r app-release.apk` (release) o `adb install -r app-debug.apk` (debug), o sideload (habilitar "Instalar apps desconocidas" para el navegador/gestor de archivos). Verificación del release: `sha256sum -c app-release.apk.sha256`.
+- Es un APK de **debug**, firmado con la clave de debug: sirve para probar, no para distribución de producción. La release firmada requiere keystore + los 5 secrets de CI (pendiente).
 
 ---
 
@@ -182,14 +182,14 @@ Estado al 2026-10-30 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
 - [x] Scaffold de build + dominio (tracking, descriptores, elevación, calorías) con gate verde
 - [x] Schema Room de rides/track_points/outbox + migraciones
 - [x] Sync a Hermes Agent + webhooks firmados (HMAC, outbox, SQLCipher)
-- [x] CI con GitHub Actions + release `v0.1.0` (APK de debug)
+- [x] CI con GitHub Actions + release `v0.1.0` (APK de debug, histórica; los tags ya no publican debug)
 - [x] UI de ride en vivo (U1) + permiso de ubicación en runtime (U1.1)
 - [x] Historial, detalle y exportación GPX 1.1 (U2)
 - [ ] Ajustes y perfil: DataStore + perfil corporal (U3)
 - [ ] Garaje y desgaste de componentes: schema `bikes`/`components` + `WearEngine` (ADR-004, U4)
 - [ ] Mapa en vivo/detalle con MapLibre + OpenFreeMap (U5)
 - [ ] Accesibilidad (TalkBack, contraste) (U6)
-- [ ] Primera release firmada (keystore + secrets)
+- [ ] Primera release firmada (keystore + los 5 secrets de CI; el job de release ya está preparado)
 - [ ] Post-v1: BLE frecuencia cardíaca/potencia, PMTiles offline, F-Droid
 
 ---

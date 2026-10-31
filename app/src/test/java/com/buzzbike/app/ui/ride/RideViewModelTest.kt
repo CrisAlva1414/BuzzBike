@@ -14,12 +14,18 @@ import com.buzzbike.app.domain.ride.session.RideSessionWriter
 import com.buzzbike.app.domain.ride.session.TrackPointWriter
 import com.buzzbike.app.domain.ride.session.TrackingManager
 import com.buzzbike.app.domain.sync.HermesConfig
+import com.buzzbike.app.domain.sync.HmacSecretManager
 import com.buzzbike.app.domain.sync.OutboxEnqueuer
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
 import com.buzzbike.app.domain.sync.RideSyncDataSource
 import com.buzzbike.app.domain.sync.RideSyncInput
+import com.buzzbike.app.domain.sync.SecretSealer
+import com.buzzbike.app.domain.sync.SecretStorage
 import com.buzzbike.app.domain.sync.SyncConfigStore
+import com.buzzbike.app.domain.sync.SyncGatekeeper
+import com.buzzbike.app.domain.sync.SyncMutationGate
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
+import com.buzzbike.app.domain.sync.UnsealedSecret
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -320,8 +326,14 @@ class RideViewModelTest {
                 dataSource = UnusedRideSyncDataSource,
                 enqueuer = UnusedOutboxEnqueuer,
                 scheduler = UnusedSyncWorkScheduler,
+                gatekeeper =
+                    SyncGatekeeper(
+                        configStore = FakeSyncConfigStore(),
+                        secretManager = HmacSecretManager(UnusedSecretSealer, EmptySecretStorage),
+                        gate = SyncMutationGate(),
+                    ),
             )
-        return RideViewModel(manager, coordinator, FakeSyncConfigStore(), service)
+        return RideViewModel(manager, coordinator, service)
     }
 
     private class FakeRideServiceController : RideServiceController {
@@ -454,6 +466,26 @@ class RideViewModelTest {
         override fun schedule(config: HermesConfig) = Unit
 
         override fun cancel() = Unit
+    }
+
+    private object UnusedSecretSealer : SecretSealer {
+        override fun seal(
+            plaintext: ByteArray,
+            purpose: String,
+        ): ByteArray = plaintext.copyOf()
+
+        override fun unseal(
+            sealed: ByteArray,
+            purpose: String,
+        ): UnsealedSecret = UnsealedSecret(sealed.copyOf(), wasLegacy = false)
+    }
+
+    private object EmptySecretStorage : SecretStorage {
+        override fun readSealed(): ByteArray? = null
+
+        override fun writeSealed(sealed: ByteArray) = Unit
+
+        override fun clear() = Unit
     }
 
     /** No persisted sync configuration, so rides are not enqueued. */
