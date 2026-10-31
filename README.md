@@ -30,25 +30,34 @@ Hecho para la comunidad, en español, y quiero que se use: si le falta algo o un
 
 ## Estado actual (honesto)
 
-Verificado contra el código en `main`:
+Verificado contra el código en `main` (2026-10-30):
+
+**Hecho y cerrado:**
 
 - ✅ **Dominio de sensores y tracking:** `TrackingManager` con puerto `TrackPointWriter`, validación de coordenadas, permiso de ubicación en runtime y persistencia vía `RideRepository`.
-- ✅ **Captura GPS:** `LocationSensor` sobre Play Services Location (`FusedLocationProviderClient`), mapeado a un `LocationReading` puro (testeable en JVM sin Android).
+- ✅ **Captura GPS:** `LocationSensor` sobre Play Services Location (`FusedLocationProviderClient`), mapeado a un `LocationReading` puro (testeable en JVM sin Android) + foreground service de ubicación con pause/resume.
 - ✅ **Segmentación de traza:** corte por pausas, moving time, distancia, velocidad media/máxima (ADR-005).
 - ✅ **Elevación:** fusión de barómetro + altitud GPS con suavizado e histéresis para desnivel positivo/negativo (ADR-006).
 - ✅ **Calculadora de calorías:** nivel 3 (Compendium) implementado; ACSM/Keytel quedan preparados para sensores futuros (ADR-001).
+- ✅ **Ride en vivo (U1):** pantalla con estados sellados (reposo, listo, grabando, pausado, terminado, recuperable), resumen al final y recuperación de un ride interrumpido.
+- ✅ **Permiso de ubicación en runtime (U1.1):** solicitud desde la pantalla de ride, con manejo de denegado y ubicación aproximada.
+- ✅ **Historial, detalle y GPX (U2):** lista de rides con franja semanal, detalle con traza y 8 métricas, exportación **GPX 1.1 + `TrackPointExtension`** a destino `content://` vía Storage Access Framework.
+- ✅ **Sync a Hermes Agent:** outbox en Room + WorkManager, firma HMAC V2 con secret en Android Keystore, SQLCipher, data minimization y dedupe por `ride.id` (ADR-003). *La validación E2E contra un NAS real sigue pendiente.*
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
-- ✅ **Gate verde:** `compileDebugKotlin`, `test` (**322 tests, 0 fallos**), `ktlintCheck`, `detekt`, `lintDebug` y `assembleDebug` (APK ~81 MB) pasan.
+- ✅ **CI:** `.github/workflows/android.yml` verde en cada push/PR (gate `test ktlintCheck detekt lintDebug assembleDebug`), artifact `buzzbike-debug-apk` y Release automática en tags `v*` (existe la release **`v0.1.0`**).
+- ✅ **Gate verde:** `test` (**394 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **84.5 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila; **no hay dispositivo ni emulador** en esta máquina, así que `connectedDebugAndroidTest` no se corre acá.
 
 **Todavía no:**
 
-- 🚧 **UI de producto:** hay scaffold Compose; las pantallas de ride, mapa y desgaste están en desarrollo.
-- 🚧 **Desgaste de componentes:** en diseño (ADR-004), aún no implementado.
-- 🚧 **APK de debug en CI:** artifact por push y Release en tags `v*`; la release firmada de producción sigue pendiente (requiere keystore).
-- ❌ Sin mapas en producción aún (MapLibre + OpenFreeMap cableado, se activa en el slice de mapas).
-- ❌ Sin BLE (frecuencia cardíaca/potencia) ni exportación GPX.
+- 🚧 **U3 — Ajustes y perfil:** DataStore + perfil corporal; falta el ADR de dato personal y cablear `hasProfile` en ride/historial/detalle.
+- 🚧 **U4 — Garaje y desgaste:** existe ADR-004, pero no hay `domain/wear/` ni tablas `bikes`/`components`/`component_events` (Room hoy tiene 3 tablas: `rides`, `outbox`, `track_points`).
+- 🚧 **U5 — Mapa:** MapLibre 13.7.1 + OpenFreeMap están declarados en el build, con **cero usos en Kotlin**.
+- 🚧 **U6 — Accesibilidad:** TalkBack, contraste y tests de borde sin hacer.
+- ❌ **Release firmada de producción:** sin `keystore.properties` ni secrets; solo builds de debug.
+- ❌ **E2E del sync con Hermes real:** nunca validado contra un NAS con Hermes Agent (la spec está implementada y testeada contra mock).
+- ❌ **BLE** (frecuencia cardíaca / potenciómetro): fuera de v1.
 
-O sea: **el motor está listo y probado, la app todavía no es usable de punta a punta.** Prefiero decirlo antes de que alguien clone y se decepcione. El roadmap con fases y criterios: [`docs/roadmap.md`](docs/roadmap.md).
+O sea: **el ciclo de un ride ya está cubierto en código** — capturar, ver en historial, abrir el detalle y exportar GPX — y todo eso está testeado en JVM, pero **falta verificarlo en un dispositivo real** (imposible en esta máquina: sin emulador/conectado) y aún no hay perfil, garaje, mapa ni release firmada. Prefiero decirlo antes de que alguien clone y se decepcione. El macroplan con fases y gate: [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
 
@@ -125,7 +134,7 @@ Diseñado para **Hermes Agent** (agente local self-hosted, que no es el modelo H
 
 ## Empezar
 
-Prerrequisitos: **JDK 17+** (el CI usa JDK 21) y **Android SDK 37** (compileSdk 37 por el AAR metadata de las AndroidX resueltas; targetSdk 36).
+Prerrequisitos: **JDK 21** (probado: Temurin 21.0.13; el CI usa JDK 21) y **Android SDK 37** (compileSdk 37 por el AAR metadata de las AndroidX resueltas; targetSdk 36).
 
 ```bash
 git clone https://github.com/CrisAlva1414/BuzzBike.git
@@ -167,15 +176,20 @@ Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Conve
 
 ## Roadmap
 
+Estado al 2026-10-30 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
+
 - [x] Fundación: ADR-001..006, docs, toolchain
 - [x] Scaffold de build + dominio (tracking, descriptores, elevación, calorías) con gate verde
 - [x] Schema Room de rides/track_points/outbox + migraciones
 - [x] Sync a Hermes Agent + webhooks firmados (HMAC, outbox, SQLCipher)
-- [ ] Schema Room de bikes/components (ADR-004)
-- [ ] UI de captura en vivo (mapa + métricas)
-- [ ] Desgaste de componentes con alertas
-- [ ] Exportación GPX 1.1
-- [ ] Primera release firmada (GitHub Releases)
+- [x] CI con GitHub Actions + release `v0.1.0` (APK de debug)
+- [x] UI de ride en vivo (U1) + permiso de ubicación en runtime (U1.1)
+- [x] Historial, detalle y exportación GPX 1.1 (U2)
+- [ ] Ajustes y perfil: DataStore + perfil corporal (U3)
+- [ ] Garaje y desgaste de componentes: schema `bikes`/`components` + `WearEngine` (ADR-004, U4)
+- [ ] Mapa en vivo/detalle con MapLibre + OpenFreeMap (U5)
+- [ ] Accesibilidad (TalkBack, contraste) (U6)
+- [ ] Primera release firmada (keystore + secrets)
 - [ ] Post-v1: BLE frecuencia cardíaca/potencia, PMTiles offline, F-Droid
 
 ---

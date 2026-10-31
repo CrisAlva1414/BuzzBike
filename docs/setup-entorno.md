@@ -5,6 +5,13 @@
 > Verificada contra la máquina de desarrollo original el 2026-10-26
 > (JDK Zulu 17.0.13, Android SDK 36, Gradle 9.8.2 vía wrapper).
 >
+> **Actualización (2026-10-30):** el toolchain vigente en la máquina de
+> desarrollo es **JDK Temurin 21.0.13** y **Android SDK 37.0** (`~/android-sdk`,
+> con build-tools 36.0.0), y el proyecto compila con **`compileSdk 37` /
+> `targetSdk 36` / `minSdk 26`** (`app/build.gradle.kts`). Los pasos de esta
+> guía documentan la instalación original (Zulu 17 / SDK 36) y siguen valiendo
+> para una máquina nueva; para instalar, usá las versiones de `AGENTS.md` §4.
+>
 > Después de seguir esta guía, leé `AGENTS.md` §0 ("Estado actual y cómo retomar")
 > antes de tocar código.
 
