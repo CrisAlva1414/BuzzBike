@@ -66,6 +66,30 @@ altos/críticos; 2 LOW residuales). Sin escalado.
 
 ---
 
+## Tarea — Fase 1: verificación en hardware (emulador)
+
+### Estado
+**completada** · clase **Standard** · 2026-10-31.
+
+### Criterio de aceptación (cumplido)
+1. `connectedDebugAndroidTest` ejecutado sobre emulador/AVD, no solo compilado.
+2. Smoke E2E manual del ciclo de un ride en la app instalada.
+
+### Resultado
+- AVD **`tester36`** (API 36, `android-36;google_apis;x86_64`) levantado headless.
+- `connectedDebugAndroidTest` = **8/8 PASS**.
+- Smoke: permiso de ubicación → Ready → ride → pausa → reanudar → terminar →
+  historial → detalle → ajustes de sync → segundo ride. **0 `FATAL EXCEPTION`**.
+- Banda calórica siempre `≈ min–max kcal` con modelo (ADR-001 respetado).
+- Evidencia local: `build/smoke/01..14.png` (no versionada).
+- No automatizado: picker SAF de "EXPORTAR GPX" (UI de sistema).
+
+### Deuda
+- Emulador en CI (Fase 1 lo dejó opcional): no implementado, solo local.
+- `EXPORTAR GPX` sigue verificado solo por tests, no E2E en dispositivo.
+
+---
+
 ## Tarea — U2: historial, detalle y export GPX
 
 ### Estado
