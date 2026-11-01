@@ -13,7 +13,22 @@ data class CalorieSummary(
     val lowKcal: Double,
     val highKcal: Double,
     val model: String,
+    /**
+     * Body mass assumed by the calculator when the ride had no known weight,
+     * or `null` when a real weight was used. ADR-001 §5.3 requires the UI to
+     * label this explicitly as `"supuesto: 70 kg"`; it is the historical
+     * reference man, never an estimate of the user's mass.
+     */
+    val assumedWeightKg: Double? = null,
 )
+
+/**
+ * Reference body mass used when no weight is known.
+ *
+ * This is a product assumption, not a physiological constant: ADR-001 §5.3
+ * only allows it when the UI labels it as `"supuesto: 70 kg"`.
+ */
+const val FALLBACK_WEIGHT_KG = 70.0
 
 /**
  * Converts a calculator [CalorieResult] into a transportable [CalorieSummary].
@@ -38,6 +53,7 @@ fun CalorieResult.toSummary(): CalorieSummary? =
                 lowKcal = low,
                 highKcal = high,
                 model = model.name,
+                assumedWeightKg = assumedWeightKg,
             )
         } else {
             null

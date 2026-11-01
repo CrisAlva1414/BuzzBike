@@ -33,6 +33,8 @@ object RideFormat {
     private const val PROFILE_SEPARATOR = " · "
     private const val WITH_PROFILE = "con perfil"
     private const val WITHOUT_PROFILE = "sin perfil"
+    private const val ASSUMPTION_PREFIX = "supuesto: "
+    private const val KG_SUFFIX = " kg"
 
     /** Placeholder shown when a value cannot be formatted. */
     const val UNKNOWN = "—"
@@ -133,9 +135,14 @@ object RideFormat {
         val value =
             APPROX + wholeNumber(lowWhole, locale) + RANGE_DASH + wholeNumber(highWhole, locale) + KCAL_SUFFIX
         val profile = if (hasProfile) WITH_PROFILE else WITHOUT_PROFILE
+        val assumption =
+            calories.assumedWeightKg
+                ?.takeIf { it.isFinite() && it > MIN_METERS }
+                ?.let { PROFILE_SEPARATOR + ASSUMPTION_PREFIX + wholeNumber(it, locale) + KG_SUFFIX }
+                .orEmpty()
         return CalorieBandText(
             value = value,
-            model = modelLabel(calories.model) + PROFILE_SEPARATOR + profile,
+            model = modelLabel(calories.model) + PROFILE_SEPARATOR + profile + assumption,
         )
     }
 

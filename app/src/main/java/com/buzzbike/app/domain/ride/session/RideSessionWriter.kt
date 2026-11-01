@@ -1,5 +1,6 @@
 package com.buzzbike.app.domain.ride.session
 
+import com.buzzbike.app.domain.calories.UserProfile
 import com.buzzbike.app.domain.model.RideDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
 
@@ -19,10 +20,25 @@ import com.buzzbike.app.domain.model.TrackPoint
  * reconstruct a number from the estimate alone.
  */
 interface RideSessionWriter {
-    suspend fun startRide(): String
+    /**
+     * Creates the persisted active ride and stores [profile] as the snapshot
+     * the ride will use for its whole lifetime. `null` leaves the four snapshot
+     * columns empty (ride recorded without a profile).
+     */
+    suspend fun startRide(profile: UserProfile? = null): String
 
     /** Returns the id of the persisted active ride, if any, for recovery. */
     suspend fun findActiveRideId(): String?
+
+    /**
+     * Reads the profile snapshot stored when [rideId] was started.
+     *
+     * Recovery must use this value instead of the current profile: the user may
+     * have edited or cleared the profile if the process died, and historical
+     * rides keep the inputs they were actually calculated with (ADR-001 §5.3.4,
+     * ADR-007 §3).
+     */
+    suspend fun persistedProfile(rideId: String): UserProfile?
 
     /**
      * Loads the persisted points of [rideId] in ascending timestamp order.
@@ -47,5 +63,6 @@ interface RideSessionWriter {
         caloriesLowKcal: Double? = null,
         caloriesHighKcal: Double? = null,
         calorieModel: String? = null,
+        profile: UserProfile? = null,
     )
 }

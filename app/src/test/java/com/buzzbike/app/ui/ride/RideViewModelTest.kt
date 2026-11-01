@@ -1,5 +1,7 @@
 package com.buzzbike.app.ui.ride
 
+import com.buzzbike.app.domain.calories.UserProfile
+import com.buzzbike.app.domain.calories.UserProfileStore
 import com.buzzbike.app.domain.model.RideDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
 import com.buzzbike.app.domain.ride.engine.RideEngine
@@ -32,6 +34,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -82,6 +85,21 @@ class RideViewModelTest {
             assertEquals(RIDE_ID, writer.startedRideId)
             assertEquals(1, service.startCalls)
             assertEquals(0, service.stopCalls)
+        }
+
+    @Test
+    fun given_savedProfile_when_startRide_thenPassesSnapshotAndExposesHasProfile() =
+        runTest {
+            val profile = UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true)
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer, profileStore = FakeProfileStore(profile))
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertEquals(profile, writer.startedProfile)
+            val recording = viewModel.state.value as RideSessionState.Recording
+            assertTrue(recording.live.hasProfile)
         }
 
     @Test
@@ -191,6 +209,40 @@ class RideViewModelTest {
             assertTrue(writer.savedDescriptors)
             assertEquals(1, writer.stopCalls)
             assertEquals(0, service.startCalls)
+        }
+
+    @Test
+    fun given_liveProfileChanged_when_salvage_thenUsesPersistedSnapshotWithoutReadingStore() =
+        runTest {
+            val persisted = UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true)
+            val live = UserProfile(weightKg = 60.0, heightCm = 160.0, ageYears = 20, isMale = false)
+            val writer =
+                RecordingRideSessionWriter(initialActiveRideId = RIDE_ID).apply {
+                    persistedProfileValue = persisted
+                    loadedPoints =
+                        listOf(
+                            TrackPoint(timestampMonotonicNanos = 0L, lat = BASE_LAT, lon = BASE_LON, speedMps = 5.0),
+                            TrackPoint(
+                                timestampMonotonicNanos = NANOS_PER_SECOND,
+                                lat = BASE_LAT + LAT_STEP,
+                                lon = BASE_LON,
+                                speedMps = 5.0,
+                            ),
+                        )
+                }
+            val store = FakeProfileStore(live)
+            val viewModel = viewModel(writer = writer, profileStore = store)
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value is RideSessionState.Recoverable)
+
+            viewModel.salvageRecoverableRide()
+            advanceUntilIdle()
+
+            assertEquals(0, store.getCalls)
+            assertEquals(1, writer.persistedProfileCalls)
+            assertEquals(persisted, writer.savedProfile)
+            val finished = viewModel.state.value as RideSessionState.Finished
+            assertTrue(finished.summary.hasProfile)
         }
 
     @Test
@@ -306,6 +358,8 @@ class RideViewModelTest {
         writer: RecordingRideSessionWriter = RecordingRideSessionWriter(),
         service: RideServiceController = FakeRideServiceController(),
         permissionChecker: LocationPermissionChecker = GrantedPermissionChecker,
+        profileStore: UserProfileStore = FakeProfileStore(),
+        engine: RideEngine = RideEngine(),
     ): RideViewModel {
         val trackingManager =
             TrackingManager(
@@ -315,7 +369,7 @@ class RideViewModelTest {
             )
         val manager =
             RideSessionManager(
-                rideEngine = RideEngine(),
+                rideEngine = engine,
                 trackingManager = trackingManager,
                 rideSessionWriter = writer,
                 permissionChecker = permissionChecker,
@@ -333,7 +387,7 @@ class RideViewModelTest {
                         gate = SyncMutationGate(),
                     ),
             )
-        return RideViewModel(manager, coordinator, service)
+        return RideViewModel(manager, coordinator, service, profileStore)
     }
 
     private class FakeRideServiceController : RideServiceController {
@@ -359,6 +413,9 @@ class RideViewModelTest {
         var startedRideId: String? = null
             private set
 
+        var startedProfile: UserProfile? = null
+            private set
+
         var startCalls: Int = 0
             private set
 
@@ -379,15 +436,24 @@ class RideViewModelTest {
         var savedDescriptors: Boolean = false
             private set
 
+        var savedProfile: UserProfile? = null
+            private set
+
         var findActiveRideCalls: Int = 0
             private set
 
         var loadedPoints: List<TrackPoint> = emptyList()
 
+        var persistedProfileValue: UserProfile? = null
+
+        var persistedProfileCalls: Int = 0
+            private set
+
         private var activeRideId: String? = initialActiveRideId
 
-        override suspend fun startRide(): String {
+        override suspend fun startRide(profile: UserProfile?): String {
             startCalls += 1
+            startedProfile = profile
             startedRideId = RIDE_ID
             activeRideId = RIDE_ID
             return RIDE_ID
@@ -396,6 +462,11 @@ class RideViewModelTest {
         override suspend fun findActiveRideId(): String? {
             findActiveRideCalls += 1
             return activeRideId
+        }
+
+        override suspend fun persistedProfile(rideId: String): UserProfile? {
+            persistedProfileCalls += 1
+            return persistedProfileValue
         }
 
         override suspend fun loadTrackPoints(rideId: String): List<TrackPoint> = loadedPoints
@@ -422,14 +493,38 @@ class RideViewModelTest {
             caloriesLowKcal: Double?,
             caloriesHighKcal: Double?,
             calorieModel: String?,
+            profile: UserProfile?,
         ) {
             savedDescriptors = true
+            savedProfile = profile
         }
 
         override suspend fun saveTrackPoint(
             rideId: String,
             point: TrackPoint,
         ) = Unit
+    }
+
+    private class FakeProfileStore(
+        var profile: UserProfile? = null,
+    ) : UserProfileStore {
+        var getCalls: Int = 0
+            private set
+
+        override fun observe(): Flow<UserProfile?> = flowOf(profile)
+
+        override suspend fun get(): UserProfile? {
+            getCalls += 1
+            return profile
+        }
+
+        override suspend fun save(profile: UserProfile) {
+            this.profile = profile
+        }
+
+        override suspend fun clear() {
+            profile = null
+        }
     }
 
     private object EmptyLocationSensor : LocationSensorPort {

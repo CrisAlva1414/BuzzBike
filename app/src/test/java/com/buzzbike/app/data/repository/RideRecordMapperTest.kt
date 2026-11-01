@@ -2,8 +2,11 @@ package com.buzzbike.app.data.repository
 
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.domain.calories.CalorieSummary
+import com.buzzbike.app.domain.calories.UserProfile
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -42,7 +45,13 @@ class RideRecordMapperTest {
         assertEquals(6.5, record.avgSpeedMps, 0.0)
         assertEquals(11.2, record.maxSpeedMps, 0.0)
         assertEquals(
-            CalorieSummary(estimateKcal = 100.0, lowKcal = 70.0, highKcal = 130.0, model = "MET_V3"),
+            CalorieSummary(
+                estimateKcal = 100.0,
+                lowKcal = 70.0,
+                highKcal = 130.0,
+                model = "MET_V3",
+                assumedWeightKg = 70.0,
+            ),
             record.calories,
         )
     }
@@ -72,7 +81,13 @@ class RideRecordMapperTest {
         val entity = entity().copy(caloriesLowKcal = 100.0, caloriesHighKcal = 100.0)
 
         assertEquals(
-            CalorieSummary(estimateKcal = 100.0, lowKcal = 100.0, highKcal = 100.0, model = "MET_V3"),
+            CalorieSummary(
+                estimateKcal = 100.0,
+                lowKcal = 100.0,
+                highKcal = 100.0,
+                model = "MET_V3",
+                assumedWeightKg = 70.0,
+            ),
             entity.toRideRecord().calories,
         )
     }
@@ -89,6 +104,74 @@ class RideRecordMapperTest {
         val entity = entity().copy(calorieModel = null)
 
         assertNull(entity.toRideRecord().calories)
+    }
+
+    @Test
+    fun given_noStoredSnapshot_when_mapped_thenProfileSnapshotNull() {
+        val entity =
+            entity().copy(
+                profileWeightKg = null,
+                profileHeightCm = null,
+                profileAgeYears = null,
+                profileIsMale = null,
+            )
+
+        assertNull(entity.toRideRecord().profileSnapshot)
+    }
+
+    @Test
+    fun given_partialSnapshot_when_mapped_thenProfileSnapshotKeepsKnownInputs() {
+        val entity = entity().copy(profileWeightKg = 72.5, profileAgeYears = 34)
+
+        assertEquals(
+            UserProfile(weightKg = 72.5, ageYears = 34),
+            entity.toRideRecord().profileSnapshot,
+        )
+    }
+
+    @Test
+    fun given_completeSnapshot_when_mapped_thenProfileSnapshotIsPreserved() {
+        val entity =
+            entity().copy(
+                profileWeightKg = 72.5,
+                profileHeightCm = 178.0,
+                profileAgeYears = 34,
+                profileIsMale = true,
+            )
+
+        assertEquals(
+            UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true),
+            entity.toRideRecord().profileSnapshot,
+        )
+    }
+
+    @Test
+    fun given_completeProfile_when_writtenAndReadBack_thenSnapshotRoundTripsAndHasProfile() {
+        val profile = UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true)
+
+        val record = entity().withProfileSnapshot(profile).toRideRecord()
+
+        assertEquals(profile, record.profileSnapshot)
+        assertTrue(record.hasProfile)
+        assertNull(record.calories?.assumedWeightKg)
+    }
+
+    @Test
+    fun given_partialProfile_when_writtenAndReadBack_thenSnapshotRoundTripsWithoutHasProfile() {
+        val profile = UserProfile(weightKg = 72.5, ageYears = 34)
+
+        val record = entity().withProfileSnapshot(profile).toRideRecord()
+
+        assertEquals(profile, record.profileSnapshot)
+        assertFalse(record.hasProfile)
+    }
+
+    @Test
+    fun given_noSnapshot_when_mapped_thenHasProfileIsFalseAndCaloriesUseAssumption() {
+        val record = entity().toRideRecord()
+
+        assertFalse(record.hasProfile)
+        assertEquals(70.0, record.calories?.assumedWeightKg ?: Double.NaN, 0.0)
     }
 
     private fun entity(): RideEntity =

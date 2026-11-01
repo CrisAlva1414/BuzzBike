@@ -208,11 +208,11 @@ private fun DetailContent(
 /**
  * Metrics for the detail grid, in the same order as the finished-ride summary.
  *
- * [hasProfile] is hard-coded to `false` because v1 has no body profile (U3).
- * Once a persisted `calHasProfile` value exists, this function must use it
- * instead so the calorie band reports the right context.
+ * The calorie cell uses the profile snapshot persisted with the ride, so its
+ * "con perfil"/"sin perfil" context describes how the band was calculated and
+ * does not change if the current profile is edited later (ADR-001 §5.3.4).
  */
-private fun detailMetricCells(
+internal fun detailMetricCells(
     ride: RideRecord,
     locale: Locale,
 ): List<MetricCellData> =
@@ -224,5 +224,5 @@ private fun detailMetricCells(
         MetricCellData(RideMetricLabels.ELEVATION_LOSS, RideFormat.elevationM(ride.elevationLossM, locale)),
         MetricCellData(RideMetricLabels.AVG_SPEED, RideFormat.speedKmh(ride.avgSpeedMps, locale)),
         MetricCellData(RideMetricLabels.MAX_SPEED, RideFormat.speedKmh(ride.maxSpeedMps, locale)),
-        calorieMetricCell(ride.calories, hasProfile = false, locale = locale),
+        calorieMetricCell(ride.calories, hasProfile = ride.hasProfile, locale = locale),
     )

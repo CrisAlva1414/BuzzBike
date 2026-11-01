@@ -4,6 +4,7 @@ import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
+import com.buzzbike.app.domain.calories.UserProfile
 import com.buzzbike.app.domain.history.RideDetail
 import com.buzzbike.app.domain.history.RideDetailSource
 import com.buzzbike.app.domain.history.RideHistorySource
@@ -56,19 +57,22 @@ class RideRepository
          */
         suspend fun getRideWithDescriptors(rideId: String): RideEntity? = rideDao.getRideById(rideId)
 
-        override suspend fun startRide(): String {
+        override suspend fun startRide(profile: UserProfile?): String {
             val rideId = UUID.randomUUID().toString()
             val ride =
                 RideEntity(
                     id = rideId,
                     startTimeMillis = System.currentTimeMillis(),
                     isActive = true,
-                )
+                ).withProfileSnapshot(profile)
             rideDao.replaceActiveRide(ride)
             return rideId
         }
 
         override suspend fun findActiveRideId(): String? = rideDao.getActiveRideId()
+
+        override suspend fun persistedProfile(rideId: String): UserProfile? =
+            rideDao.getRideById(rideId)?.toProfileSnapshot()
 
         override suspend fun loadTrackPoints(rideId: String): List<TrackPoint> =
             trackPointDao.getPointsForRideSync(rideId).map(TrackPointEntity::toTrackPoint)
@@ -92,21 +96,23 @@ class RideRepository
             caloriesLowKcal: Double?,
             caloriesHighKcal: Double?,
             calorieModel: String?,
+            profile: UserProfile?,
         ) {
             val ride = rideDao.getRideById(rideId) ?: return
             rideDao.updateRide(
-                ride.copy(
-                    distanceM = descriptors.distanceM,
-                    movingTimeSeconds = descriptors.movingSeconds,
-                    elevationGainM = elevationGainM,
-                    elevationLossM = elevationLossM,
-                    caloriesKcal = caloriesKcal,
-                    caloriesLowKcal = caloriesLowKcal,
-                    caloriesHighKcal = caloriesHighKcal,
-                    calorieModel = calorieModel,
-                    avgSpeedMps = descriptors.avgSpeedMps,
-                    maxSpeedMps = descriptors.maxSpeedMps,
-                ),
+                ride
+                    .copy(
+                        distanceM = descriptors.distanceM,
+                        movingTimeSeconds = descriptors.movingSeconds,
+                        elevationGainM = elevationGainM,
+                        elevationLossM = elevationLossM,
+                        caloriesKcal = caloriesKcal,
+                        caloriesLowKcal = caloriesLowKcal,
+                        caloriesHighKcal = caloriesHighKcal,
+                        calorieModel = calorieModel,
+                        avgSpeedMps = descriptors.avgSpeedMps,
+                        maxSpeedMps = descriptors.maxSpeedMps,
+                    ).withProfileSnapshot(profile),
             )
         }
 

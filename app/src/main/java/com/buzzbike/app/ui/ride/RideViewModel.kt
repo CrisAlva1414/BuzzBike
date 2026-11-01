@@ -2,6 +2,7 @@ package com.buzzbike.app.ui.ride
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.buzzbike.app.domain.calories.UserProfileStore
 import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionState
@@ -31,6 +32,7 @@ class RideViewModel
         private val rideSessionManager: RideSessionManager,
         private val rideSyncCoordinator: RideSyncCoordinator,
         private val rideServiceController: RideServiceController,
+        private val profileStore: UserProfileStore,
     ) : ViewModel() {
         val state: StateFlow<RideSessionState> =
             rideSessionManager.state.stateIn(
@@ -64,7 +66,11 @@ class RideViewModel
             startInFlight = true
             viewModelScope.launch {
                 try {
-                    val rideId = rideSessionManager.startRide()
+                    // Read once at start: the manager fixes this snapshot for
+                    // the whole ride, so a later profile edit cannot rewrite
+                    // the live values or the persisted ride.
+                    val profile = profileStore.get()
+                    val rideId = rideSessionManager.startRide(profile)
                     if (rideId != null) {
                         rideServiceController.start()
                     }
@@ -136,6 +142,8 @@ class RideViewModel
          */
         fun salvageRecoverableRide() {
             viewModelScope.launch {
+                // No live profile read here: the manager recovers the snapshot
+                // persisted when the ride started (ADR-007 §3).
                 rideSessionManager.salvageRecoverableRide()
             }
         }

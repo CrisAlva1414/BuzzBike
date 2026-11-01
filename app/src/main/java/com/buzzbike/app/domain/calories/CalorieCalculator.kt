@@ -2,9 +2,10 @@ package com.buzzbike.app.domain.calories
 
 /**
  * Default body weight used when the user has not provided a profile.
- * ADR-001: the result is marked as an assumption and carries the wider band.
+ * ADR-001 §5.3: the result is marked as an assumption and carries the wider
+ * band; the UI must label it as `"supuesto: 70 kg"`.
  */
-private const val DEFAULT_WEIGHT_KG = 70.0
+private const val DEFAULT_WEIGHT_KG = FALLBACK_WEIGHT_KG
 
 private const val SECONDS_PER_MINUTE = 60.0
 
@@ -45,6 +46,7 @@ class CalorieCalculator {
                 speedSamplesMps = speedSamplesMps,
                 durationsSeconds = durationsSeconds,
                 isMoving = isMoving,
+                stopMet = resolvedProfile.stopMet,
             )
 
         return CalorieResult(
@@ -76,6 +78,7 @@ class CalorieCalculator {
         speedSamplesMps: List<Double>,
         durationsSeconds: List<Double>,
         isMoving: List<Boolean>,
+        stopMet: Double,
     ): MetMinutes {
         var total = 0.0
         var active = 0.0
@@ -86,6 +89,7 @@ class CalorieCalculator {
                     speedMps = speedSamplesMps[index],
                     durationSeconds = durationsSeconds[index],
                     moving = isMoving[index],
+                    stopMet = stopMet,
                 )
             total += sample.total
             active += sample.active
@@ -97,35 +101,55 @@ class CalorieCalculator {
         speedMps: Double,
         durationSeconds: Double,
         moving: Boolean,
+        stopMet: Double,
     ): MetMinutes {
         if (durationSeconds <= 0.0 || !durationSeconds.isFinite()) {
             return MetMinutes(total = 0.0, active = 0.0)
         }
         val durationMinutes = durationSeconds / SECONDS_PER_MINUTE
         val metBand = if (moving) MetTable.getMetForSpeedMps(speedMps) else null
-        val met = metBand?.met ?: MetTable.STOP_MET
+        val met = metBand?.met ?: stopMet
         val total = met * durationMinutes
         val active = if (metBand != null) total else 0.0
         return MetMinutes(total = total, active = active)
     }
 
     private fun resolveProfile(profile: UserProfile): ResolvedProfile {
-        val hasProfile = profile.weightKg != null && profile.weightKg > 0.0
+        val hasProfile = profile.isComplete
+        val weightKg = profile.weightKg ?: DEFAULT_WEIGHT_KG
         val assumedWeightKg = if (profile.weightKg == null) DEFAULT_WEIGHT_KG else null
+        // ADR-001 §4: a complete profile replaces the 1.0 MET stop baseline with
+        // Mifflin REE / 1440 kcal/min. Expressed as a MET-equivalent so the rest
+        // of the cascade (and its kcal conversion) stays untouched.
+        val stopMet =
+            if (hasProfile) {
+                restingKcalPerMinute(profile)
+                    ?.div(kcalPerMinutePerMet(weightKg))
+                    ?: MetTable.STOP_MET
+            } else {
+                MetTable.STOP_MET
+            }
         return ResolvedProfile(
-            weightKg = profile.weightKg ?: DEFAULT_WEIGHT_KG,
+            weightKg = weightKg,
             assumedWeightKg = assumedWeightKg,
             hasProfile = hasProfile,
+            stopMet = stopMet,
             uncertaintyMinPercent = if (hasProfile) WITH_PROFILE_MIN_PERCENT else WITHOUT_PROFILE_MIN_PERCENT,
             uncertaintyMaxPercent = if (hasProfile) WITH_PROFILE_MAX_PERCENT else WITHOUT_PROFILE_MAX_PERCENT,
         )
     }
 
+    private fun kcalPerMinutePerMet(weightKg: Double): Double =
+        OXYGEN_ML_PER_KG_PER_MIN_PER_MET * weightKg / KCAL_CONVERSION_DENOMINATOR
+
     private fun kcalFrom(
         metMinutes: Double,
         profile: ResolvedProfile,
     ): Double? =
-        if (profile.hasProfile || profile.assumedWeightKg != null) {
+        // Absolute kcal needs a usable mass. A `null` weight falls back to the
+        // documented 70 kg assumption, while a non-positive supplied weight does
+        // not produce a value (ADR-001 §5.3).
+        if (profile.weightKg > 0.0) {
             metMinutes * OXYGEN_ML_PER_KG_PER_MIN_PER_MET * profile.weightKg / KCAL_CONVERSION_DENOMINATOR
         } else {
             null
@@ -133,9 +157,12 @@ class CalorieCalculator {
 
     private fun missingInputs(profile: UserProfile): List<String> =
         buildList {
-            if (profile.weightKg == null) add("weight")
-            if (profile.heightCm == null) add("height")
-            if (profile.ageYears == null) add("age")
+            val weightKg = profile.weightKg
+            val heightCm = profile.heightCm
+            val ageYears = profile.ageYears
+            if (weightKg == null || weightKg <= 0.0) add("weight")
+            if (heightCm == null || heightCm <= 0.0) add("height")
+            if (ageYears == null || ageYears <= 0) add("age")
             if (profile.isMale == null) add("sex")
         }
 
@@ -143,6 +170,7 @@ class CalorieCalculator {
         val weightKg: Double,
         val assumedWeightKg: Double?,
         val hasProfile: Boolean,
+        val stopMet: Double,
         val uncertaintyMinPercent: Int,
         val uncertaintyMaxPercent: Int,
     )

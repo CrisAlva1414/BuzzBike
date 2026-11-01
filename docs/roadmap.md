@@ -3,7 +3,7 @@
 > Documento de trabajo, no marketing. Sirve para retomar el proyecto en cualquier
 > momento sin releer todo el repo. Fuente de verdad del *por qué*: `AGENTS.md` y
 > `docs/adr/`. Fuente de verdad del *estado real*: `AGENTS.md` §0 y `docs/sessions/`.
-> Última actualización: **2026-10-30**.
+> Última actualización: **2026-11-01**.
 
 ---
 
@@ -21,12 +21,20 @@
 | Fase | Qué incluye | Gate / cierre |
 |---|---|---|
 | **0 — Verdad y salvaguardas** | Estado honesto en docs (`README.md`, `AGENTS.md`, este roadmap), resolución de la contradicción de proceso sobre `security-reviewer` (§4), app id y nombre definitivo **pendientes de la persona**, harness de `doc-writer` y gate de seguridad acumulado. | Docs verificados contra el código; §4 unificada con `AGENTS.md`. |
-| **1 — Verificación en hardware** | Emulador o dispositivo conectado, smoke E2E manual, ejecución de `connectedDebugAndroidTest` (hoy solo compila) y, si entra, emulador en CI. | Instrumentados en verde sobre un dispositivo/emulador real. |
-| **2 — U3 Ajustes y perfil** | DataStore + perfil corporal, **ADR de dato personal** nuevo, y cablear `hasProfile` en ride/historial/detalle (hoy hardcodeado en `false`). | `tester: PASS` + `security-reviewer: PASS`. |
-| **3 — U4 Garaje y desgaste** | Migración Room v1→v2 con tablas `bikes`, `components`, `component_events` + `WearEngine` (ADR-004) + UI de garaje + bici asignada al ride. | `tester: PASS` + `security-reviewer: PASS`. |
+| **1 — Verificación en hardware** ✅ **COMPLETA (2026-11-01)** | Emulador o dispositivo conectado, smoke E2E manual, ejecución de `connectedDebugAndroidTest` (hoy solo compila) y, si entra, emulador en CI. **Hecho con el AVD local `tester36`: 8/8 instrumentados en verde.** | Instrumentados en verde sobre un dispositivo/emulador real. |
+| **2 — U3 Ajustes y perfil** ✅ **COMPLETA (2026-11-01, 465 tests)** | **Perfil corporal en Room cifrado (ADR-007)**, **ADR de dato personal** nuevo (ADR-007), y cablear `hasProfile` en ride/historial/detalle (estaba hardcodeado en `false`). | `tester: PASS` + `security-reviewer: PASS`. |
+| **3 — U4 Garaje y desgaste** | Migración Room **5→6** con tablas `bikes`, `components`, `component_events` + `WearEngine` (ADR-004) + UI de garaje + bici asignada al ride. | `tester: PASS` + `security-reviewer: PASS`. |
 | **4 — U5 Mapa** | MapLibre + OpenFreeMap con atribución ODbL visible y track en el detalle; **o sacar la dependencia** si no entra en v1 (hoy está declarada con cero usos de Kotlin). | `tester: PASS` + `security-reviewer: PASS`, o decisión documentada de quitar la dependencia. |
 | **5 — U6 Accesibilidad y pulido** | TalkBack, contraste, deuda de corrutinas (p. ej. `runCatching` que captura `CancellationException`) y tests de borde. | `tester: PASS` + `security-reviewer: PASS`. |
 | **6 — Release** | Keystore + secrets, **release firmada**, **E2E del sync contra un Hermes real**, `security-reviewer` final sobre el diff acumulado, docs `PRIVACY`/`SECURITY`/`CONTRIBUTING`/guía de usuario/inventario de datos y `CHANGELOG` **v1.0.0**. | `security-reviewer` final PASS + tag + GitHub Release firmada. |
+
+> **Nota sobre Fase 2 (U3) — 2026-11-01:** completada. El plan original decía
+> "DataStore + perfil corporal"; se implementó **en Room cifrado con SQLCipher**
+> para que el perfil comparta la misma frontera de cifrado que los rides
+> (motivo y decisiones: **ADR-007**). Gate JVM en **465 tests, 0
+> fallos**. La DB pasó a **v5** (migración 4→5: crea `user_profile` y agrega
+> las 4 columnas `profile_*` de `rides`); por eso
+> la migración de U4 es **5→6**, no 1→2.
 
 > **Nota sobre Fase 6 (2026-10-31):** el pipeline de **release firmado ya está
 > preparado en CI** (`.github/workflows/android.yml`, job `release` en tags `v*`:
@@ -46,11 +54,11 @@
 
 ## 1. Estado actual
 
-> **Nota breve (2026-10-30).** El estado vigente del proyecto se mantiene en
+> **Nota breve (2026-11-01).** El estado vigente del proyecto se mantiene en
 > **`AGENTS.md` §0**. A la fecha: **U0 (tema/componentes), L1 (pause/resume + FGS),
-> U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime) y U2
-> (historial/detalle + GPX) están hechos**; el próximo slice es **U3 (Ajustes y
-> perfil)**. El resto de este documento
+> U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime), U2
+> (historial/detalle + GPX) y U3 (Ajustes y perfil) están hechos**; el próximo
+> slice es **U4 (Garaje y desgaste)**. El resto de este documento
 > queda como **referencia de fases y
 > criterios**, no como estado real; si hay conflicto, manda `AGENTS.md` §0.
 
@@ -73,14 +81,17 @@
 
 **Slice 1 — build Gradle + Compose + Hilt + Room + ktlint/detekt.**
 Archivos escritos y commiteados (`e54cce2`). **Gate de verificación en verde**
-(`assembleDebug`, `test`, `ktlintCheck`, `detekt`, `lintDebug`) — cerrado; el
-gate acumulado hoy es de **415 tests, 0 fallos** (ver `AGENTS.md` §0).
+(`assembleDebug`, `test`, `ktlintCheck`, `detekt`, `lintDebug`) — cerrado (el
+gate de esa época era de 415 tests; el conteo vigente está en `AGENTS.md` §0).
 
 ### Fase 2 — Dominio y datos (COMPLETA)
 
 - **Slice 2 — schema Room:** *estado real 2026-10-30:* las tablas cerradas en v1 son
-  `rides`, `track_points`, `outbox` (+ migración Room 1→2). `bikes`, `components` y
-  `component_events` **no existen** y quedan para U4 (Fase 3 del macroplan §0).
+  `rides`, `track_points`,   `outbox` (+ migración Room 1→2). *Actualizado
+  2026-11-01:* U3 agregó **`user_profile`** y las 4 columnas `profile_*` de
+  `rides` (migración 4→5, DB en **v5**).
+  `bikes`, `components` y `component_events` **no existen** y quedan para U4
+  (Fase 3 del macroplan §0, migración **5→6**).
 - **Slice 4 — motor de descriptores:** distancia, moving time, velocidad
   (media/pico), desnivel +/− con suavizado e histéresis (barómetro primario,
   GPS como fallback). ✅ Hecho (ADR-005 segmentación, ADR-006 elevación). Tests JVM puro con fixtures de tracks conocidos.
@@ -99,7 +110,9 @@ gate acumulado hoy es de **415 tests, 0 fallos** (ver `AGENTS.md` §0).
 
 - **Slice 5 — `CaloriesEngine` (ADR-001):** ✅ **COMPLETA (nivel 3).** Cascada ACSM → Keytel → Compendium MET;
   en v1 solo corre el **nivel 3** (Compendium por bandas de velocidad GPS); los
-  niveles 1 y 2 quedan como hooks. BMR Mifflin-St Jeor. **UI de incertidumbre
+  niveles 1 y 2 quedan como hooks. BMR Mifflin-St Jeor — **operativo desde U3**
+  (2026-11-01): baseline de paradas `REE/1440` con perfil completo, fallback
+  `MetTable.STOP_MET` (actualización 2026-11-01 de ADR-001). **UI de incertidumbre
   obligatoria:** intervalo + modelo usado, nunca un número exacto solo.
 - **Slice 6 — `WearEngine` (ADR-004):** ❌ **PENDIENTE (U4).** No hay `domain/wear/` ni
   tablas de componentes.
@@ -160,10 +173,11 @@ gate acumulado hoy es de **415 tests, 0 fallos** (ver `AGENTS.md` §0).
 | 8 — Mapas | Mapa online con track + atribución ODbL visible + UA identificable | Compila + revisión visual manual (requiere dispositivo; fuera de esta máquina) | Slice 3 |
 | 6 (release) — Gate final | Diff completo pasa security review; APK de release firmado | `security-reviewer` PASS + tag + GitHub Release | Todos los anteriores |
 
-> **Estado real del schema (2026-10-30):** la fila «2 — Schema Room» habla de
-> 6 tablas; en el repo solo existen **3** (`rides`, `track_points`, `outbox`,
-> con migración Room 1→2). `bikes`/`components`/`component_events` se agregan en
-> U4 (migración v1→v2).
+> **Estado real del schema (2026-11-01):** la fila «2 — Schema Room» habla de
+> 6 tablas; hoy existen **4** (`rides`, `track_points`, `outbox`,
+> `user_profile`), con **migraciones 1→2 … 4→5** y la DB en **v5**.
+> `bikes`/`components`/`component_events` se agregan en
+> U4 (migración **5→6**).
 
 ---
 

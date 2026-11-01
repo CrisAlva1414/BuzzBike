@@ -126,6 +126,18 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    sourceSets {
+        // Room exports the schema JSON to `app/schemas`; the instrumented
+        // MigrationTestHelper reads those files from the androidTest assets.
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+}
+
+ksp {
+    // Required by MigrationTestHelper: it needs the exported schema for the
+    // previous version to recreate it before applying the migration.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 kotlin {
@@ -137,6 +149,12 @@ kotlin {
 dependencies {
     // Compose — versions come from the BOM; individual libs are unversioned.
     implementation(platform(libs.compose.bom))
+
+    // room-testing 2.8.5 uses kotlinx-serialization 1.8.x for its schema
+    // bundles. Pin the BOM so the test runtime cannot resolve the older 1.7.3
+    // graph (AbstractMethodError in GeneratedSerializer).
+    implementation(platform("org.jetbrains.kotlinx:kotlinx-serialization-bom:1.8.1"))
+
     implementation(libs.compose.material3)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
@@ -188,6 +206,9 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.coroutines.test)
+    // MigrationTestHelper: recreates the previous schema from the exported JSON
+    // and validates the migrated database against the current one.
+    androidTestImplementation(libs.room.testing)
 }
 
 detekt {

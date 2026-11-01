@@ -5,14 +5,16 @@ import androidx.room.RoomDatabase
 import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
+import com.buzzbike.app.data.local.dao.UserProfileDao
 import com.buzzbike.app.data.local.entity.OutboxEntity
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
+import com.buzzbike.app.data.local.entity.UserProfileEntity
 
 @Database(
-    entities = [RideEntity::class, TrackPointEntity::class, OutboxEntity::class],
-    version = 4,
-    exportSchema = false,
+    entities = [RideEntity::class, TrackPointEntity::class, OutboxEntity::class, UserProfileEntity::class],
+    version = 5,
+    exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun rideDao(): RideDao
@@ -20,4 +22,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun trackPointDao(): TrackPointDao
 
     abstract fun outboxDao(): OutboxDao
+
+    abstract fun userProfileDao(): UserProfileDao
 }

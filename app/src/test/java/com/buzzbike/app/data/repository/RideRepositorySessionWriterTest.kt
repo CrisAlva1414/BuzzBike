@@ -4,6 +4,8 @@ import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.data.local.entity.TrackPointEntity
+import com.buzzbike.app.domain.calories.UserProfile
+import com.buzzbike.app.domain.model.RideDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -108,18 +110,117 @@ class RideRepositorySessionWriterTest {
             assertTrue(rideDao.inserted.single().isActive)
         }
 
+    @Test
+    fun given_completeProfile_when_startRide_thenInsertCarriesSnapshotColumns() =
+        runTest {
+            val rideDao = FakeRideDao()
+            val repository = RideRepository(rideDao, FakeTrackPointDao())
+            val profile = UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true)
+
+            repository.startRide(profile)
+
+            val inserted = rideDao.inserted.single()
+            assertEquals(72.5, inserted.profileWeightKg ?: Double.NaN, 0.0)
+            assertEquals(178.0, inserted.profileHeightCm ?: Double.NaN, 0.0)
+            assertEquals(34, inserted.profileAgeYears)
+            assertEquals(true, inserted.profileIsMale)
+        }
+
+    @Test
+    fun given_noProfile_when_startRide_thenInsertSnapshotColumnsStayNull() =
+        runTest {
+            val rideDao = FakeRideDao()
+            val repository = RideRepository(rideDao, FakeTrackPointDao())
+
+            repository.startRide(null)
+
+            val inserted = rideDao.inserted.single()
+            assertNull(inserted.profileWeightKg)
+            assertNull(inserted.profileHeightCm)
+            assertNull(inserted.profileAgeYears)
+            assertNull(inserted.profileIsMale)
+        }
+
+    @Test
+    fun given_storedSnapshot_when_persistedProfile_thenReturnsIt() =
+        runTest {
+            val ride =
+                RideEntity(
+                    id = RIDE_ID,
+                    startTimeMillis = 1_700_000_000_000L,
+                    profileWeightKg = 72.5,
+                    profileHeightCm = 178.0,
+                    profileAgeYears = 34,
+                    profileIsMale = true,
+                )
+            val repository = RideRepository(FakeRideDao(storedRide = ride), FakeTrackPointDao())
+
+            assertEquals(
+                UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true),
+                repository.persistedProfile(RIDE_ID),
+            )
+            assertNull(repository.persistedProfile("missing"))
+        }
+
+    @Test
+    fun given_partialProfile_when_saveRideDescriptors_thenStoresOnlyKnownSnapshotFields() =
+        runTest {
+            val ride = RideEntity(id = RIDE_ID, startTimeMillis = 1_700_000_000_000L, isActive = true)
+            val rideDao = FakeRideDao(storedRide = ride)
+            val repository = RideRepository(rideDao, FakeTrackPointDao())
+
+            repository.saveRideDescriptors(
+                rideId = RIDE_ID,
+                descriptors = descriptors(),
+                elevationGainM = 10.0,
+                elevationLossM = 5.0,
+                caloriesKcal = 100.0,
+                caloriesLowKcal = 70.0,
+                caloriesHighKcal = 130.0,
+                calorieModel = "COMPENDIUM_VELOCITY",
+                profile = UserProfile(weightKg = 72.5, ageYears = 34),
+            )
+
+            val updated = rideDao.updated.single()
+            assertEquals(72.5, updated.profileWeightKg ?: Double.NaN, 0.0)
+            assertNull(updated.profileHeightCm)
+            assertEquals(34, updated.profileAgeYears)
+            assertNull(updated.profileIsMale)
+        }
+
+    private fun descriptors(): RideDescriptors =
+        RideDescriptors(
+            distanceM = 1_000.0,
+            elapsedSeconds = 600L,
+            movingSeconds = 600L,
+            stoppedSeconds = 0L,
+            avgMovingSpeedMps = 1.6,
+            avgSpeedMps = 1.6,
+            maxSpeedMps = 3.2,
+            stopCount = 0,
+            stopDurationsSeconds = emptyList(),
+            acceptedPoints = 10,
+            rejectedPoints = 0,
+            gapCount = 0,
+            distanceIsLowerBound = false,
+            modelVersion = "test",
+        )
+
     private class FakeRideDao(
         private val activeRideId: String? = null,
         private val log: MutableList<String>? = null,
+        private val storedRide: RideEntity? = null,
     ) : RideDao {
         var deactivateCalls: Int = 0
             private set
 
         val inserted = mutableListOf<RideEntity>()
 
+        val updated = mutableListOf<RideEntity>()
+
         override fun getAllRides(): Flow<List<RideEntity>> = emptyFlow()
 
-        override suspend fun getRideById(id: String): RideEntity? = null
+        override suspend fun getRideById(id: String): RideEntity? = storedRide?.takeIf { it.id == id }
 
         override fun getActiveRide(): Flow<RideEntity?> = emptyFlow()
 
@@ -129,7 +230,9 @@ class RideRepositorySessionWriterTest {
             inserted += ride
         }
 
-        override suspend fun updateRide(ride: RideEntity) = Unit
+        override suspend fun updateRide(ride: RideEntity) {
+            updated += ride
+        }
 
         override suspend fun deactivateAllRides() {
             deactivateCalls += 1

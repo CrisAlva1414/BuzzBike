@@ -83,6 +83,26 @@ class RideFormatTest {
     }
 
     @Test
+    fun caloriesBand_labelsAssumedWeightWhenNoProfileWeightWasKnown() {
+        val withAssumption =
+            RideFormat.caloriesBand(
+                summary(310.0, 560.0).copy(assumedWeightKg = 70.0),
+                hasProfile = false,
+                locale = esCl,
+            )
+
+        assertEquals("Compendium por velocidad · sin perfil · supuesto: 70 kg", withAssumption?.model)
+
+        val withKnownWeight =
+            RideFormat.caloriesBand(
+                summary(310.0, 560.0).copy(assumedWeightKg = null),
+                hasProfile = false,
+                locale = esCl,
+            )
+        assertEquals("Compendium por velocidad · sin perfil", withKnownWeight?.model)
+    }
+
+    @Test
     fun caloriesBand_returnsNullForMissingOrCorruptInput() {
         assertNull(RideFormat.caloriesBand(null, hasProfile = false, locale = esCl))
         // Inverted/corrupt bands are rejected instead of silently swapped.

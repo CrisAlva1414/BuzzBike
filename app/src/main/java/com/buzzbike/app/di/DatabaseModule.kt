@@ -8,9 +8,13 @@ import com.buzzbike.app.data.local.LegacyDatabaseCleaner
 import com.buzzbike.app.data.local.MIGRATION_1_2
 import com.buzzbike.app.data.local.MIGRATION_2_3
 import com.buzzbike.app.data.local.MIGRATION_3_4
+import com.buzzbike.app.data.local.MIGRATION_4_5
 import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
+import com.buzzbike.app.data.local.dao.UserProfileDao
+import com.buzzbike.app.data.repository.ProfileRepository
+import com.buzzbike.app.domain.calories.UserProfileStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -37,7 +41,7 @@ object DatabaseModule {
                 AppDatabase::class.java,
                 "buzzbike-encrypted.db",
             ).openHelperFactory(SupportOpenHelperFactory(passphraseProvider.getPassphrase()))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
     }
 
@@ -49,4 +53,11 @@ object DatabaseModule {
 
     @Provides
     fun provideOutboxDao(database: AppDatabase): OutboxDao = database.outboxDao()
+
+    @Provides
+    fun provideUserProfileDao(database: AppDatabase): UserProfileDao = database.userProfileDao()
+
+    @Provides
+    @Singleton
+    fun provideUserProfileStore(impl: ProfileRepository): UserProfileStore = impl
 }

@@ -274,3 +274,51 @@ Conversión: `kcal/min = kJ/min ÷ 4.184`, redondeado a 2 decimales.
 - `TODO:` calibrar la ventana de suavizado (10–30 s), la duración mínima de segmento (~1 min) y el umbral de hueco de GPS con datos propios.
 - `TODO:` no existe corrección por pendiente validada para ciclismo sin potencia en las fuentes consultadas.
 - `TODO:` documentar en código la convención de borde de las bandas MET.
+
+---
+
+## Actualización 2026-11-01 — implementación de Mifflin-St Jeor
+
+> **Alcance.** Registra que la ecuación de §5.1 **ya está implementada** en
+> `domain/` y cómo se usa en el cálculo. No modifica la cascada de 3 niveles,
+> las bandas de §7 ni las reglas de UI de §8. Donde haya conflicto, prevalece el
+> texto más reciente.
+
+### 1. Fórmula implementada (`domain/calories/MifflinStJeor.kt`)
+
+| Sexo | Ecuación (REE, kcal/día) |
+|---|---|
+| Hombre | `10×kg + 6.25×cm − 5×edad + 5` |
+| Mujer | `10×kg + 6.25×cm − 5×edad − 161` |
+
+- Coeficientes `10`, `6.25` y `5`, y offsets `+5` / `−161`, exactamente los de
+  §5.1; fuente Mifflin et al. 1990, DOI `10.1093/ajcn/51.2.241` (§9).
+- Unidades de entrada: kg, cm y años; salida en **kcal/día**.
+- **Devuelve `null` si el perfil no está completo**: la ecuación no se aplica
+  con campos faltantes y no se imputa ninguno (§5.3.3).
+
+### 2. Uso como baseline de paradas (§4)
+
+- **Con perfil completo**, las paradas se tasan a **`REE / 1440` kcal/min**
+  (kcal/día ÷ 1440), que es la línea "Mifflin REE / 1440 si el perfil está
+  completo" de la tabla de §4.
+- **Fallback:** si el REE no está disponible (perfil incompleto o ausente), se
+  usa **`MetTable.STOP_MET = 1.0 MET`** (Compendium `07021`), que es la otra
+  vía prevista en §4.
+- El valor se expresa como MET-equivalente para convivir con el sumatorio
+  muestra a muestra del nivel 3. **Prohibido** usar Keytel o ACSM en paradas
+  (§4), y no se suman "total" y "activo" como magnitudes distintas.
+
+### 3. Bandas de incertidumbre y `hasProfile` (§7)
+
+- **`hasProfile` = perfil completo de 4 campos**: peso, altura, edad y sexo
+  presentes y utilizables (`weight > 0 && height > 0 && age > 0 && sexo
+  definido`). Es el mismo criterio que exige la ecuación de §5.1, no un criterio
+  nuevo.
+- El código ya aplica las bandas de §7: **±20–30% con perfil** y **±30–40% sin
+  perfil**. **No hay banda intermedia**: un perfil parcial cuenta como *sin
+  perfil*, consistente con §5.3.
+- Siguen vigentes las reglas de §8 (rango + modelo + inputs, redondeo a
+  decenas) y §5.3.2 (`"supuesto: 70 kg"` etiquetado si se usa).
+- El almacenamiento y la privacidad del perfil salen de **ADR-007** (Room
+  cifrado, snapshot por ride, nunca sale del dispositivo); este ADR no cambia.

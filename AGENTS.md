@@ -7,18 +7,20 @@
 
 ## 0. Estado actual y cómo retomar
 
-> **Última actualización: 2026-10-30.**
+> **Última actualización: 2026-11-01.**
 
 **¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
-elevación, calorías (nivel 3) y **backend/sync están cerrados**. El backend/sync
-cerró con gate PASS; hoy el gate acumula **415 tests**. `test`, `ktlintCheck`, `detekt`,
+elevación, calorías (nivel 3), **backend/sync** y **U3 (Ajustes y perfil)**
+están cerrados. El backend/sync cerró con gate PASS; hoy el gate acumula
+**465 tests**. `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
 compila. La UI de producto está en curso: **U0 (tema/componentes), L1
-(pause/resume + FGS), U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime)
-y U2 (historial/detalle + GPX) están hechos**; el próximo slice es
-**U3 (Ajustes y perfil)**. La UI de U1 vive en `ui/ride/` y su contrato en
+(pause/resume + FGS), U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime),
+U2 (historial/detalle + GPX) y U3 (Ajustes y perfil) están hechos**; el próximo
+slice es **U4 (Garaje y desgaste)**. La UI de U1 vive en `ui/ride/` y su contrato en
 `domain/ride/session/RideSessionState.kt`; la de U2 vive en `ui/history/`, con
-dominio en `domain/history/` y `domain/export/`.
+dominio en `domain/history/` y `domain/export/`; la de U3 en `ui/settings/`
+(perfil) con persistencia en `data/local/` y `data/repository/`.
 CI/CD vive en `.github/workflows/android.yml` (GitHub Actions): corre el gate,
 sube el artifact `buzzbike-debug-apk`, está **verde** y ya se publicó el release
 **`v0.1.0`** con el APK de debug.
@@ -64,10 +66,22 @@ sesión al volver del diálogo. Sobre ese cierre se construyó U2.
 `tester: PASS` y `security-reviewer: PASS` (0 hallazgos abiertos) sobre **400
 tests**. La lista y la franja semanal viven en `ui/history/`; el detalle usa
 `RideTrace` y exporta GPX 1.1 + `TrackPointExtension` por SAF (`content://`).
-Decisiones: sin migración Room (nombre derivado de `startTimeMillis`; la bici
+Decisiones: sin migración Room en U2 (nombre derivado de `startTimeMillis`; la bici
 queda para U4), sin barra inferior (botón HISTORIAL desde `Ready`) y
-`hasProfile = false` hasta U3. **Próximo slice: U3 — Ajustes y perfil**
-(DataStore + perfil corporal; dependencia nueva → Heavy).
+`hasProfile = false` hasta U3.
+
+**Ajustes y perfil (U3):** **U3 está hecho y cerrado el 2026-11-01** sobre
+**465 tests**. El perfil corporal (peso, altura, edad, sexo) se edita en
+`ui/settings/` y se persiste en **Room cifrado con SQLCipher** (tabla
+`user_profile`, fila única) — **no en DataStore**: ver **ADR-007** (dato
+personal, frontera de cifrado, nunca sale del dispositivo). Cada ride guarda un
+snapshot de los 4 campos (`profile_*` en `rides`), así que borrar el perfil no
+rompe el historial; `hasProfile` = perfil completo de 4 campos (parcial ⇒ banda
+sin perfil). Mifflin-St Jeor quedó operativo como baseline de paradas
+(`REE/1440` con perfil, `MetTable.STOP_MET` sin él) y la DB pasó a **v5**
+(migración 4→5; ver actualización 2026-11-01 de ADR-001).
+**Próximo slice: U4 — Garaje y desgaste** (migración Room **5→6**, `WearEngine`
+ADR-004).
 
 ---
 
@@ -148,9 +162,9 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**415 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**465 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
-> **Emulador local disponible** vía AVD **`tester36`** (`~/android-sdk/emulator`, system image `android-36;google_apis;x86_64`): `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en ese AVD (**6/6 PASS**). El gate JVM local sigue siendo `test`, `ktlintCheck`, `detekt`, `lintDebug`.
+> **Emulador local disponible** vía AVD **`tester36`** (`~/android-sdk/emulator`, system image `android-36;google_apis;x86_64`): `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en ese AVD (**8/8 PASS**). El gate JVM local sigue siendo `test`, `ktlintCheck`, `detekt`, `lintDebug`.
 >
 > **CI:** `.github/workflows/android.yml` corre el gate en cada push/PR con JDK 21 y SDK 37 y sube el APK de debug **solo como artifact** `buzzbike-debug-apk` — nunca como release. El job `release` corre **solo en tags `v*`**: construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256`; exige **5 secrets**: los 4 de firma `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS` y `RELEASE_KEY_PASSWORD`, más **`RELEASE_CERT_SHA256`** (SHA-256 del certificado de firma; si falta o no coincide, el job falla antes de publicar — obtenerlo con `apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk` y tomar el «certificate SHA-256 digest» sin `:`). Si faltan los 4 de firma **falla** con «release signing not configured» sin publicar nada. El job además **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`. Permisos: `contents: read` a nivel global, `contents: write` solo en el job release; acciones pinnadas por SHA. La release firmada de producción requiere configurar esos 5 secrets en el repo (pendiente).
 

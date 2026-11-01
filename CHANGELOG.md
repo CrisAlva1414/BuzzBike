@@ -27,6 +27,20 @@ y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 - Exportación a GPX 1.1 con `TrackPointExtension` a un destino elegido por el
   usuario vía Storage Access Framework (destinos `content://`, sin permisos de
   almacenamiento).
+- **Perfil corporal** (peso, altura, edad y sexo) editable desde Ajustes y
+  persistido en **Room cifrado con SQLCipher** (tabla `user_profile`,
+  [ADR-007](docs/adr/ADR-007-perfil-corporal-dato-personal.md)): misma
+  frontera de cifrado que los rides, nunca en DataStore ni en SharedPreferences,
+  y nunca fuera del dispositivo.
+- **Mifflin-St Jeor como baseline de paradas con perfil completo**
+  (`REE/1440` kcal/min, ADR-001); sin perfil las paradas siguen usando
+  `1.0 MET` (Compendium `07021`). Con perfil completo la banda calórica pasa a
+  **±20–30%** (sin perfil, ±30–40%).
+- **Snapshot de los 4 campos del perfil por ride**: historial y detalle
+  muestran el perfil real con el que se calculó cada ride, y borrar o editar el
+  perfil no altera los rides históricos.
+- Etiqueta **`supuesto: 70 kg`** visible en la UI cuando se usa ese peso de
+  referencia (ADR-001 §5.3.2), nunca presentado como dato del usuario.
 
 ### Cambiado
 

@@ -6,12 +6,31 @@
     tracks GPS ni de Room. allowBackup=false en el manifest es la regla
     principal; este archivo es la capa explícita para Android 12+
     (dataExtractionRules) por si allowBackup se revisita.
+
+    Se excluyen explícitamente todos los dominios sensibles: la base Room
+    cifrada (user_profile / rides.profile_*), las preferencias selladas
+    (HMAC) y los archivos internos, incluidos los de almacenamiento
+    protegido por dispositivo (device_*).
 -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+        <exclude domain="device_file" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="root" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="device_root" path="." />
+        <exclude domain="device_database" path="." />
+        <exclude domain="device_sharedpref" path="." />
+        <exclude domain="device_file" path="." />
     </device-transfer>
 </data-extraction-rules>

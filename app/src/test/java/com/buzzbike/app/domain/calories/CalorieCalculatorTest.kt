@@ -1,6 +1,7 @@
 package com.buzzbike.app.domain.calories
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -140,5 +141,117 @@ class CalorieCalculatorTest {
 
         // Should be treated as stop (1 MET) since no band
         assertEquals(1.225, result.totalKcal!!, 0.01)
+    }
+
+    @Test
+    fun given_completeProfile_when_stop_thenUsesMifflinReeBaseline() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(0.0),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(false),
+                profile = UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 30, isMale = true),
+            )
+
+        assertTrue(result.hasProfile)
+        // ADR-001 §4: stop baseline becomes Mifflin REE / 1440, not 1.0 MET.
+        // REE = 1648.75 kcal/day -> 1648.75 / 1440 kcal/min for one minute.
+        assertEquals(1648.75 / 1440.0, result.totalKcal ?: Double.NaN, 1e-9)
+        assertEquals(0.0, result.activeKcal ?: Double.NaN, 1e-9)
+    }
+
+    @Test
+    fun given_partialProfile_when_stop_thenKeepsOneMetBaseline() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(0.0),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(false),
+                // Missing sex: not a complete profile, so no Mifflin REE baseline.
+                profile = UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 30),
+            )
+
+        assertFalse(result.hasProfile)
+        assertEquals(1.225, result.totalKcal ?: Double.NaN, 0.01)
+    }
+
+    @Test
+    fun given_completeProfile_when_moving_thenCascadeIsUnchanged() {
+        val withCompleteProfile =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7), // ~15 mph
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 30, isMale = true),
+            )
+        val withoutCompleteProfile =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(weightKg = 70.0),
+            )
+
+        // The REE baseline only replaces the stop MET; moving samples keep the
+        // Compendium band, so kcal and active kcal are identical for both.
+        assertEquals(withoutCompleteProfile.totalKcal ?: Double.NaN, withCompleteProfile.totalKcal ?: Double.NaN, 1e-9)
+        assertEquals(
+            withoutCompleteProfile.activeKcal ?: Double.NaN,
+            withCompleteProfile.activeKcal ?: Double.NaN,
+            1e-9,
+        )
+    }
+
+    @Test
+    fun given_emptyProfile_when_missingInputs_thenListsAllFour() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(),
+            )
+
+        assertEquals(listOf("weight", "height", "age", "sex"), result.missingInputs)
+    }
+
+    @Test
+    fun given_completeProfile_when_missingInputs_thenEmpty() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 30, isMale = true),
+            )
+
+        assertTrue(result.hasProfile)
+        assertEquals(emptyList<String>(), result.missingInputs)
+    }
+
+    @Test
+    fun given_partialProfile_when_missingInputs_thenListsOnlyAbsent() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(weightKg = 70.0, heightCm = 175.0, isMale = true),
+            )
+
+        assertEquals(listOf("age"), result.missingInputs)
+    }
+
+    @Test
+    fun given_nonPositiveValues_when_missingInputs_thenCountedAsMissing() {
+        val result =
+            CalorieCalculator().calculate(
+                speedSamplesMps = listOf(6.7),
+                durationsSeconds = listOf(60.0),
+                isMoving = listOf(true),
+                profile = UserProfile(weightKg = 0.0, heightCm = -1.0, ageYears = 0, isMale = true),
+            )
+
+        assertEquals(listOf("weight", "height", "age"), result.missingInputs)
     }
 }

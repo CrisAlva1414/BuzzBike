@@ -1,5 +1,6 @@
 package com.buzzbike.app.domain.ride.session
 
+import com.buzzbike.app.domain.calories.UserProfile
 import com.buzzbike.app.domain.calories.toSummary
 import com.buzzbike.app.domain.elevation.ElevationDescriptors
 import com.buzzbike.app.domain.model.TrackPoint
@@ -73,6 +74,16 @@ class RideSessionManager(
     private var latestMovingState: MovingState? = null
 
     /**
+     * Profile snapshot fixed when the ride starts.
+     *
+     * Every live and final calculation of this session uses this value, so a
+     * profile edit during the ride cannot retroactively change what is shown or
+     * persisted. A `null` profile keeps the documented 70 kg assumption.
+     */
+    @Volatile
+    private var sessionProfile: UserProfile? = null
+
+    /**
      * Resolves the session after a cold start: a persisted active ride becomes
      * [RideSessionState.Recoverable]; otherwise the manager is
      * [RideSessionState.Ready] with the current permission/GPS status.
@@ -111,7 +122,14 @@ class RideSessionManager(
     suspend fun salvageRecoverableRide(): String? =
         lifecycleMutex.withLock {
             when (val current = _state.value) {
-                is RideSessionState.Recoverable -> salvageLocked(current.rideId)
+                is RideSessionState.Recoverable -> {
+                    // Recovery must not read the live profile store: the user
+                    // may have edited or deleted it after the process died.
+                    // The snapshot persisted at start is the ride's source of
+                    // truth (ADR-001 §5.3.4, ADR-007 §3).
+                    sessionProfile = rideSessionWriter.persistedProfile(current.rideId) ?: UserProfile()
+                    salvageLocked(current.rideId)
+                }
                 else -> null
             }
         }
@@ -144,7 +162,7 @@ class RideSessionManager(
      * permission never leaves a phantom active ride. Returns the new id, or
      * `null` when the session could not start.
      */
-    suspend fun startRide(): String? =
+    suspend fun startRide(profile: UserProfile? = null): String? =
         lifecycleMutex.withLock {
             when {
                 !canStartNewRide(_state.value) -> null
@@ -152,7 +170,7 @@ class RideSessionManager(
                     _state.value = readyState(GpsStatus.NO_PERMISSION)
                     null
                 }
-                else -> beginRide()
+                else -> beginRide(profile)
             }
         }
 
@@ -251,9 +269,12 @@ class RideSessionManager(
         _state.value = readyState(currentGpsStatus())
     }
 
-    private suspend fun beginRide(): String? {
+    private suspend fun beginRide(profile: UserProfile?): String? {
         cancelCollectors()
-        val rideId = rideSessionWriter.startRide()
+        // Fix the snapshot before any point is processed so live and persisted
+        // values always describe the same profile (ADR-001 §5.3.4).
+        sessionProfile = profile
+        val rideId = rideSessionWriter.startRide(profile)
         resetAccumulated()
 
         if (!trackingManager.startTracking(rideId)) {
@@ -268,7 +289,7 @@ class RideSessionManager(
         _state.value =
             RideSessionState.Recording(
                 rideId = rideId,
-                live = LiveMetrics.empty,
+                live = LiveMetrics.empty.copy(hasProfile = profile?.isComplete == true),
                 autoPaused = false,
             )
         startCollectors()
@@ -281,7 +302,7 @@ class RideSessionManager(
     ) {
         val (result, elevation) =
             synchronized(stateLock) {
-                val finalResult = rideEngine.processRide(points)
+                val finalResult = rideEngine.processRide(points, profile = sessionProfile ?: UserProfile())
                 latestRideResult = finalResult
                 finalResult to (latestElevation ?: finalResult.elevationDescriptors)
             }
@@ -297,6 +318,7 @@ class RideSessionManager(
             caloriesLowKcal = summary?.lowKcal,
             caloriesHighKcal = summary?.highKcal,
             calorieModel = summary?.model,
+            profile = sessionProfile,
         )
         _state.value =
             RideSessionState.Finished(
@@ -306,7 +328,7 @@ class RideSessionManager(
                         descriptors = result.rideDescriptors,
                         elevation = elevation,
                         calories = summary,
-                        hasProfile = result.calorieResult?.hasProfile ?: false,
+                        hasProfile = result.calorieResult?.hasProfile ?: (sessionProfile?.isComplete == true),
                     ),
             )
     }
@@ -340,7 +362,7 @@ class RideSessionManager(
     }
 
     private fun onTrackPoints(points: List<TrackPoint>) {
-        val result = rideEngine.processRide(points)
+        val result = rideEngine.processRide(points, profile = sessionProfile ?: UserProfile())
         synchronized(stateLock) {
             accumulatedPoints = points
             latestRideResult = result
@@ -381,7 +403,7 @@ class RideSessionManager(
             elevationGainM = elevation.gainM,
             altitudeM = accumulatedPoints.asReversed().firstNotNullOfOrNull { it.altitudeMslM },
             calories = calorieResult?.toSummary(),
-            hasProfile = calorieResult?.hasProfile ?: false,
+            hasProfile = calorieResult?.hasProfile ?: (sessionProfile?.isComplete == true),
             tailPoints =
                 accumulatedPoints
                     .takeLast(TAIL_POINTS_LIMIT)

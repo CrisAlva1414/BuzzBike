@@ -66,6 +66,46 @@ altos/críticos; 2 LOW residuales). Sin escalado.
 
 ---
 
+## Tarea — Fase 2: U3 Ajustes y perfil
+
+### Estado
+**completada** · clase **Heavy**: `tester: PASS` (465 JVM + 9 instrumentados) y
+`security-reviewer: PASS` (0 hallazgos). 2026-11-01.
+
+### Decisiones
+- Perfil en **Room cifrado** (`user_profile`, fila única), **no DataStore** →
+  ADR-007 nuevo (dato personal, frontera de cifrado, nunca sale del dispositivo).
+- `hasProfile` = perfil **completo** (peso+altura+edad+sexo>0), según ADR-001:225;
+  antes era solo peso.
+- **Mifflin-St Jeor** implementado y usado como baseline de paradas
+  (`REE/1440`) con perfil completo; `MetTable.STOP_MET` como fallback.
+- Snapshot del perfil por ride (`profile_*`), fijado al iniciar el ride y
+  **reutilizado en la recuperación** (nunca el perfil vivo).
+- Sin peso: se mantiene el supuesto de 70 kg pero **etiquetado** `supuesto: 70 kg`
+  (ADR-001:205).
+
+### Iteraciones
+| Iter | Slice | Resultado |
+|---|---|---|
+| 1 | S1 dominio (isComplete, Mifflin, baseline) | PASS (427 tests) |
+| 2 | S2 Room v4→v5 (`user_profile` + `profile_*`) | PASS (439 tests) |
+| 3 | S3 UI perfil (form + validación + borrado) | PASS (449 tests) |
+| 4 | S4 cableado (ride/detalle/snapshot/`supuesto`) | **FAIL build** → PASS |
+| 5 | S5 docs + ADR-007 | PASS |
+| 6 | gates: security **FAIL (1 ALTA)** → fix → PASS | recuperación con perfil vivo, `clear()` vs `save()`, `data_extraction_rules` |
+| 7 | instrumentados: `AbstractMethodError` de kotlinx-serialization | fix: BOM 1.7.3 → 1.8.1; **9/9 PASS** |
+
+### Verificación
+- `test` = **465**, 0 fallos; `detekt` 0; `connectedDebugAndroidTest` **9/9**.
+- Migración 4→5 validada con `MigrationTestHelper` en emulador.
+- Egress: ningún valor del perfil entra al payload de sync (verificado por security).
+
+### Deuda
+- `isComplete` no acota superiores (solo la UI); defensa en profundidad pendiente.
+- 23 warnings de `lintDebug` preexistentes.
+
+---
+
 ## Tarea — Fase 1: verificación en hardware (emulador)
 
 ### Estado

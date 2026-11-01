@@ -1,6 +1,7 @@
 package com.buzzbike.app.domain.history
 
 import com.buzzbike.app.domain.calories.CalorieSummary
+import com.buzzbike.app.domain.calories.UserProfile
 
 /**
  * Domain projection of a completed ride for the history list and detail screen.
@@ -22,4 +23,19 @@ data class RideRecord(
     val avgSpeedMps: Double,
     val maxSpeedMps: Double,
     val calories: CalorieSummary?,
-)
+    /**
+     * Profile inputs used when the calorie band was calculated, or `null` for
+     * rides recorded without a profile / before schema v5. Editable profiles
+     * must not retroactively change historical rides (ADR-001 §5.3.4).
+     */
+    val profileSnapshot: UserProfile? = null,
+) {
+    /**
+     * `true` only when the saved snapshot had every input Mifflin-St Jeor needs
+     * (ADR-001 §5.1). A partial snapshot and a legacy all-null snapshot both
+     * render as "sin perfil", which matches the band the ride was calculated
+     * with.
+     */
+    val hasProfile: Boolean
+        get() = profileSnapshot?.isComplete == true
+}

@@ -72,3 +72,28 @@ val MIGRATION_3_4 =
             db.execSQL("ALTER TABLE `rides` ADD COLUMN `calorieModel` TEXT")
         }
     }
+
+/**
+ * Adds the singleton body profile and the per-ride profile snapshot (schema
+ * version 5).
+ *
+ * `user_profile` holds at most one row: the fixed primary key `id = 1` is
+ * enforced by the DAO, which always writes that id. `rides` gets four nullable
+ * snapshot columns so a later profile edit or deletion cannot rewrite the
+ * inputs a historical ride was calculated with (ADR-001 §5.3.4). Existing rides
+ * keep `NULL` in all four columns, which the mapper projects as "no snapshot".
+ */
+val MIGRATION_4_5 =
+    object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `user_profile` (`id` INTEGER NOT NULL, " +
+                    "`updated_at_millis` INTEGER NOT NULL, `weight_kg` REAL, `height_cm` REAL, " +
+                    "`age_years` INTEGER, `is_male` INTEGER, PRIMARY KEY(`id`))",
+            )
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `profile_weight_kg` REAL")
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `profile_height_cm` REAL")
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `profile_age_years` INTEGER")
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `profile_is_male` INTEGER")
+        }
+    }

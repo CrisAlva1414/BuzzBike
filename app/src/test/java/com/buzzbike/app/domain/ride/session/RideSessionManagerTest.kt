@@ -167,6 +167,35 @@ class RideSessionManagerTest {
         }
 
     @Test
+    fun given_profileAtStart_when_rideRuns_thenUsesFixedSnapshotForEngineAndSave() =
+        runTest {
+            val startedProfile = UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true)
+            val differentProfile = UserProfile(weightKg = 60.0, heightCm = 160.0, ageYears = 20, isMale = false)
+            val writer = FakeRideSessionWriter()
+            val tracking = FakeTrackingManager()
+            val engine = FakeRideEngine { processResult(distanceM = 100.0, movingSeconds = 20L) }
+            val manager = manager(writer = writer, tracking = tracking, engine = engine)
+
+            manager.startRide(startedProfile)
+            runCurrent()
+            // A second start (for example after a profile edit) must not replace
+            // the snapshot fixed by the first one.
+            manager.startRide(differentProfile)
+            runCurrent()
+            tracking.points.value = listOf(point(0), point(10))
+            runCurrent()
+
+            manager.stopRide()
+
+            assertEquals(startedProfile, writer.startedProfile)
+            assertEquals(startedProfile, writer.saved.single().profile)
+            assertTrue(engine.receivedProfiles.isNotEmpty())
+            assertTrue(engine.receivedProfiles.all { it == startedProfile })
+            val finished = manager.state.first() as RideSessionState.Finished
+            assertTrue(finished.summary.hasProfile)
+        }
+
+    @Test
     fun given_recordingRide_when_discard_thenRideIsDeletedAndReady() =
         runTest {
             val writer = FakeRideSessionWriter()
@@ -291,6 +320,28 @@ class RideSessionManagerTest {
             assertTrue(finished is RideSessionState.Finished)
             assertEquals(RIDE_ID, (finished as RideSessionState.Finished).rideId)
             assertEquals(80.0, finished.summary.calories?.estimateKcal ?: Double.NaN, TOLERANCE)
+        }
+
+    @Test
+    fun given_interruptedRideWithPersistedProfile_when_salvage_thenReusesPersistedSnapshot() =
+        runTest {
+            val persisted = UserProfile(weightKg = 72.5, heightCm = 178.0, ageYears = 34, isMale = true)
+            val writer = FakeRideSessionWriter()
+            writer.startRide(persisted)
+            writer.persistedProfileValue = persisted
+            writer.points = listOf(point(0), point(10))
+            val engine = FakeRideEngine { processResult(distanceM = 500.0, movingSeconds = 40L) }
+            val manager = manager(writer = writer, engine = engine)
+            manager.restore()
+
+            val salvaged = manager.salvageRecoverableRide()
+
+            assertEquals(RIDE_ID, salvaged)
+            assertEquals(1, writer.persistedProfileCalls)
+            assertEquals(persisted, engine.receivedProfiles.single())
+            assertEquals(persisted, writer.saved.single().profile)
+            val finished = manager.state.first() as RideSessionState.Finished
+            assertTrue(finished.summary.hasProfile)
         }
 
     @Test
@@ -791,6 +842,7 @@ class RideSessionManagerTest {
         val caloriesLowKcal: Double?,
         val caloriesHighKcal: Double?,
         val calorieModel: String?,
+        val profile: UserProfile?,
     )
 
     private class FakeRideSessionWriter(
@@ -799,6 +851,9 @@ class RideSessionManagerTest {
         var points: List<TrackPoint> = emptyList(),
     ) : RideSessionWriter {
         var startCalls: Int = 0
+            private set
+
+        var startedProfile: UserProfile? = null
             private set
 
         var stoppedRideId: String? = null
@@ -810,15 +865,26 @@ class RideSessionManagerTest {
         var deletedRideId: String? = null
             private set
 
+        var persistedProfileValue: UserProfile? = null
+
+        var persistedProfileCalls: Int = 0
+            private set
+
         val saved = mutableListOf<SavedDescriptors>()
 
-        override suspend fun startRide(): String {
+        override suspend fun startRide(profile: UserProfile?): String {
             startCalls += 1
+            startedProfile = profile
             activeRideId = RIDE_ID
             return RIDE_ID
         }
 
         override suspend fun findActiveRideId(): String? = activeRideId
+
+        override suspend fun persistedProfile(rideId: String): UserProfile? {
+            persistedProfileCalls += 1
+            return persistedProfileValue
+        }
 
         override suspend fun loadTrackPoints(rideId: String): List<TrackPoint> = points
 
@@ -843,6 +909,7 @@ class RideSessionManagerTest {
             caloriesLowKcal: Double?,
             caloriesHighKcal: Double?,
             calorieModel: String?,
+            profile: UserProfile?,
         ) {
             saved +=
                 SavedDescriptors(
@@ -854,6 +921,7 @@ class RideSessionManagerTest {
                     caloriesLowKcal,
                     caloriesHighKcal,
                     calorieModel,
+                    profile,
                 )
         }
     }
@@ -862,6 +930,7 @@ class RideSessionManagerTest {
         private val onProcess: (List<TrackPoint>) -> RideEngineResult,
     ) : RideEngine() {
         val received = mutableListOf<List<TrackPoint>>()
+        val receivedProfiles = mutableListOf<UserProfile>()
 
         override fun processRide(
             rawPoints: List<TrackPoint>,
@@ -869,6 +938,7 @@ class RideSessionManagerTest {
             profile: UserProfile,
         ): RideEngineResult {
             received += rawPoints
+            receivedProfiles += profile
             return onProcess(rawPoints)
         }
     }

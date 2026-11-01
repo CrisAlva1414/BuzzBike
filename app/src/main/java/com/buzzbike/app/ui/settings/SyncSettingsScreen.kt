@@ -100,7 +100,7 @@ fun SyncSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sync") },
+                title = { Text("Ajustes") },
                 navigationIcon = {
                     TextButton(onClick = onBack, enabled = !state.isBusy) { Text("Atrás") }
                 },
@@ -116,6 +116,12 @@ fun SyncSettingsScreen(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            ProfileSection()
+
+            Text(
+                text = "Sync",
+                style = MaterialTheme.typography.titleMedium,
+            )
             OutlinedTextField(
                 value = state.endpoint,
                 onValueChange = viewModel::onEndpointChange,
