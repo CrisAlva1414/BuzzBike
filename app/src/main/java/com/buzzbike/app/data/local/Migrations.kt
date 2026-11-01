@@ -97,3 +97,50 @@ val MIGRATION_4_5 =
             db.execSQL("ALTER TABLE `rides` ADD COLUMN `profile_is_male` INTEGER")
         }
     }
+
+/**
+ * Adds the garage tables and assigns rides to bikes (schema version 6, U4).
+ *
+ * The SQL mirrors exactly what Room generates for [BikeEntity],
+ * [ComponentEntity] and [ComponentEventEntity], including the cascade foreign
+ * keys. `rides.bike_id` is a plain nullable column with an index but **no**
+ * foreign key: SQLite cannot add a foreign key with `ALTER TABLE`, so a hard
+ * constraint would force a full table rebuild. Keeping the reference soft also
+ * guarantees that deleting a bike never deletes or blocks historical rides:
+ * the ride **keeps** its `bike_id` as a soft historical reference (ADR-004),
+ * so the detail screen can still tell which bike was used and falls back to
+ * "deleted bike" once the row is gone. Existing rides keep `NULL`, i.e.
+ * "not assigned".
+ */
+val MIGRATION_5_6 =
+    object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `bikes` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`notes` TEXT, `createdAtMillis` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `components` (`id` TEXT NOT NULL, `bikeId` TEXT NOT NULL, " +
+                    "`type` TEXT NOT NULL, `label` TEXT NOT NULL, `installedAtMillis` INTEGER NOT NULL, " +
+                    "`lifecycleKm` REAL, `lifecycleHours` REAL, `lifecycleDays` REAL, " +
+                    "`retiredAtMillis` INTEGER, `notes` TEXT, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`bikeId`) REFERENCES `bikes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_components_bikeId` ON `components` (`bikeId`)")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `component_events` (`id` TEXT NOT NULL, " +
+                    "`componentId` TEXT NOT NULL, `type` TEXT NOT NULL, `atMillis` INTEGER NOT NULL, " +
+                    "`wearRatioAtEvent` REAL, `consumedKm` REAL, `consumedHours` REAL, `notes` TEXT, " +
+                    "PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`componentId`) REFERENCES `components`(`id`) " +
+                    "ON UPDATE NO ACTION ON DELETE CASCADE)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_component_events_componentId` " +
+                    "ON `component_events` (`componentId`)",
+            )
+            db.execSQL("ALTER TABLE `rides` ADD COLUMN `bike_id` TEXT")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_rides_bike_id` ON `rides` (`bike_id`)")
+        }
+    }

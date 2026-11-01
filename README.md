@@ -45,7 +45,7 @@ Verificado contra el código en `main` (2026-10-30):
 - ✅ **Sync a Hermes Agent:** outbox en Room + WorkManager, firma HMAC V2 con secret en Android Keystore, SQLCipher, data minimization y dedupe por `ride.id` (ADR-003). *La validación E2E contra un NAS real sigue pendiente.*
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
 - ✅ **CI:** `.github/workflows/android.yml` verde en cada push/PR (gate `test ktlintCheck detekt lintDebug assembleDebug`) y sube el APK de debug **solo como artifact** `buzzbike-debug-apk`. En tags `v*` corre el job `release`, que construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256` **solo** si están los **5 secrets** (los 4 de firma + `RELEASE_CERT_SHA256`); sin los de firma falla («release signing not configured») y no publica nada; además **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`. La release **`v0.1.0`** (2026-10-30) se publicó con APK de debug, antes de este cambio.
-- ✅ **Gate verde:** `test` (**465 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **84.5 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **8/8 PASS**).
+- ✅ **Gate verde:** `test` (**551 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **84.5 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **10/10 PASS**).
 
 **Todavía no:**
 
@@ -57,7 +57,7 @@ Verificado contra el código en `main` (2026-10-30):
 - ❌ **E2E del sync con Hermes real:** nunca validado contra un NAS con Hermes Agent (la spec está implementada y testeada contra mock).
 - ❌ **BLE** (frecuencia cardíaca / potenciómetro): fuera de v1.
 
-O sea: **el ciclo de un ride ya está cubierto en código** — capturar, ver en historial, abrir el detalle y exportar GPX — y todo eso está testeado en JVM; el emulador local (**AVD `tester36`**, system image `android-36;google_apis;x86_64`) ya corre los instrumentados con **8/8 PASS** y el perfil corporal ya existe, pero aún no hay garaje, mapa ni release firmada. Prefiero decirlo antes de que alguien clone y se decepcione. El macroplan con fases y gate: [`docs/roadmap.md`](docs/roadmap.md).
+O sea: **el ciclo de un ride ya está cubierto en código** — capturar, ver en historial, abrir el detalle y exportar GPX — y todo eso está testeado en JVM; el emulador local (**AVD `tester36`**, system image `android-36;google_apis;x86_64`) ya corre los instrumentados con **10/10 PASS** y el perfil corporal ya existe, pero aún no hay garaje, mapa ni release firmada. Prefiero decirlo antes de que alguien clone y se decepcione. El macroplan con fases y gate: [`docs/roadmap.md`](docs/roadmap.md).
 
 ---
 

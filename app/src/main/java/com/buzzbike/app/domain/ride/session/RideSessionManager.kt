@@ -159,10 +159,15 @@ class RideSessionManager(
      * active ride whose points could land under the wrong id.
      *
      * The fine-location guard runs **before** creating the row, so a missing
-     * permission never leaves a phantom active ride. Returns the new id, or
-     * `null` when the session could not start.
+     * permission never leaves a phantom active ride. [bikeId] is fixed at this
+     * point and persisted with the ride; recovery never re-reads the live
+     * garage selection. Returns the new id, or `null` when the session could
+     * not start.
      */
-    suspend fun startRide(profile: UserProfile? = null): String? =
+    suspend fun startRide(
+        profile: UserProfile? = null,
+        bikeId: String? = null,
+    ): String? =
         lifecycleMutex.withLock {
             when {
                 !canStartNewRide(_state.value) -> null
@@ -170,7 +175,7 @@ class RideSessionManager(
                     _state.value = readyState(GpsStatus.NO_PERMISSION)
                     null
                 }
-                else -> beginRide(profile)
+                else -> beginRide(profile, bikeId)
             }
         }
 
@@ -269,12 +274,17 @@ class RideSessionManager(
         _state.value = readyState(currentGpsStatus())
     }
 
-    private suspend fun beginRide(profile: UserProfile?): String? {
+    private suspend fun beginRide(
+        profile: UserProfile?,
+        bikeId: String?,
+    ): String? {
         cancelCollectors()
         // Fix the snapshot before any point is processed so live and persisted
-        // values always describe the same profile (ADR-001 §5.3.4).
+        // values always describe the same profile (ADR-001 §5.3.4). The bike
+        // assignment follows the same rule: it is written to the ride row once
+        // and later garage edits cannot change it.
         sessionProfile = profile
-        val rideId = rideSessionWriter.startRide(profile)
+        val rideId = rideSessionWriter.startRide(profile, bikeId)
         resetAccumulated()
 
         if (!trackingManager.startTracking(rideId)) {

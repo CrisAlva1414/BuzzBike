@@ -49,6 +49,7 @@ private const val BACK_LABEL = "VOLVER"
 private const val LOADING_TEXT = "Cargando…"
 private const val NOT_FOUND_TEXT = "No se encontró el ride."
 private const val EMPTY_POINTS_TEXT = "Este ride no tiene puntos para exportar."
+private const val DELETED_BIKE_LABEL = "Bici eliminada"
 private const val EXPORT_SUCCESS_TEXT = "GPX exportado."
 private const val EXPORT_LABEL = "EXPORTAR GPX"
 private const val EXPORTING_LABEL = "EXPORTANDO…"
@@ -118,6 +119,7 @@ private fun RideDetailContent(
             is RideDetailUiState.Content ->
                 DetailContent(
                     detail = state.detail,
+                    bikeName = state.bikeName,
                     exportState = exportState,
                     locale = locale,
                     onExport = onExport,
@@ -158,6 +160,7 @@ private fun Message(text: String) {
 @Composable
 private fun DetailContent(
     detail: RideDetail,
+    bikeName: String?,
     exportState: GpxExportState,
     locale: Locale,
     onExport: (Long) -> Unit,
@@ -170,6 +173,14 @@ private fun DetailContent(
         color = colors.ink,
         modifier = Modifier.fillMaxWidth(),
     )
+    rideBikeLabel(ride, bikeName)?.let { label ->
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.ink,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
     RideTrace(
         points = detail.points.map { LatLon(it.lat, it.lon) },
         modifier = Modifier.fillMaxWidth().height(TRACE_HEIGHT_DP.dp),
@@ -226,3 +237,22 @@ internal fun detailMetricCells(
         MetricCellData(RideMetricLabels.MAX_SPEED, RideFormat.speedKmh(ride.maxSpeedMps, locale)),
         calorieMetricCell(ride.calories, hasProfile = ride.hasProfile, locale = locale),
     )
+
+/**
+ * Label of the ride's bike row.
+ *
+ * Returns `null` when the ride was recorded without a bike: the screen must not
+ * render an empty row. When the persisted `bikeId` still exists but the garage
+ * lookup found nothing (the bike was deleted afterwards), the row uses the
+ * static "Bici eliminada" text instead of failing the detail load (ADR-004).
+ * That static label is rendered as-is, without the "Bici: " prefix.
+ */
+internal fun rideBikeLabel(
+    ride: RideRecord,
+    bikeName: String?,
+): String? =
+    when {
+        ride.bikeId == null -> null
+        bikeName.isNullOrBlank() -> DELETED_BIKE_LABEL
+        else -> "Bici: $bikeName"
+    }

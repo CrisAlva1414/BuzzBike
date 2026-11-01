@@ -29,6 +29,13 @@ data class RideRecord(
      * must not retroactively change historical rides (ADR-001 §5.3.4).
      */
     val profileSnapshot: UserProfile? = null,
+    /**
+     * Bike assigned when the ride started, or `null` when it was recorded
+     * without one. The association is a persisted snapshot: it may point to a
+     * bike that no longer exists, which the detail screen renders as "Bici
+     * eliminada" instead of failing (ADR-004).
+     */
+    val bikeId: String? = null,
 ) {
     /**
      * `true` only when the saved snapshot had every input Mifflin-St Jeor needs

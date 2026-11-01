@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.buzzbike.app.domain.export.GpxExporter
 import com.buzzbike.app.domain.export.GpxRide
 import com.buzzbike.app.domain.history.RideDetailSource
+import com.buzzbike.app.domain.wear.BikeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,7 @@ class RideDetailViewModel
         savedStateHandle: SavedStateHandle,
         private val source: RideDetailSource,
         private val exporter: GpxExporter,
+        private val bikeRepository: BikeRepository,
     ) : ViewModel() {
         val rideId: String? = savedStateHandle[RIDE_ID_KEY]
 
@@ -58,12 +60,26 @@ class RideDetailViewModel
                             if (detail == null) {
                                 RideDetailUiState.NotFound
                             } else {
-                                RideDetailUiState.Content(detail)
+                                RideDetailUiState.Content(
+                                    detail = detail,
+                                    bikeName = resolveBikeName(detail.ride.bikeId),
+                                )
                             }
                         },
                         onFailure = { RideDetailUiState.Error(LOAD_ERROR_MESSAGE) },
                     )
         }
+
+        /**
+         * Resolves the current name of the ride's bike.
+         *
+         * A `null` [bikeId] means "no bike" (no row is shown). A failed lookup
+         * means the bike was deleted after the ride: the detail keeps working
+         * and the screen renders the static "Bici eliminada" label instead of
+         * failing the whole load.
+         */
+        private suspend fun resolveBikeName(bikeId: String?): String? =
+            bikeId?.let { id -> runCatching { bikeRepository.getBike(id) }.getOrNull()?.name }
 
         /**
          * Hands the loaded ride to the exporter for [destination].

@@ -113,3 +113,85 @@ Los defaults son **defaults, no verdades de fábrica.** El usuario puede (y debe
 | bikenance-app | TODO: verificar URL exacta del repo | Prior art mencionado en investigación |
 | higorslva/biketrackd | https://github.com/higorslva/biketrackd | Prior art Android casi idéntico — **revisar antes de codear** |
 | Compendium / estándares de vida útil | — | No hay estándar público único; los defaults de cadena/suspensión/neumáticos son consenso de la industria, no un paper. Documentar como defaults configurables. |
+
+---
+
+## Actualización 2026-11-01 — implementación en U4
+
+> **Alcance.** Registra las decisiones tomadas al **implementar** este ADR en el
+> slice U4 (Garaje y desgaste): `domain/wear/` (`WearEngine`,
+> `ComponentDefaults`, repositorios), las tablas de la DB **v6** y la UI de
+> garaje. No reescribe las secciones anteriores; donde haya conflicto, prevalece
+> este texto por ser el más reciente.
+
+### 1. `lifecycleDays` es opcional
+
+- `WearLifecycle.lifecycleDays` quedó como **nullable, sin default**. El ADR no
+  fijaba uno y **no se inventó**: un eje `null` simplemente **no se evalúa** en
+  el `max()` de la fórmula (junto con `lifecycleKm`/`lifecycleHours` también
+  opcionales).
+- Un componente queda sin ejes declarados solo si el usuario lo deja así; en
+  ese caso no hay ratio que calcular.
+
+### 2. Frenos: sin ciclo de vida por defecto
+
+- **No se implementó default de frenos.** El ADR (§Defaults) define el proxy
+  "km + desnivel negativo" pero **no fija factor de ponderación** (era TODO
+  configurable), y sin ese factor no hay umbral que inventar.
+- En la práctica: los frenos **requieren que el usuario configure el ciclo de
+  vida en km** antes de que se evalúen. El **desnivel negativo queda como TODO
+  informativo** en el modelo — **no entra en la fórmula** de `wearRatio`.
+
+### 3. Defaults implementados (`ComponentDefaults`)
+
+| Componente | Default implementado | Eje |
+|---|---|---|
+| Cadena | 2000 km | km |
+| Suspensión | 100 h | hours |
+| Neumáticos | **3000 km** (mínimo del rango 3000–5000 km, configurable) | km |
+| Frenos | **sin default** (ver §2) | — |
+
+Siguen siendo **defaults, no verdades de fábrica**: editables por componente y
+por bici, como manda §Defaults.
+
+### 4. Umbrales y estados globales
+
+- `approaching` → `wearRatio >= 0.80`; `due` → `wearRatio >= 1.00`, tal cual §Umbrales.
+- Estados derivados en el dominio: **`OK` / `APPROACHING` / `DUE`** (`WearStatus`).
+- No hay umbrales por tipo de componente: **uno global**, igual para todos.
+
+### 5. Acumulación de uso
+
+- **Solo los rides asignados a esa bici** (`rides.bike_id`) suman km/horas hacia
+  su desgaste. Un ride sin bici no acumula en ningún componente.
+- **Base de acumulación:** el último evento `SERVICE` del componente; si nunca
+  tuvo service, `installedAtMillis`. El `SERVICE` resetea el acumulado y deja
+  snapshot previo en `component_events` (§Evento `service`).
+- **El eje días se mide desde esa misma base** con un **reloj inyectable**
+  (`WearClock`), testeable en JVM sin dormir.
+
+### 6. Borrado de bici — contrato de "referencia histórica"
+
+- Al borrar una bici, los rides **conservan su `bike_id`** (no se limpia, no se
+  borran): es una **referencia histórica suave**. En el detalle del ride, si la
+  bici ya no existe, se muestra el label **"Bici eliminada"** en vez de fallar
+  la carga.
+- Componentes y eventos de esa bici **se borran por CASCADE** (FK Room sobre
+  `components`/`component_events`).
+- Una bici borrada **no acumula desgaste**: sus componentes ya no existen, y la
+  UI de garaje solo evalúa bicis presentes.
+
+### 7. Persistencia — DB v6 (migración 5→6)
+
+| Elemento | Detalle |
+|---|---|
+| `bikes` | id, name, notes, createdAtMillis, isArchived |
+| `components` | ciclo de vida nullable por eje, FK → `bikes` **CASCADE** + índice |
+| `component_events` | snapshots de service, FK → `components` **CASCADE** + índice |
+| `rides.bike_id` | columna **nullable** + índice `index_rides_bike_id` |
+
+- **Sin FK dura de `rides` → `bikes`:** SQLite **no permite añadir una foreign
+  key con `ALTER TABLE`** (habría que reconstruir la tabla), y una FK dura
+  además **bloquearía el borrado** de bicis con rides asociados. Por eso la
+  relación es **soft reference** (§6) y la consistencia la da la capa de
+  dominio/repo, no el schema.

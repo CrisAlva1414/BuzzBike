@@ -41,6 +41,20 @@ y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
   perfil no altera los rides históricos.
 - Etiqueta **`supuesto: 70 kg`** visible en la UI cuando se usa ese peso de
   referencia (ADR-001 §5.3.2), nunca presentado como dato del usuario.
+- **Garaje:** alta, edición y borrado de bicis y de sus componentes
+  (cadena, suspensión, neumáticos, frenos), con **alertas de desgaste al 80%
+  («se acerca») y al 100% («vencido»)** según el motor de la
+  [ADR-004](docs/adr/ADR-004-wear-tracking-maximos-normalizados.md).
+- **Motor de desgaste** (`WearEngine`): ratio normalizado
+  `max(km/lifecycleKm, hours/lifecycleHours, days/lifecycleDays)` con defaults
+  configurables por componente (cadena 2000 km, suspensión 100 h, neumáticos
+  3000 km; frenos sin default, requieren configuración del usuario).
+- **Registro de servicios:** cada `service` resetea el acumulado del componente
+  y guarda snapshot previo (consumido, fecha y ratio al momento) en
+  `component_events`, dejando el historial de mantenimiento consultable.
+- **Selector de bici al iniciar el ride** («BICI DEL RIDE») y **nombre de la
+  bici en el detalle** del ride; si la bici ya no existe se muestra
+  «Bici eliminada» (los rides conservan su referencia histórica).
 
 ### Cambiado
 

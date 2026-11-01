@@ -57,13 +57,17 @@ class RideRepository
          */
         suspend fun getRideWithDescriptors(rideId: String): RideEntity? = rideDao.getRideById(rideId)
 
-        override suspend fun startRide(profile: UserProfile?): String {
+        override suspend fun startRide(
+            profile: UserProfile?,
+            bikeId: String?,
+        ): String {
             val rideId = UUID.randomUUID().toString()
             val ride =
                 RideEntity(
                     id = rideId,
                     startTimeMillis = System.currentTimeMillis(),
                     isActive = true,
+                    bikeId = bikeId,
                 ).withProfileSnapshot(profile)
             rideDao.replaceActiveRide(ride)
             return rideId

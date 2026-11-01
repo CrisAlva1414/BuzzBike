@@ -78,6 +78,29 @@ class RideSessionManagerTest {
         }
 
     @Test
+    fun given_selectedBike_when_startRide_thenWriterReceivesBikeId() =
+        runTest {
+            val writer = FakeRideSessionWriter()
+            val manager = manager(writer = writer)
+
+            val rideId = manager.startRide(bikeId = BIKE_ID)
+
+            assertEquals(RIDE_ID, rideId)
+            assertEquals(BIKE_ID, writer.startedBikeId)
+        }
+
+    @Test
+    fun given_noBike_when_startRide_thenWriterReceivesNull() =
+        runTest {
+            val writer = FakeRideSessionWriter()
+            val manager = manager(writer = writer)
+
+            manager.startRide()
+
+            assertNull(writer.startedBikeId)
+        }
+
+    @Test
     fun given_recordingRide_when_pause_thenMetricsAndPointsAreKept() =
         runTest {
             val tracking = FakeTrackingManager()
@@ -856,6 +879,9 @@ class RideSessionManagerTest {
         var startedProfile: UserProfile? = null
             private set
 
+        var startedBikeId: String? = null
+            private set
+
         var stoppedRideId: String? = null
             private set
 
@@ -872,9 +898,13 @@ class RideSessionManagerTest {
 
         val saved = mutableListOf<SavedDescriptors>()
 
-        override suspend fun startRide(profile: UserProfile?): String {
+        override suspend fun startRide(
+            profile: UserProfile?,
+            bikeId: String?,
+        ): String {
             startCalls += 1
             startedProfile = profile
+            startedBikeId = bikeId
             activeRideId = RIDE_ID
             return RIDE_ID
         }
@@ -1048,6 +1078,7 @@ class RideSessionManagerTest {
 
     private companion object {
         private const val RIDE_ID = "ride-1"
+        private const val BIKE_ID = "bike-a"
         private const val STALE_RIDE_ID = "ride-stale"
         private const val NANOS_PER_SECOND = 1_000_000_000L
         private const val BASE_LAT = -33.45

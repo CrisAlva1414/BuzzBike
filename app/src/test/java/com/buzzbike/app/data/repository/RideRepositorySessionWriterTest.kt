@@ -142,6 +142,28 @@ class RideRepositorySessionWriterTest {
         }
 
     @Test
+    fun given_bikeId_when_startRide_thenInsertCarriesTheAssignment() =
+        runTest {
+            val rideDao = FakeRideDao()
+            val repository = RideRepository(rideDao, FakeTrackPointDao())
+
+            repository.startRide(bikeId = BIKE_ID)
+
+            assertEquals(BIKE_ID, rideDao.inserted.single().bikeId)
+        }
+
+    @Test
+    fun given_noBike_when_startRide_thenInsertBikeIdIsNull() =
+        runTest {
+            val rideDao = FakeRideDao()
+            val repository = RideRepository(rideDao, FakeTrackPointDao())
+
+            repository.startRide(bikeId = null)
+
+            assertNull(rideDao.inserted.single().bikeId)
+        }
+
+    @Test
     fun given_storedSnapshot_when_persistedProfile_thenReturnsIt() =
         runTest {
             val ride =
@@ -262,5 +284,6 @@ class RideRepositorySessionWriterTest {
 
     private companion object {
         private const val RIDE_ID = "ride-1"
+        private const val BIKE_ID = "bike-a"
     }
 }

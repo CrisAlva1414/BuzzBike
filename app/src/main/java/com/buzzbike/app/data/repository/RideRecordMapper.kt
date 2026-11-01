@@ -27,6 +27,7 @@ internal fun RideEntity.toRideRecord(): RideRecord =
         maxSpeedMps = maxSpeedMps,
         calories = toCalorieSummary(),
         profileSnapshot = toProfileSnapshot(),
+        bikeId = bikeId,
     )
 
 /**

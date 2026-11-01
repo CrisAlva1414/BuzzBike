@@ -7,6 +7,7 @@ import com.buzzbike.app.domain.ride.session.RideServiceController
 import com.buzzbike.app.domain.ride.session.RideSessionManager
 import com.buzzbike.app.domain.ride.session.RideSessionState
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
+import com.buzzbike.app.domain.wear.BikeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ class RideViewModel
         private val rideSyncCoordinator: RideSyncCoordinator,
         private val rideServiceController: RideServiceController,
         private val profileStore: UserProfileStore,
+        bikeRepository: BikeRepository,
     ) : ViewModel() {
         val state: StateFlow<RideSessionState> =
             rideSessionManager.state.stateIn(
@@ -40,6 +42,15 @@ class RideViewModel
                 started = SharingStarted.Eagerly,
                 initialValue = RideSessionState.Idle,
             )
+
+        /**
+         * Owns the garage flow, the current selection and its validation.
+         * Extracted so this view model stays a thin session adapter.
+         */
+        private val bikeSelector = RideBikeSelector(bikeRepository, viewModelScope)
+
+        /** Selector state shown in [RideSessionState.Ready]. */
+        val bikeSelection: StateFlow<RideBikeSelection> = bikeSelector.state
 
         /**
          * Synchronous guard against a double stop: the first tap flips it
@@ -61,23 +72,43 @@ class RideViewModel
             }
         }
 
+        /**
+         * Starts a ride with the current garage selection.
+         *
+         * Both the profile and the bike are read synchronously and fixed for
+         * this ride: editing the garage or the profile afterwards cannot change
+         * what was persisted. While the request is in flight
+         * [RideBikeSelection.isBusy] disables the selector.
+         */
         fun startRide() {
             if (startInFlight) return
             startInFlight = true
+            val bikeId = bikeSelector.beginStart()
             viewModelScope.launch {
                 try {
                     // Read once at start: the manager fixes this snapshot for
                     // the whole ride, so a later profile edit cannot rewrite
-                    // the live values or the persisted ride.
+                    // the live values or the persisted ride. The bike was
+                    // captured synchronously above for the same reason.
                     val profile = profileStore.get()
-                    val rideId = rideSessionManager.startRide(profile)
+                    val rideId = rideSessionManager.startRide(profile, bikeId)
                     if (rideId != null) {
                         rideServiceController.start()
                     }
                 } finally {
+                    bikeSelector.endStart()
                     startInFlight = false
                 }
             }
+        }
+
+        /**
+         * Selects the bike for the next ride, or "Sin bici" when [bikeId] is
+         * null. Ignores changes while a start is in flight and ids that are no
+         * longer in the active garage.
+         */
+        fun selectBike(bikeId: String?) {
+            bikeSelector.select(bikeId)
         }
 
         fun pauseRide() {

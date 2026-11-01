@@ -1,0 +1,599 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 6,
+    "identityHash": "9834318cbc2c2b3a203f39e04ac1c52c",
+    "entities": [
+      {
+        "tableName": "rides",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `startTimeMillis` INTEGER NOT NULL, `endTimeMillis` INTEGER, `distanceM` REAL NOT NULL, `movingTimeSeconds` INTEGER NOT NULL, `stoppedTimeSeconds` INTEGER NOT NULL, `elevationGainM` REAL NOT NULL, `elevationLossM` REAL NOT NULL, `caloriesKcal` REAL, `caloriesLowKcal` REAL, `caloriesHighKcal` REAL, `calorieModel` TEXT, `profile_weight_kg` REAL, `profile_height_cm` REAL, `profile_age_years` INTEGER, `profile_is_male` INTEGER, `avgSpeedMps` REAL NOT NULL, `maxSpeedMps` REAL NOT NULL, `isActive` INTEGER NOT NULL, `bike_id` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTimeMillis",
+            "columnName": "startTimeMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTimeMillis",
+            "columnName": "endTimeMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "distanceM",
+            "columnName": "distanceM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "movingTimeSeconds",
+            "columnName": "movingTimeSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stoppedTimeSeconds",
+            "columnName": "stoppedTimeSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "elevationGainM",
+            "columnName": "elevationGainM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "elevationLossM",
+            "columnName": "elevationLossM",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "caloriesKcal",
+            "columnName": "caloriesKcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "caloriesLowKcal",
+            "columnName": "caloriesLowKcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "caloriesHighKcal",
+            "columnName": "caloriesHighKcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "calorieModel",
+            "columnName": "calorieModel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "profileWeightKg",
+            "columnName": "profile_weight_kg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "profileHeightCm",
+            "columnName": "profile_height_cm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "profileAgeYears",
+            "columnName": "profile_age_years",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "profileIsMale",
+            "columnName": "profile_is_male",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "avgSpeedMps",
+            "columnName": "avgSpeedMps",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxSpeedMps",
+            "columnName": "maxSpeedMps",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bikeId",
+            "columnName": "bike_id",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_rides_bike_id",
+            "unique": false,
+            "columnNames": [
+              "bike_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_rides_bike_id` ON `${TABLE_NAME}` (`bike_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "track_points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `rideId` TEXT NOT NULL, `timestampNanos` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `altitudeMslM` REAL, `altitudeEllipsoidM` REAL, `accuracyH` REAL, `accuracyV` REAL, `speedMps` REAL, `bearing` REAL, `pressureHpa` REAL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rideId",
+            "columnName": "rideId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampNanos",
+            "columnName": "timestampNanos",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "altitudeMslM",
+            "columnName": "altitudeMslM",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "altitudeEllipsoidM",
+            "columnName": "altitudeEllipsoidM",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "accuracyH",
+            "columnName": "accuracyH",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "accuracyV",
+            "columnName": "accuracyV",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "speedMps",
+            "columnName": "speedMps",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "bearing",
+            "columnName": "bearing",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "pressureHpa",
+            "columnName": "pressureHpa",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_track_points_rideId",
+            "unique": false,
+            "columnNames": [
+              "rideId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_track_points_rideId` ON `${TABLE_NAME}` (`rideId`)"
+          },
+          {
+            "name": "index_track_points_timestampNanos",
+            "unique": false,
+            "columnNames": [
+              "timestampNanos"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_track_points_timestampNanos` ON `${TABLE_NAME}` (`timestampNanos`)"
+          }
+        ]
+      },
+      {
+        "tableName": "outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `rideId` TEXT NOT NULL, `payload` BLOB NOT NULL, `status` TEXT NOT NULL, `attemptCount` INTEGER NOT NULL, `maxAttempts` INTEGER NOT NULL, `lastError` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rideId",
+            "columnName": "rideId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxAttempts",
+            "columnName": "maxAttempts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_outbox_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_outbox_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_outbox_createdAt",
+            "unique": false,
+            "columnNames": [
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_outbox_createdAt` ON `${TABLE_NAME}` (`createdAt`)"
+          },
+          {
+            "name": "index_outbox_rideId",
+            "unique": true,
+            "columnNames": [
+              "rideId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_outbox_rideId` ON `${TABLE_NAME}` (`rideId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "user_profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `updated_at_millis` INTEGER NOT NULL, `weight_kg` REAL, `height_cm` REAL, `age_years` INTEGER, `is_male` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtMillis",
+            "columnName": "updated_at_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weightKg",
+            "columnName": "weight_kg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "heightCm",
+            "columnName": "height_cm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "ageYears",
+            "columnName": "age_years",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isMale",
+            "columnName": "is_male",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "bikes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `notes` TEXT, `createdAtMillis` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtMillis",
+            "columnName": "createdAtMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isArchived",
+            "columnName": "isArchived",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "components",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `bikeId` TEXT NOT NULL, `type` TEXT NOT NULL, `label` TEXT NOT NULL, `installedAtMillis` INTEGER NOT NULL, `lifecycleKm` REAL, `lifecycleHours` REAL, `lifecycleDays` REAL, `retiredAtMillis` INTEGER, `notes` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`bikeId`) REFERENCES `bikes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bikeId",
+            "columnName": "bikeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "installedAtMillis",
+            "columnName": "installedAtMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lifecycleKm",
+            "columnName": "lifecycleKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lifecycleHours",
+            "columnName": "lifecycleHours",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lifecycleDays",
+            "columnName": "lifecycleDays",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "retiredAtMillis",
+            "columnName": "retiredAtMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_components_bikeId",
+            "unique": false,
+            "columnNames": [
+              "bikeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_components_bikeId` ON `${TABLE_NAME}` (`bikeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "bikes",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "bikeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "component_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `componentId` TEXT NOT NULL, `type` TEXT NOT NULL, `atMillis` INTEGER NOT NULL, `wearRatioAtEvent` REAL, `consumedKm` REAL, `consumedHours` REAL, `notes` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`componentId`) REFERENCES `components`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "componentId",
+            "columnName": "componentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "atMillis",
+            "columnName": "atMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wearRatioAtEvent",
+            "columnName": "wearRatioAtEvent",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "consumedKm",
+            "columnName": "consumedKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "consumedHours",
+            "columnName": "consumedHours",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_component_events_componentId",
+            "unique": false,
+            "columnNames": [
+              "componentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_component_events_componentId` ON `${TABLE_NAME}` (`componentId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "components",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "componentId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9834318cbc2c2b3a203f39e04ac1c52c')"
+    ]
+  }
+}

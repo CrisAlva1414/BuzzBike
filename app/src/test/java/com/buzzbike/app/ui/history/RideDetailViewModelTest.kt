@@ -7,8 +7,12 @@ import com.buzzbike.app.domain.history.RideDetail
 import com.buzzbike.app.domain.history.RideDetailSource
 import com.buzzbike.app.domain.history.RideRecord
 import com.buzzbike.app.domain.model.TrackPoint
+import com.buzzbike.app.domain.wear.Bike
+import com.buzzbike.app.domain.wear.BikeRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -172,18 +176,71 @@ class RideDetailViewModelTest {
             assertNull(exporter.lastDestination)
         }
 
+    @Test
+    fun given_rideWithExistingBike_when_loaded_thenContentExposesBikeName() =
+        runTest {
+            val viewModel =
+                viewModel(
+                    RIDE_ID,
+                    FakeSource(detail(bikeId = BIKE_ID)),
+                    bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID, "Gravel"))),
+                )
+
+            advanceUntilIdle()
+
+            val content = viewModel.state.value as RideDetailUiState.Content
+            assertEquals(BIKE_ID, content.detail.ride.bikeId)
+            assertEquals("Gravel", content.bikeName)
+        }
+
+    @Test
+    fun given_deletedBike_when_loaded_thenBikeNameIsNullAndLabelSaysDeleted() =
+        runTest {
+            val viewModel =
+                viewModel(
+                    RIDE_ID,
+                    FakeSource(detail(bikeId = BIKE_ID)),
+                    bikeRepository = FakeBikeRepository(emptyList()),
+                )
+
+            advanceUntilIdle()
+
+            val content = viewModel.state.value as RideDetailUiState.Content
+            assertNull(content.bikeName)
+            assertEquals("Bici eliminada", rideBikeLabel(content.detail.ride, content.bikeName))
+        }
+
+    @Test
+    fun given_rideWithoutBike_when_loaded_thenBikeNameAndLabelAreNull() =
+        runTest {
+            val viewModel =
+                viewModel(
+                    RIDE_ID,
+                    FakeSource(detail(bikeId = null)),
+                    bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID, "Gravel"))),
+                )
+
+            advanceUntilIdle()
+
+            val content = viewModel.state.value as RideDetailUiState.Content
+            assertNull(content.bikeName)
+            assertNull(rideBikeLabel(content.detail.ride, content.bikeName))
+        }
+
     private fun viewModel(
         rideId: String?,
         source: RideDetailSource,
         exporter: GpxExporter = FakeExporter(Result.success(Unit)),
+        bikeRepository: BikeRepository = FakeBikeRepository(emptyList()),
     ): RideDetailViewModel {
         val handle = if (rideId == null) SavedStateHandle() else SavedStateHandle(mapOf("rideId" to rideId))
-        return RideDetailViewModel(handle, source, exporter)
+        return RideDetailViewModel(handle, source, exporter, bikeRepository)
     }
 
     private fun detail(
         rideId: String = RIDE_ID,
         points: List<TrackPoint> = defaultPoints(),
+        bikeId: String? = null,
     ): RideDetail =
         RideDetail(
             ride =
@@ -199,8 +256,21 @@ class RideDetailViewModelTest {
                     avgSpeedMps = 4.57,
                     maxSpeedMps = 11.2,
                     calories = null,
+                    bikeId = bikeId,
                 ),
             points = points,
+        )
+
+    private fun bike(
+        id: String,
+        name: String,
+    ): Bike =
+        Bike(
+            id = id,
+            name = name,
+            notes = null,
+            createdAtMillis = 1_000L,
+            isArchived = false,
         )
 
     private fun defaultPoints(): List<TrackPoint> =
@@ -240,8 +310,31 @@ class RideDetailViewModelTest {
         }
     }
 
+    private class FakeBikeRepository(
+        private val bikes: List<Bike>,
+    ) : BikeRepository {
+        override fun observeBikes(): Flow<List<Bike>> = flowOf(bikes)
+
+        override suspend fun getBike(id: String): Bike? = bikes.firstOrNull { it.id == id }
+
+        override suspend fun createBike(
+            name: String,
+            notes: String?,
+        ): String = error("not used")
+
+        override suspend fun updateBike(bike: Bike) = Unit
+
+        override suspend fun deleteBike(id: String) = Unit
+
+        override suspend fun assignRideToBike(
+            rideId: String,
+            bikeId: String?,
+        ) = Unit
+    }
+
     private companion object {
         const val RIDE_ID = "r1"
+        const val BIKE_ID = "bike-1"
         const val START_MILLIS = 1_790_000_000_000L
         const val DESTINATION = "content://com.buzzbike.test/export/r1.gpx"
     }

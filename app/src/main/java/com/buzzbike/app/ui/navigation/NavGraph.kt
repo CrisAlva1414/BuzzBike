@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.buzzbike.app.ui.garage.GarageScreen
 import com.buzzbike.app.ui.history.HistoryScreen
 import com.buzzbike.app.ui.history.RideDetailScreen
 import com.buzzbike.app.ui.ride.RideScreen
@@ -15,6 +16,7 @@ import com.buzzbike.app.ui.settings.SyncSettingsScreen
 private const val RIDE_ROUTE = "ride"
 private const val SETTINGS_ROUTE = "settings"
 private const val HISTORY_ROUTE = "history"
+private const val GARAGE_ROUTE = "garage"
 private const val RIDE_DETAIL_ROUTE = "history/{rideId}"
 private const val RIDE_ID_ARG = "rideId"
 
@@ -36,7 +38,13 @@ fun NavGraph() {
                 onOpenHistory = {
                     navController.navigate(HISTORY_ROUTE) { launchSingleTop = true }
                 },
+                onOpenGarage = {
+                    navController.navigate(GARAGE_ROUTE) { launchSingleTop = true }
+                },
             )
+        }
+        composable(GARAGE_ROUTE) {
+            GarageScreen(onBack = { navController.popBackStack() })
         }
         composable(SETTINGS_ROUTE) {
             SyncSettingsScreen(onBack = { navController.popBackStack() })

@@ -24,8 +24,16 @@ interface RideSessionWriter {
      * Creates the persisted active ride and stores [profile] as the snapshot
      * the ride will use for its whole lifetime. `null` leaves the four snapshot
      * columns empty (ride recorded without a profile).
+     *
+     * [bikeId] is the bike selected by the user when the ride started. It is
+     * persisted in `rides.bike_id` and becomes immutable for this ride: later
+     * garage edits must not rewrite the association. `null` means the ride is
+     * not assigned to any bike, so it never contributes to wear (ADR-004).
      */
-    suspend fun startRide(profile: UserProfile? = null): String
+    suspend fun startRide(
+        profile: UserProfile? = null,
+        bikeId: String? = null,
+    ): String
 
     /** Returns the id of the persisted active ride, if any, for recovery. */
     suspend fun findActiveRideId(): String?

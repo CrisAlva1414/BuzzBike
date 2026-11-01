@@ -19,7 +19,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Verifies [MIGRATION_1_2], [MIGRATION_2_3], [MIGRATION_3_4] and [MIGRATION_4_5]
+ * Verifies [MIGRATION_1_2], [MIGRATION_2_3], [MIGRATION_3_4], [MIGRATION_4_5] and
+ * [MIGRATION_5_6]
  * against a real file-backed database.
  *
  * `room-testing` is not a project dependency, so the source databases are
@@ -58,7 +59,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .allowMainThreadQueries()
                     .build()
 
@@ -103,7 +104,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_V2_NAME)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .allowMainThreadQueries()
                     .build()
 
@@ -142,7 +143,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_V3_NAME)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .allowMainThreadQueries()
                     .build()
 
@@ -171,7 +172,7 @@ class MigrationsTest {
             val database =
                 Room
                     .databaseBuilder(context, AppDatabase::class.java, DATABASE_V4_NAME)
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .allowMainThreadQueries()
                     .build()
 

@@ -2,9 +2,17 @@ package com.buzzbike.app.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "rides")
+@Entity(
+    tableName = "rides",
+    // Only rides assigned to a bike contribute to that bike's wear. The column
+    // is a plain nullable reference with no SQL foreign key: adding a hard FK
+    // to an existing table would require rebuilding `rides`, and deleting a
+    // bike must never delete or block historical rides.
+    indices = [Index("bike_id")],
+)
 data class RideEntity(
     @PrimaryKey val id: String,
     val startTimeMillis: Long,
@@ -27,4 +35,6 @@ data class RideEntity(
     val avgSpeedMps: Double = 0.0,
     val maxSpeedMps: Double = 0.0,
     val isActive: Boolean = false,
+    // Added in schema v6 (U4 garage). Null means "not assigned to a bike".
+    @ColumnInfo(name = "bike_id") val bikeId: String? = null,
 )

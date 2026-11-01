@@ -66,6 +66,48 @@ altos/críticos; 2 LOW residuales). Sin escalado.
 
 ---
 
+## Tarea — Fase 3: U4 Garaje y desgaste
+
+### Estado
+**completada** · clase **Heavy**: `tester: PASS` (552 JVM + 10 instrumentados) y
+`security-reviewer: PASS` (3 LOW, defensa en profundidad). 2026-11-01.
+
+### Decisiones
+- Fórmula tal cual ADR-004:29-38 (`max` de ejes normalizados), umbrales 0.80/1.00,
+  estados `OK`/`APPROACHING`/`DUE`.
+- `lifecycleDays` **nullable** (el ADR no fijaba default → no se inventó).
+- Frenos **sin default**: requieren configurar km; el desnivel negativo queda como
+  TODO informativo (ADR-004:61-63).
+- Defaults: cadena 2000 km, suspensión 100 h, neumáticos 3000 km (mínimo del rango).
+- Acumulación **solo** con rides asignados (`rides.bike_id`); base = último
+  `SERVICE` o `installedAtMillis`; reloj inyectable.
+- **Borrar bici conserva `bike_id`** en los rides (referencia histórica suave):
+  el detalle muestra «Bici eliminada», componentes/eventos caen por CASCADE y la
+  bici borrada no acumula desgaste. (Decisión tomada al resolver el FAIL del tester.)
+- DB v6 sin FK dura en `rides.bike_id` (SQLite no permite añadir FK con ALTER).
+
+### Iteraciones
+| Iter | Slice | Resultado |
+|---|---|---|
+| 1 | S1 dominio `domain/wear` | PASS (487 tests) |
+| 2 | S2 Room 5→6 + repos | FAIL (migraciones/ktlint/detekt) → PASS (501) |
+| 3 | S3 UI garaje | FAIL (ktlint/detekt TooManyFunctions/ReturnCount) → PASS (529) |
+| 4 | S4 bici en el ride | incompleto ×2 (step limit) → PASS con tests (551) |
+| 5 | gates: tester **FAIL** (producto: borrado) + probe temporal | fix: conservar `bike_id`; probe eliminado |
+| 6 | cierre: KDoc, test permanente, docs | PASS (552) |
+
+### Verificación
+- `test` = **552**, 0 fallos; `detekt` 0; `connectedDebugAndroidTest` **10/10**.
+- Migración 5→6 validada en emulador; desgaste 100 km → 5%, 1600 km → 80%, 2000 km → 100%.
+
+### Deuda
+- Sin UI para editar el ciclo de vida de un componente ni historial de servicios
+  (el repo lo soporta; falta pantalla).
+- Caps de longitud solo en UI (`notes` sin cota) — defensa en profundidad.
+- N+1 en `assessWear` por bici (no medido; sin bloqueo).
+
+---
+
 ## Tarea — Fase 2: U3 Ajustes y perfil
 
 ### Estado

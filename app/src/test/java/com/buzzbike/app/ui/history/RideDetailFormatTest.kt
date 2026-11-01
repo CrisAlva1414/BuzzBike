@@ -3,7 +3,9 @@ package com.buzzbike.app.ui.history
 import com.buzzbike.app.domain.calories.CalorieSummary
 import com.buzzbike.app.domain.calories.UserProfile
 import com.buzzbike.app.domain.history.RideRecord
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
@@ -51,10 +53,28 @@ class RideDetailFormatTest {
         assertTrue(calories.label.contains("supuesto: 70 kg"))
     }
 
+    @Test
+    fun given_rideWithExistingBike_when_rideBikeLabel_thenShowsCurrentName() {
+        assertEquals("Bici: Gravel", rideBikeLabel(ride(profile = null, bikeId = BIKE_ID), "Gravel"))
+    }
+
+    @Test
+    fun given_rideWithDeletedBike_when_rideBikeLabel_thenShowsStaticDeletedLabel() {
+        assertEquals("Bici eliminada", rideBikeLabel(ride(profile = null, bikeId = BIKE_ID), null))
+    }
+
+    @Test
+    fun given_rideWithoutBike_when_rideBikeLabel_thenNoRowIsProduced() {
+        assertNull(rideBikeLabel(ride(profile = null, bikeId = null), null))
+    }
+
     private fun caloriesCell(ride: RideRecord) =
         detailMetricCells(ride, esCl).single { it.label.startsWith("Calorías") }
 
-    private fun ride(profile: UserProfile?): RideRecord =
+    private fun ride(
+        profile: UserProfile?,
+        bikeId: String? = null,
+    ): RideRecord =
         RideRecord(
             id = "ride-1",
             startTimeMillis = 1_700_000_000_000L,
@@ -75,5 +95,10 @@ class RideDetailFormatTest {
                     assumedWeightKg = if (profile?.weightKg == null) 70.0 else null,
                 ),
             profileSnapshot = profile,
+            bikeId = bikeId,
         )
+
+    private companion object {
+        const val BIKE_ID = "bike-1"
+    }
 }

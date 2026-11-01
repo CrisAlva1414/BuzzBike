@@ -38,6 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -77,10 +80,15 @@ private const val CANCEL_LABEL = "CANCELAR"
 private const val RECOVER_LABEL = "RECUPERAR"
 private const val SETTINGS_LABEL = "Ajustes de sync"
 private const val HISTORY_LABEL = "HISTORIAL"
+private const val GARAGE_LABEL = "GARAJE"
 private const val AUTO_PAUSE_TEXT = "Pausa automática"
 private const val PAUSED_TEXT = "En pausa"
 private const val FINISHED_TITLE = "RIDE TERMINADO"
 private const val APP_TITLE = "BUZZBIKE"
+private const val BIKE_SELECTOR_TITLE = "BICI DEL RIDE"
+private const val BIKE_SELECTOR_LABEL = "Bici"
+private const val NO_BIKES_TEXT = "Todavía no tenés bicis en el garaje."
+private const val OPTION_GAP_DP = 8
 private const val RECOVERABLE_TITLE = "Se interrumpió un ride"
 private const val RECOVERABLE_MESSAGE =
     "Se encontró un ride sin terminar guardado en el dispositivo. " +
@@ -96,9 +104,11 @@ private const val DISCARD_RECOVERABLE_MESSAGE =
 fun RideScreen(
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenGarage: () -> Unit,
     viewModel: RideViewModel = hiltViewModel(),
 ) {
     val sessionState by viewModel.state.collectAsState()
+    val bikeSelection by viewModel.bikeSelection.collectAsState()
     val locale = LocalConfiguration.current.locales[0]
     var permissionResult by rememberSaveable {
         mutableStateOf(LocationPermissionRequestResult.NOT_REQUESTED)
@@ -125,11 +135,14 @@ fun RideScreen(
 
     RideContent(
         state = sessionState,
+        bikeSelection = bikeSelection,
         locale = locale,
         permissionResult = permissionResult,
         onRequestPermission = onRequestPermission,
         onOpenSettings = onOpenSettings,
         onOpenHistory = onOpenHistory,
+        onOpenGarage = onOpenGarage,
+        onSelectBike = viewModel::selectBike,
         onStart = viewModel::startRide,
         onPause = viewModel::pauseRide,
         onResume = viewModel::resumeRide,
@@ -155,11 +168,14 @@ private fun KeepScreenOn(state: RideSessionState) {
 @Suppress("LongParameterList")
 private fun RideContent(
     state: RideSessionState,
+    bikeSelection: RideBikeSelection,
     locale: Locale,
     permissionResult: LocationPermissionRequestResult,
     onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenGarage: () -> Unit,
+    onSelectBike: (String?) -> Unit,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -193,11 +209,14 @@ private fun RideContent(
             is RideSessionState.Ready ->
                 ReadyContent(
                     state = state,
+                    bikeSelection = bikeSelection,
                     permissionResult = permissionResult,
                     onRequestPermission = onRequestPermission,
+                    onSelectBike = onSelectBike,
                     onStart = onStart,
                     onOpenSettings = onOpenSettings,
                     onOpenHistory = onOpenHistory,
+                    onOpenGarage = onOpenGarage,
                 )
             is RideSessionState.Recording ->
                 ActiveRideContent(
@@ -277,11 +296,14 @@ private fun IdleContent() {
 @Composable
 private fun ReadyContent(
     state: RideSessionState.Ready,
+    bikeSelection: RideBikeSelection,
     permissionResult: LocationPermissionRequestResult,
     onRequestPermission: () -> Unit,
+    onSelectBike: (String?) -> Unit,
     onStart: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenGarage: () -> Unit,
 ) {
     val colors = BuzzTheme.colors
     val hasPermission = state.gps != GpsStatus.NO_PERMISSION
@@ -318,6 +340,7 @@ private fun ReadyContent(
             modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
         )
     }
+    BikeSelector(selection = bikeSelection, onSelect = onSelectBike)
     BuzzButton(
         text = START_LABEL,
         onClick = onStart,
@@ -335,6 +358,84 @@ private fun ReadyContent(
         onClick = onOpenHistory,
         modifier = Modifier.fillMaxWidth(),
         primary = false,
+    )
+    BuzzButton(
+        text = GARAGE_LABEL,
+        onClick = onOpenGarage,
+        modifier = Modifier.fillMaxWidth(),
+        primary = false,
+    )
+}
+
+@Composable
+private fun BikeSelector(
+    selection: RideBikeSelection,
+    onSelect: (String?) -> Unit,
+) {
+    val colors = BuzzTheme.colors
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(OPTION_GAP_DP.dp),
+    ) {
+        BuzzDisplay(
+            text = BIKE_SELECTOR_TITLE,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            text = "$BIKE_SELECTOR_LABEL: ${selection.selectedLabel}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.ink,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        BikeOption(
+            text = RideBikeSelection.NO_BIKE_LABEL,
+            selected = selection.selectedBikeId == null,
+            enabled = !selection.isBusy,
+            description = "Sin bici: no asignar este ride a ninguna bici",
+            onClick = { onSelect(null) },
+        )
+        selection.bikes.forEach { bike ->
+            BikeOption(
+                text = bike.name,
+                selected = bike.id == selection.selectedBikeId,
+                enabled = !selection.isBusy,
+                description = "Asignar este ride a la bici ${bike.name}",
+                onClick = { onSelect(bike.id) },
+            )
+        }
+        if (selection.bikes.isEmpty()) {
+            Text(
+                text = NO_BIKES_TEXT,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.ink,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BikeOption(
+    text: String,
+    selected: Boolean,
+    enabled: Boolean,
+    description: String,
+    onClick: () -> Unit,
+) {
+    val stateDescription = if (selected) "Seleccionada" else "No seleccionada"
+    BuzzButton(
+        text = text,
+        onClick = onClick,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics {
+                    contentDescription = "$description. $stateDescription"
+                    this.selected = selected
+                },
+        enabled = enabled,
+        primary = selected,
     )
 }
 

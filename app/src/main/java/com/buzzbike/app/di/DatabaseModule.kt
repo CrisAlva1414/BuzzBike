@@ -9,8 +9,13 @@ import com.buzzbike.app.data.local.MIGRATION_1_2
 import com.buzzbike.app.data.local.MIGRATION_2_3
 import com.buzzbike.app.data.local.MIGRATION_3_4
 import com.buzzbike.app.data.local.MIGRATION_4_5
+import com.buzzbike.app.data.local.MIGRATION_5_6
+import com.buzzbike.app.data.local.dao.BikeDao
+import com.buzzbike.app.data.local.dao.ComponentDao
+import com.buzzbike.app.data.local.dao.ComponentEventDao
 import com.buzzbike.app.data.local.dao.OutboxDao
 import com.buzzbike.app.data.local.dao.RideDao
+import com.buzzbike.app.data.local.dao.RideUsageDao
 import com.buzzbike.app.data.local.dao.TrackPointDao
 import com.buzzbike.app.data.local.dao.UserProfileDao
 import com.buzzbike.app.data.repository.ProfileRepository
@@ -41,12 +46,15 @@ object DatabaseModule {
                 AppDatabase::class.java,
                 "buzzbike-encrypted.db",
             ).openHelperFactory(SupportOpenHelperFactory(passphraseProvider.getPassphrase()))
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
     }
 
     @Provides
     fun provideRideDao(database: AppDatabase): RideDao = database.rideDao()
+
+    @Provides
+    fun provideRideUsageDao(database: AppDatabase): RideUsageDao = database.rideUsageDao()
 
     @Provides
     fun provideTrackPointDao(database: AppDatabase): TrackPointDao = database.trackPointDao()
@@ -56,6 +64,15 @@ object DatabaseModule {
 
     @Provides
     fun provideUserProfileDao(database: AppDatabase): UserProfileDao = database.userProfileDao()
+
+    @Provides
+    fun provideBikeDao(database: AppDatabase): BikeDao = database.bikeDao()
+
+    @Provides
+    fun provideComponentDao(database: AppDatabase): ComponentDao = database.componentDao()
+
+    @Provides
+    fun provideComponentEventDao(database: AppDatabase): ComponentEventDao = database.componentEventDao()
 
     @Provides
     @Singleton

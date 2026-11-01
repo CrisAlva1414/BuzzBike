@@ -28,11 +28,14 @@ import com.buzzbike.app.domain.sync.SyncGatekeeper
 import com.buzzbike.app.domain.sync.SyncMutationGate
 import com.buzzbike.app.domain.sync.SyncWorkScheduler
 import com.buzzbike.app.domain.sync.UnsealedSecret
+import com.buzzbike.app.domain.wear.Bike
+import com.buzzbike.app.domain.wear.BikeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -354,12 +357,120 @@ class RideViewModelTest {
             assertEquals(1, service.stopCalls)
         }
 
+    @Test
+    fun given_availableBike_when_nothingSelected_then_startRidePersistsNoBike() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer, bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID))))
+            advanceUntilIdle()
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertNull(viewModel.bikeSelection.value.selectedBikeId)
+            assertNull(writer.startedBikeId)
+        }
+
+    @Test
+    fun given_selectedBike_when_startRide_thenWriterReceivesBikeId() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer, bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID))))
+            advanceUntilIdle()
+
+            viewModel.selectBike(BIKE_ID)
+            advanceUntilIdle()
+            assertEquals(BIKE_ID, viewModel.bikeSelection.value.selectedBikeId)
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            assertEquals(BIKE_ID, writer.startedBikeId)
+        }
+
+    @Test
+    fun given_rideStartedWithBike_when_garageChanges_thenCapturedBikeIdIsUnchanged() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID)))
+            val viewModel = viewModel(writer = writer, bikeRepository = bikeRepository)
+            advanceUntilIdle()
+            viewModel.selectBike(BIKE_ID)
+            advanceUntilIdle()
+
+            viewModel.startRide()
+            advanceUntilIdle()
+
+            bikeRepository.bikes.value = listOf(bike(OTHER_BIKE_ID))
+            advanceUntilIdle()
+
+            assertEquals(BIKE_ID, writer.startedBikeId)
+            assertTrue(viewModel.state.value is RideSessionState.Recording)
+        }
+
+    @Test
+    fun given_startInFlight_when_selectBike_thenSelectionIsIgnored() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel = viewModel(writer = writer, bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID))))
+            advanceUntilIdle()
+
+            // beginStart flips the busy flag synchronously; the start coroutine
+            // is still queued on the test dispatcher.
+            viewModel.startRide()
+            viewModel.selectBike(BIKE_ID)
+            advanceUntilIdle()
+
+            assertNull(viewModel.bikeSelection.value.selectedBikeId)
+            assertNull(writer.startedBikeId)
+        }
+
+    @Test
+    fun given_archivedBike_when_selecting_thenItIsNotOfferedNorSelected() =
+        runTest {
+            val writer = RecordingRideSessionWriter()
+            val viewModel =
+                viewModel(
+                    writer = writer,
+                    bikeRepository = FakeBikeRepository(listOf(bike(BIKE_ID), bike(OTHER_BIKE_ID, archived = true))),
+                )
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(BIKE_ID),
+                viewModel.bikeSelection.value.bikes
+                    .map { it.id },
+            )
+
+            viewModel.selectBike(OTHER_BIKE_ID)
+            advanceUntilIdle()
+
+            assertNull(viewModel.bikeSelection.value.selectedBikeId)
+            viewModel.startRide()
+            advanceUntilIdle()
+            assertNull(writer.startedBikeId)
+        }
+
+    private fun bike(
+        id: String,
+        archived: Boolean = false,
+    ): Bike =
+        Bike(
+            id = id,
+            name = "Bike $id",
+            notes = null,
+            createdAtMillis = 1_000L,
+            isArchived = archived,
+        )
+
+    @Suppress("LongParameterList")
     private fun TestScope.viewModel(
         writer: RecordingRideSessionWriter = RecordingRideSessionWriter(),
         service: RideServiceController = FakeRideServiceController(),
         permissionChecker: LocationPermissionChecker = GrantedPermissionChecker,
         profileStore: UserProfileStore = FakeProfileStore(),
         engine: RideEngine = RideEngine(),
+        bikeRepository: FakeBikeRepository = FakeBikeRepository(),
     ): RideViewModel {
         val trackingManager =
             TrackingManager(
@@ -387,7 +498,31 @@ class RideViewModelTest {
                         gate = SyncMutationGate(),
                     ),
             )
-        return RideViewModel(manager, coordinator, service, profileStore)
+        return RideViewModel(manager, coordinator, service, profileStore, bikeRepository)
+    }
+
+    private class FakeBikeRepository(
+        bikes: List<Bike> = emptyList(),
+    ) : BikeRepository {
+        val bikes = MutableStateFlow(bikes)
+
+        override fun observeBikes(): Flow<List<Bike>> = bikes
+
+        override suspend fun getBike(id: String): Bike? = bikes.value.firstOrNull { it.id == id }
+
+        override suspend fun createBike(
+            name: String,
+            notes: String?,
+        ): String = error("not used")
+
+        override suspend fun updateBike(bike: Bike) = Unit
+
+        override suspend fun deleteBike(id: String) = Unit
+
+        override suspend fun assignRideToBike(
+            rideId: String,
+            bikeId: String?,
+        ) = Unit
     }
 
     private class FakeRideServiceController : RideServiceController {
@@ -414,6 +549,9 @@ class RideViewModelTest {
             private set
 
         var startedProfile: UserProfile? = null
+            private set
+
+        var startedBikeId: String? = null
             private set
 
         var startCalls: Int = 0
@@ -451,9 +589,13 @@ class RideViewModelTest {
 
         private var activeRideId: String? = initialActiveRideId
 
-        override suspend fun startRide(profile: UserProfile?): String {
+        override suspend fun startRide(
+            profile: UserProfile?,
+            bikeId: String?,
+        ): String {
             startCalls += 1
             startedProfile = profile
+            startedBikeId = bikeId
             startedRideId = RIDE_ID
             activeRideId = RIDE_ID
             return RIDE_ID
@@ -600,6 +742,8 @@ class RideViewModelTest {
 
     private companion object {
         private const val RIDE_ID = "ride-1"
+        private const val BIKE_ID = "bike-a"
+        private const val OTHER_BIKE_ID = "bike-b"
         private const val NANOS_PER_SECOND = 1_000_000_000L
         private const val BASE_LAT = -33.45
         private const val BASE_LON = -70.66

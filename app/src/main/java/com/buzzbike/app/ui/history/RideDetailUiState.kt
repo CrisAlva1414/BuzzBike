@@ -6,8 +6,15 @@ import com.buzzbike.app.domain.history.RideDetail
 sealed interface RideDetailUiState {
     data object Loading : RideDetailUiState
 
+    /**
+     * @property bikeName current garage name of the ride's assigned bike, or
+     *   `null` when the ride has no bike or the bike no longer exists. The
+     *   screen distinguishes those two cases with `detail.ride.bikeId` and
+     *   renders "Bici eliminada" for a dangling assignment.
+     */
     data class Content(
         val detail: RideDetail,
+        val bikeName: String? = null,
     ) : RideDetailUiState
 
     data object NotFound : RideDetailUiState
