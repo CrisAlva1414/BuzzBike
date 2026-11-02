@@ -50,6 +50,13 @@
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+        ACCESS_WIFI_STATE NO se declara acá: la aporta el merge del AAR
+        org.maplibre.gl:android-sdk-opengl (13.7.1), que lo necesita para
+        detectar tiles disponibles por Wi-Fi. Es la única fuente de ese
+        permiso en el manifiesto fusionado; si se reemplaza MapLibre, revisar
+        el merged manifest antes de asumirlo.
+    -->
 
     <!--
         HARDWARE — la app es inútil sin GPS y no tiene sentido en tablets

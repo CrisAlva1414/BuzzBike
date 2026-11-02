@@ -45,13 +45,13 @@ Verificado contra el código en `main` (2026-10-30):
 - ✅ **Sync a Hermes Agent:** outbox en Room + WorkManager, firma HMAC V2 con secret en Android Keystore, SQLCipher, data minimization y dedupe por `ride.id` (ADR-003). *La validación E2E contra un NAS real sigue pendiente.*
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
 - ✅ **CI:** `.github/workflows/android.yml` verde en cada push/PR (gate `test ktlintCheck detekt lintDebug assembleDebug`) y sube el APK de debug **solo como artifact** `buzzbike-debug-apk`. En tags `v*` corre el job `release`, que construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256` **solo** si están los **5 secrets** (los 4 de firma + `RELEASE_CERT_SHA256`); sin los de firma falla («release signing not configured») y no publica nada; además **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`. La release **`v0.1.0`** (2026-10-30) se publicó con APK de debug, antes de este cambio.
-- ✅ **Gate verde:** `test` (**551 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **84.5 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **10/10 PASS**).
+- ✅ **Gate verde:** `test` (**576 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **~70 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **10/10 PASS**).
 
 **Todavía no:**
 
 - ✅ **U3 — Ajustes y perfil:** perfil corporal en **Room cifrado** (ADR-007) con snapshot por ride; Mifflin-St Jeor operativo como baseline de paradas con perfil completo y `hasProfile` cableado en ride/historial/detalle.
 - 🚧 **U4 — Garaje y desgaste:** existe ADR-004, pero no hay `domain/wear/` ni tablas `bikes`/`components`/`component_events` (Room hoy tiene 3 tablas: `rides`, `outbox`, `track_points`).
-- 🚧 **U5 — Mapa:** MapLibre 13.7.1 + OpenFreeMap están declarados en el build, con **cero usos en Kotlin**.
+- ✅ **U5 — Mapa:** pestaña DATOS/MAPA en el detalle con **MapLibre (artifact `android-sdk-opengl`) + OpenFreeMap**, sin API key; atribución visible permanente, aviso offline con `REINTENTAR` y el track renderizado en local (las coordenadas no se envían).
 - 🚧 **U6 — Accesibilidad:** TalkBack, contraste y tests de borde sin hacer.
 - ❌ **Release firmada de producción:** el pipeline de release en CI ya está preparado, pero falta el keystore y los 5 secrets (`RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` y `RELEASE_CERT_SHA256`); sin ellos el job `release` falla y no publica nada.
 - ❌ **E2E del sync con Hermes real:** nunca validado contra un NAS con Hermes Agent (la spec está implementada y testeada contra mock).
@@ -187,7 +187,7 @@ Estado al 2026-10-30 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
 - [x] Historial, detalle y exportación GPX 1.1 (U2)
 - [x] Ajustes y perfil: perfil corporal en Room cifrado (U3, ADR-007)
 - [ ] Garaje y desgaste de componentes: schema `bikes`/`components` + `WearEngine` (ADR-004, U4)
-- [ ] Mapa en vivo/detalle con MapLibre + OpenFreeMap (U5)
+- [x] Mapa en el detalle con MapLibre + OpenFreeMap (U5, ADR-002)
 - [ ] Accesibilidad (TalkBack, contraste) (U6)
 - [ ] Primera release firmada (keystore + los 5 secrets de CI; el job de release ya está preparado)
 - [ ] Post-v1: BLE frecuencia cardíaca/potencia, PMTiles offline, F-Droid

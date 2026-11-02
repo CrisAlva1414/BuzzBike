@@ -24,7 +24,7 @@
 | **1 — Verificación en hardware** ✅ **COMPLETA (2026-11-01)** | Emulador o dispositivo conectado, smoke E2E manual, ejecución de `connectedDebugAndroidTest` (hoy solo compila) y, si entra, emulador en CI. **Hecho con el AVD local `tester36`: 8/8 instrumentados en verde.** | Instrumentados en verde sobre un dispositivo/emulador real. |
 | **2 — U3 Ajustes y perfil** ✅ **COMPLETA (2026-11-01, 465 tests)** | **Perfil corporal en Room cifrado (ADR-007)**, **ADR de dato personal** nuevo (ADR-007), y cablear `hasProfile` en ride/historial/detalle (estaba hardcodeado en `false`). | `tester: PASS` + `security-reviewer: PASS`. |
 | **3 — U4 Garaje y desgaste** ✅ **COMPLETA (2026-11-01, 551 tests)** | Migración Room **5→6** con tablas `bikes`, `components`, `component_events` + `WearEngine` (ADR-004) + UI de garaje + bici asignada al ride. | `tester: PASS` + `security-reviewer: PASS`. |
-| **4 — U5 Mapa** | MapLibre + OpenFreeMap con atribución ODbL visible y track en el detalle; **o sacar la dependencia** si no entra en v1 (hoy está declarada con cero usos de Kotlin). | `tester: PASS` + `security-reviewer: PASS`, o decisión documentada de quitar la dependencia. |
+| **4 — U5 Mapa** ✅ **COMPLETA (2026-11-01, 576 tests)** | **Se implementó** (la opción de quitar la dependencia quedó descartada): MapLibre + OpenFreeMap online con estilo Liberty, track en el detalle vía pestaña **DATOS/MAPA**, atribución ODbL visible, aviso offline con reintento. Artefacto cambiado a **`android-sdk-opengl:13.7.1`** (ver actualización 2026-11-01 de ADR-002). | `tester: PASS` (576 tests, 0 fallos); `security-reviewer: PASS` (0 altos/críticos; 1 medio de atribución y 2 bajos, ver `state/loop-state.md`). |
 | **5 — U6 Accesibilidad y pulido** | TalkBack, contraste, deuda de corrutinas (p. ej. `runCatching` que captura `CancellationException`) y tests de borde. | `tester: PASS` + `security-reviewer: PASS`. |
 | **6 — Release** | Keystore + secrets, **release firmada**, **E2E del sync contra un Hermes real**, `security-reviewer` final sobre el diff acumulado, docs `PRIVACY`/`SECURITY`/`CONTRIBUTING`/guía de usuario/inventario de datos y `CHANGELOG` **v1.0.0**. | `security-reviewer` final PASS + tag + GitHub Release firmada. |
 
@@ -40,7 +40,18 @@
 > (migración **5→6**: tablas `bikes`, `components`, `component_events` +
 > `rides.bike_id` nullable con índice, sin FK dura — ver actualización
 > 2026-11-01 de ADR-004). Gate JVM en **551 tests, 0 fallos**. La **próxima
-> migración sería 6→7**, solo si U5 (o un slice posterior) lo requiere.
+> migración sería 6→7**, solo si un slice posterior la requiere (U5 no la
+> requirió — ver nota de Fase 4).
+
+> **Nota sobre Fase 4 (U5 Mapa) — 2026-11-01:** completada **implementando** el
+> mapa; la alternativa de **sacar la dependencia** quedó descartada (MapLibre
+> ya era `ADR-002` y entra en v1). Artefacto cambiado de `android-sdk` a
+> **`org.maplibre.gl:android-sdk-opengl:13.7.1`** — en 13.7.1 el `android-sdk`
+> es **Vulkan-only**, arriesgado con minSdk 26 — con el renderer **forzado a
+> OpenGL**. Release con `abiFilters` solo `arm64-v8a` + `armeabi-v7a` (debug
+> conserva `x86`/`x86_64` para el emulador): APK de debug de **~84.5 MB →
+> ~70 MB**. **Sin migración Room: la DB sigue en v6.** Gate JVM en **576
+> tests, 0 fallos**. Detalle: actualización 2026-11-01 de ADR-002.
 
 > **Nota sobre Fase 6 (2026-10-31):** el pipeline de **release firmado ya está
 > preparado en CI** (`.github/workflows/android.yml`, job `release` en tags `v*`:
@@ -63,9 +74,9 @@
 > **Nota breve (2026-11-01).** El estado vigente del proyecto se mantiene en
 > **`AGENTS.md` §0**. A la fecha: **U0 (tema/componentes), L1 (pause/resume + FGS),
 > U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime), U2
-> (historial/detalle + GPX), U3 (Ajustes y perfil) y U4 (Garaje y desgaste)
-> están hechos**; el próximo
-> slice es **U5 (Mapa)**. El resto de este documento
+> (historial/detalle + GPX), U3 (Ajustes y perfil), U4 (Garaje y desgaste) y
+> U5 (Mapa)** están hechos**; el próximo slice es **U6 (Accesibilidad y
+> pulido)**. El resto de este documento
 > queda como **referencia de fases y
 > criterios**, no como estado real; si hay conflicto, manda `AGENTS.md` §0.
 
@@ -132,17 +143,23 @@ gate de esa época era de 415 tests; el conteo vigente está en `AGENTS.md` §0)
   de desnivel negativo sigue como TODO informativo). Detalle completo: 
   actualización 2026-11-01 de ADR-004.
 
-### Fase 5 — Salida (PARCIAL — sync+export ✅ / mapas ❌ pendientes)
+### Fase 5 — Salida (PARCIAL — sync+export ✅ / mapas ✅ U5; queda el E2E de sync)
 
 - **Slice 7 — Sync + export (ADR-003):** ✅ **COMPLETA.** outbox en Room + WorkManager
   (`CONNECTED`, backoff exponencial, unique work `KEEP`) + firma HMAC V2
   (`X-Webhook-Signature-V2`) con secret en Android Keystore + dedupe por
   `ride.id` + data minimization + export GPX 1.1 con TrackPointExtension (U2, por SAF).
   **Queda pendiente solo el E2E contra un NAS con Hermes real.**
-- **Slice 8 — Mapas (ADR-002):** ❌ **PENDIENTE (U5).** MapLibre 13.7.1 está declarado en
-  `gradle/libs.versions.toml` con **cero usos de Kotlin**; MapLibre Native + OpenFreeMap online,
-  atribución ODbL visible (`© OpenStreetMap contributors` + `© OpenMapTiles`)
-  y User-Agent identificable de la app.
+- **Slice 8 — Mapas (ADR-002):** ✅ **COMPLETA (U5, 2026-11-01).** MapLibre Native +
+  OpenFreeMap online (**estilo Liberty, sin API key**), track del ride en el
+  detalle vía pestaña **DATOS/MAPA**, atribución ODbL visible (`©
+  OpenStreetMap contributors` + `© OpenMapTiles` + `OpenFreeMap`, con links, más
+  el botón «(i)» de MapLibre habilitado), aviso de offline con `REINTENTAR` y
+  timeout de estilo de 9 s. **Artefacto `android-sdk-opengl:13.7.1`** (no
+  `android-sdk`: Vulkan-only en 13.7.1), renderer forzado a OpenGL, release solo
+  `arm64-v8a` + `armeabi-v7a`. **Sin migración Room (DB en v6).** Detalle:
+  actualización 2026-11-01 de ADR-002. **Queda pendiente** verificar el
+  User-Agent efectivo de las requests de tiles (§3, «UA identificable»).
 - **CI + release workflow** en GitHub (lint + unit tests en JVM; APK). ✅ **COMPLETA** —
   `.github/workflows/android.yml` verde: gate `test ktlintCheck detekt lintDebug
   assembleDebug`, artifact `buzzbike-debug-apk` y Release en tags `v*` (existe `v0.1.0`).
@@ -187,8 +204,9 @@ gate de esa época era de 415 tests; el conteo vigente está en `AGENTS.md` §0)
 > **Estado real del schema (2026-11-01):** la fila «2 — Schema Room» habla de
 > 6 tablas; hoy existen **7** (`rides`, `track_points`, `outbox`,
 > `user_profile`, `bikes`, `components`, `component_events`), con
-> **migraciones 1→2 … 5→6** y la DB en **v6**. La próxima migración, si un
-> slice la necesita, es **6→7** (U5).
+> **migraciones 1→2 … 5→6** y la DB en **v6**. **U5 (Mapa) no requirió
+> migración: la DB sigue en v6.** La próxima migración, si un slice la
+> necesita, es **6→7**.
 
 ---
 

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-only manifest. Declares the host activity used by the instrumented
+    ride-map test; it never ships in a release APK because this source set is
+    merged only into the debug variant.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".ui.history.RideDetailMapHostActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BuzzBike" />
+    </application>
+</manifest>

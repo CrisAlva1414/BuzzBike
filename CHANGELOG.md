@@ -55,6 +55,12 @@ y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 - **Selector de bici al iniciar el ride** («BICI DEL RIDE») y **nombre de la
   bici en el detalle** del ride; si la bici ya no existe se muestra
   «Bici eliminada» (los rides conservan su referencia histórica).
+- **Mapa del recorrido en el detalle del ride** con pestaña **DATOS/MAPA**:
+  MapLibre + OpenFreeMap **sin API key** (estilo Liberty, ADR-002), con
+  **atribución visible permanente** (`© OpenStreetMap contributors`,
+  `© OpenMapTiles` y `OpenFreeMap`, con links) y **aviso de offline con botón
+  REINTENTAR** cuando no hay conexión validada. Online-only: el track se
+  renderiza en local y **las coordenadas nunca se envían**.
 
 ### Cambiado
 

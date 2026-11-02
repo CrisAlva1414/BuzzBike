@@ -20,6 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -36,6 +39,7 @@ import com.buzzbike.app.ui.components.RideMetricLabels
 import com.buzzbike.app.ui.components.StatusBanner
 import com.buzzbike.app.ui.components.StatusTone
 import com.buzzbike.app.ui.components.calorieMetricCell
+import com.buzzbike.app.ui.history.map.RideMap
 import com.buzzbike.app.ui.ride.RideFormat
 import com.buzzbike.app.ui.ride.RideTrace
 import com.buzzbike.app.ui.theme.BuzzTheme
@@ -43,7 +47,11 @@ import java.util.Locale
 
 private const val CONTENT_PADDING_DP = 16
 private const val SECTION_GAP_DP = 16
+private const val TAB_GAP_DP = 8
 private const val TRACE_HEIGHT_DP = 230
+private const val MAP_HEIGHT_DP = 320
+private const val DATA_TAB_LABEL = "DATOS"
+private const val MAP_TAB_LABEL = "MAPA"
 private const val SCREEN_TITLE = "DETALLE"
 private const val BACK_LABEL = "VOLVER"
 private const val LOADING_TEXT = "Cargando…"
@@ -54,6 +62,18 @@ private const val EXPORT_SUCCESS_TEXT = "GPX exportado."
 private const val EXPORT_LABEL = "EXPORTAR GPX"
 private const val EXPORTING_LABEL = "EXPORTANDO…"
 private const val GPX_MIME_TYPE = "application/gpx+xml"
+
+/**
+ * Visualization tab of the ride detail screen.
+ *
+ * [DATA] is the default: it renders the existing trace plus every metric, GPX
+ * action and calorie band. [MAP] swaps only the trace area for the MapLibre
+ * map, so the map (and its tile downloads) is composed exclusively on demand.
+ */
+enum class RideDetailTab {
+    DATA,
+    MAP,
+}
 
 /**
  * Detail screen of one completed ride, with GPX export through the Storage
@@ -87,12 +107,13 @@ fun RideDetailScreen(
 }
 
 @Composable
-private fun RideDetailContent(
+internal fun RideDetailContent(
     state: RideDetailUiState,
     exportState: GpxExportState,
     locale: Locale,
     onBack: () -> Unit,
     onExport: (Long) -> Unit,
+    initialTab: RideDetailTab = RideDetailTab.DATA,
 ) {
     val colors = BuzzTheme.colors
     Column(
@@ -123,6 +144,7 @@ private fun RideDetailContent(
                     exportState = exportState,
                     locale = locale,
                     onExport = onExport,
+                    initialTab = initialTab,
                 )
         }
     }
@@ -164,9 +186,11 @@ private fun DetailContent(
     exportState: GpxExportState,
     locale: Locale,
     onExport: (Long) -> Unit,
+    initialTab: RideDetailTab,
 ) {
     val ride = detail.ride
     val colors = BuzzTheme.colors
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     Text(
         text = RideHistoryFormat.rideTitle(ride.startTimeMillis),
         style = MaterialTheme.typography.titleLarge,
@@ -181,10 +205,22 @@ private fun DetailContent(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    RideTrace(
-        points = detail.points.map { LatLon(it.lat, it.lon) },
-        modifier = Modifier.fillMaxWidth().height(TRACE_HEIGHT_DP.dp),
+    DetailTabSelector(
+        selectedTab = selectedTab,
+        onTabSelected = { selectedTab = it },
     )
+    when (selectedTab) {
+        RideDetailTab.DATA ->
+            RideTrace(
+                points = detail.points.map { LatLon(it.lat, it.lon) },
+                modifier = Modifier.fillMaxWidth().height(TRACE_HEIGHT_DP.dp),
+            )
+        RideDetailTab.MAP ->
+            RideMap(
+                points = detail.points,
+                modifier = Modifier.fillMaxWidth().height(MAP_HEIGHT_DP.dp),
+            )
+    }
     MetricGrid(cells = detailMetricCells(ride, locale))
     if (detail.points.isEmpty()) {
         StatusBanner(
@@ -214,6 +250,37 @@ private fun DetailContent(
         modifier = Modifier.fillMaxWidth(),
         enabled = detail.points.isNotEmpty() && exportState != GpxExportState.Exporting,
     )
+}
+
+/**
+ * DATOS / MAPA selector.
+ *
+ * The selected option uses the primary button style so the current tab stays
+ * visible without relying on color alone in TalkBack: [BuzzButton] exposes the
+ * role and both options keep their text.
+ */
+@Composable
+private fun DetailTabSelector(
+    selectedTab: RideDetailTab,
+    onTabSelected: (RideDetailTab) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TAB_GAP_DP.dp),
+    ) {
+        BuzzButton(
+            text = DATA_TAB_LABEL,
+            onClick = { onTabSelected(RideDetailTab.DATA) },
+            primary = selectedTab == RideDetailTab.DATA,
+            modifier = Modifier.weight(1f),
+        )
+        BuzzButton(
+            text = MAP_TAB_LABEL,
+            onClick = { onTabSelected(RideDetailTab.MAP) },
+            primary = selectedTab == RideDetailTab.MAP,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 /**

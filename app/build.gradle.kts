@@ -93,6 +93,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Release ships only the two ARM ABIs used by real phones. Debug
+            // intentionally keeps every ABI (including x86_64) so the local
+            // emulator can load MapLibre's native renderer.
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             signingConfig =
                 if (hasReleaseSigning) {
                     signingConfigs.getByName("release")
@@ -183,7 +189,7 @@ dependencies {
     // WorkManager — background outbox sync gated on network availability.
     implementation(libs.androidx.work.runtime.ktx)
 
-    // MapLibre — declared for slice 3+ (maps); not referenced in code yet.
+    // MapLibre — renders the ride map (U5) with OpenFreeMap vector tiles.
     implementation(libs.maplibre.android.sdk)
 
     // Play Services Location

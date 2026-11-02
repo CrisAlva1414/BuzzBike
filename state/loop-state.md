@@ -66,6 +66,53 @@ altos/críticos; 2 LOW residuales). Sin escalado.
 
 ---
 
+## Tarea — Fase 4: U5 Mapa del detalle
+
+### Estado
+**completada** · clase **Heavy**: `tester: PASS` (576 JVM + 10 instrumentados) y
+`security-reviewer: PASS` (0 altos/críticos). 2026-11-01.
+
+### Decisiones
+- **Se implementó el mapa** (no se quitó la dependencia), como pide la opción
+  principal del roadmap y ADR-002.
+- Artefacto **`org.maplibre.gl:android-sdk-opengl:13.7.1`** en lugar de
+  `android-sdk`: en 13.7.1 ese artifact es **Vulkan-only**, incompatible de forma
+  segura con `minSdk 26`. Renderer forzado a OpenGL.
+- `abiFilters` **solo en release** (`arm64-v8a`, `armeabi-v7a`); debug conserva
+  x86/x86_64 para el emulador. APK debug ~84.5 MB → **~70 MB**.
+- GeoJSON `[lon, lat]` (RFC 7946) generado en `domain` puro y testeado; el track
+  se renderiza en local y **nunca se envían coordenadas**.
+- Atribución **visible permanente** (overlay con OSM/OpenMapTiles/OpenFreeMap) y
+  botón "(i)" de MapLibre habilitado.
+- Offline: sin `NET_CAPABILITY_VALIDATED` no se instancia MapLibre; aviso +
+  `REINTENTAR`; timeout de carga de estilo de 9 s.
+
+### Iteraciones
+| Iter | Slice | Resultado |
+|---|---|---|
+| 1 | research OpenFreeMap/MapLibre | PASS (detectó Vulkan-only) |
+| 2 | builder (artefacto, GeoJSON, MapView) | incompleto (step limit) |
+| 3 | integración DATOS/MAPA + tests | FAIL (smart cast) → PASS (572) |
+| 4 | gates | **PASS/PASS** con 2 medios (offline, atribución) |
+| 5 | fix offline + overlay de atribución | PASS (576) |
+| 6 | verificación manual en AVD | PASS (online, offline, retry) |
+| 7 | docs/ADR-002 | PASS |
+
+### Verificación
+- `test` = **576**, 0 fallos; `detekt` 0; `connectedDebugAndroidTest` **10/10**.
+- Manual en `tester36`: mapa online con tiles reales y atribución visible;
+  avión → "Mapa no disponible sin conexión" + REINTENTAR; red de vuelta →
+  REINTENTAR recupera el mapa; **0 `FATAL EXCEPTION`**.
+
+### Deuda
+- El `User-Agent` identificable que pide ADR-002 no se personalizó (pendiente).
+- El viewport aproximado (tiles) sí llega a OpenFreeMap: documentado en ADR-002.
+- Auto-pause con `geo fix` estático deja el ride en 0.00 km (artefacto del
+  emulador; revisar en U6 con un caso de test explícito).
+- En anchos ≤320dp `TERMINAR` queda bajo el fold (usabilidad; U6).
+
+---
+
 ## Tarea — Fase 3: U4 Garaje y desgaste
 
 ### Estado
