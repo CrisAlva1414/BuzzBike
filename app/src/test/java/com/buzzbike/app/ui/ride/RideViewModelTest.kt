@@ -136,7 +136,7 @@ class RideViewModelTest {
             assertEquals(GpsStatus.NO_PERMISSION, (denied as RideSessionState.Ready).gps)
 
             checker.granted = true
-            viewModel.onLocationPermissionResult()
+            viewModel.permission.onLocationPermissionResult()
             advanceUntilIdle()
 
             val refreshed = viewModel.state.value
@@ -152,6 +152,37 @@ class RideViewModelTest {
         }
 
     @Test
+    fun given_permissionPermanentlyDenied_when_onResume_thenKeepsNoPermission() =
+        runTest {
+            val checker = MutablePermissionChecker(granted = false)
+            val viewModel = viewModel(permissionChecker = checker)
+            advanceUntilIdle()
+            assertEquals(GpsStatus.NO_PERMISSION, (viewModel.state.value as RideSessionState.Ready).gps)
+
+            // Returning from the app settings without granting anything must
+            // keep the same blocked state, not crash or start a ride.
+            viewModel.permission.onResume()
+            advanceUntilIdle()
+
+            assertEquals(GpsStatus.NO_PERMISSION, (viewModel.state.value as RideSessionState.Ready).gps)
+        }
+
+    @Test
+    fun given_permissionGrantedInSettings_when_onResume_thenReevaluatesToSearching() =
+        runTest {
+            val checker = MutablePermissionChecker(granted = false)
+            val viewModel = viewModel(permissionChecker = checker)
+            advanceUntilIdle()
+            assertEquals(GpsStatus.NO_PERMISSION, (viewModel.state.value as RideSessionState.Ready).gps)
+
+            checker.granted = true
+            viewModel.permission.onResume()
+            advanceUntilIdle()
+
+            assertEquals(GpsStatus.SEARCHING, (viewModel.state.value as RideSessionState.Ready).gps)
+        }
+
+    @Test
     fun given_recordingSession_when_onLocationPermissionResult_thenNoOp() =
         runTest {
             val writer = RecordingRideSessionWriter()
@@ -162,7 +193,7 @@ class RideViewModelTest {
             assertTrue(recording is RideSessionState.Recording)
             val rideId = (recording as RideSessionState.Recording).rideId
 
-            viewModel.onLocationPermissionResult()
+            viewModel.permission.onLocationPermissionResult()
             advanceUntilIdle()
 
             val after = viewModel.state.value

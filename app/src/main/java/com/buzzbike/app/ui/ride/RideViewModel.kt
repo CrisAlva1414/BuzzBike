@@ -53,6 +53,12 @@ class RideViewModel
         val bikeSelection: StateFlow<RideBikeSelection> = bikeSelector.state
 
         /**
+         * Owns the permission re-evaluation after the dialog or app settings.
+         * Extracted so this view model stays a thin session adapter.
+         */
+        val permission = RidePermissionCoordinator(rideSessionManager)
+
+        /**
          * Synchronous guard against a double stop: the first tap flips it
          * before the coroutine is launched, so a second tap in the same frame
          * cannot stop the session (or enqueue the ride) twice.
@@ -150,20 +156,6 @@ class RideViewModel
 
         fun acknowledgeFinished() {
             rideSessionManager.acknowledgeFinished()
-        }
-
-        /**
-         * Re-evaluates [RideSessionState.Ready] after the system permission dialog returns.
-         *
-         * It is a no-op outside [RideSessionState.Ready]: the dialog callback can
-         * arrive after a ride became active, and refreshing then would clobber
-         * the live session. The check reads the manager's authoritative state,
-         * not the [state] mirror, which may lag behind.
-         */
-        fun onLocationPermissionResult() {
-            if (rideSessionManager.state.value is RideSessionState.Ready) {
-                rideSessionManager.refreshReady()
-            }
         }
 
         /**

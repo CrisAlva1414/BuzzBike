@@ -3,6 +3,9 @@
 package com.buzzbike.app.ui.ride
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -36,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -46,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.buzzbike.app.domain.ride.session.GpsStatus
 import com.buzzbike.app.domain.ride.session.LiveMetrics
 import com.buzzbike.app.domain.ride.session.RideSessionState
@@ -66,6 +72,8 @@ import java.util.Locale
 private const val TRACE_HEIGHT_DP = 230
 private const val CONTENT_PADDING_DP = 16
 private const val SECTION_GAP_DP = 16
+private const val ACTION_BAR_PADDING_DP = 12
+private const val ACTION_BAR_GAP_DP = 8
 private const val DIALOG_PADDING_DP = 20
 private const val LOADING_TOP_PADDING_DP = 32
 private const val PAUSED_SPEED_MPS = 0.0
@@ -110,6 +118,7 @@ fun RideScreen(
     val sessionState by viewModel.state.collectAsState()
     val bikeSelection by viewModel.bikeSelection.collectAsState()
     val locale = LocalConfiguration.current.locales[0]
+    val context = LocalContext.current
     var permissionResult by rememberSaveable {
         mutableStateOf(LocationPermissionRequestResult.NOT_REQUESTED)
     }
@@ -119,8 +128,12 @@ fun RideScreen(
                 LocationPermissionUi.classify(
                     fineGranted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true,
                     coarseGranted = grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true,
+                    shouldShowRationale =
+                        context.findActivity()?.shouldShowRequestPermissionRationale(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                        ) ?: true,
                 )
-            viewModel.onLocationPermissionResult()
+            viewModel.permission.onLocationPermissionResult()
         }
     val onRequestPermission = {
         permissionLauncher.launch(
@@ -129,6 +142,14 @@ fun RideScreen(
                 Manifest.permission.ACCESS_COARSE_LOCATION,
             ),
         )
+    }
+    val onOpenAppSettings = { openAppSettings(context) }
+
+    // Returning from the permission dialog or from the app settings may have
+    // changed the grant, so re-evaluate the Ready state instead of keeping a
+    // stale NO_PERMISSION banner.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.permission.onResume()
     }
 
     KeepScreenOn(sessionState)
@@ -139,6 +160,7 @@ fun RideScreen(
         locale = locale,
         permissionResult = permissionResult,
         onRequestPermission = onRequestPermission,
+        onOpenAppSettings = onOpenAppSettings,
         onOpenSettings = onOpenSettings,
         onOpenHistory = onOpenHistory,
         onOpenGarage = onOpenGarage,
@@ -172,6 +194,7 @@ private fun RideContent(
     locale: Locale,
     permissionResult: LocationPermissionRequestResult,
     onRequestPermission: () -> Unit,
+    onOpenAppSettings: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenGarage: () -> Unit,
@@ -193,62 +216,73 @@ private fun RideContent(
         showRecoveryDiscardConfirm = false
     }
 
+    // The action buttons live outside the scroll area: on a 320 dp wide screen
+    // TERMINAR/PAUSA/INICIAR must never require scrolling during a live ride.
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(colors.ground)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .verticalScroll(rememberScrollState())
-                .padding(CONTENT_PADDING_DP.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(SECTION_GAP_DP.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        when (state) {
-            is RideSessionState.Idle -> IdleContent()
-            is RideSessionState.Ready ->
-                ReadyContent(
-                    state = state,
-                    bikeSelection = bikeSelection,
-                    permissionResult = permissionResult,
-                    onRequestPermission = onRequestPermission,
-                    onSelectBike = onSelectBike,
-                    onStart = onStart,
-                    onOpenSettings = onOpenSettings,
-                    onOpenHistory = onOpenHistory,
-                    onOpenGarage = onOpenGarage,
-                )
-            is RideSessionState.Recording ->
-                ActiveRideContent(
-                    live = state.live,
-                    speedText = RideFormat.speedKmh(state.live.speedMps, locale),
-                    bannerText = if (state.autoPaused) AUTO_PAUSE_TEXT else null,
-                    bannerTone = StatusTone.WARNING,
-                    primaryLabel = PAUSE_LABEL,
-                    onPrimary = onPause,
-                    onStop = onStop,
-                    locale = locale,
-                )
-            is RideSessionState.Paused ->
-                ActiveRideContent(
-                    live = state.live,
-                    speedText = RideFormat.speedKmh(PAUSED_SPEED_MPS, locale),
-                    bannerText = PAUSED_TEXT,
-                    bannerTone = StatusTone.INFO,
-                    primaryLabel = RESUME_LABEL,
-                    onPrimary = onResume,
-                    onStop = onStop,
-                    locale = locale,
-                )
-            is RideSessionState.Finished ->
-                FinishedContent(
-                    summary = state.summary,
-                    locale = locale,
-                    onSave = onSave,
-                    onDiscardRequest = { showDiscardConfirm = true },
-                )
-            is RideSessionState.Recoverable -> Unit
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(CONTENT_PADDING_DP.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(SECTION_GAP_DP.dp),
+            ) {
+                when (state) {
+                    is RideSessionState.Idle -> IdleContent()
+                    is RideSessionState.Ready ->
+                        ReadyContent(
+                            state = state,
+                            bikeSelection = bikeSelection,
+                            permissionResult = permissionResult,
+                            onRequestPermission = onRequestPermission,
+                            onOpenAppSettings = onOpenAppSettings,
+                            onSelectBike = onSelectBike,
+                            onOpenSettings = onOpenSettings,
+                            onOpenHistory = onOpenHistory,
+                            onOpenGarage = onOpenGarage,
+                        )
+                    is RideSessionState.Recording ->
+                        ActiveRideContent(
+                            live = state.live,
+                            speedText = RideFormat.speedKmh(state.live.speedMps, locale),
+                            bannerText = if (state.autoPaused) AUTO_PAUSE_TEXT else null,
+                            bannerTone = StatusTone.WARNING,
+                            locale = locale,
+                        )
+                    is RideSessionState.Paused ->
+                        ActiveRideContent(
+                            live = state.live,
+                            speedText = RideFormat.speedKmh(PAUSED_SPEED_MPS, locale),
+                            bannerText = PAUSED_TEXT,
+                            bannerTone = StatusTone.INFO,
+                            locale = locale,
+                        )
+                    is RideSessionState.Finished ->
+                        FinishedContent(
+                            summary = state.summary,
+                            locale = locale,
+                            onSave = onSave,
+                            onDiscardRequest = { showDiscardConfirm = true },
+                        )
+                    is RideSessionState.Recoverable -> Unit
+                }
+            }
         }
+        RideActionBar(
+            state = state,
+            onStart = onStart,
+            onPause = onPause,
+            onResume = onResume,
+            onStop = onStop,
+        )
     }
 
     if (state is RideSessionState.Finished && showDiscardConfirm) {
@@ -283,6 +317,63 @@ private fun RideContent(
     }
 }
 
+/**
+ * Fixed bottom action bar.
+ *
+ * Keeps the primary ride action (INICIAR, PAUSA/SEGUIR) and the hold-to-stop
+ * control pinned above the scrolling content, so a 320x640 screen with large
+ * fonts still shows them without scrolling. States without a pinned action
+ * (Idle, Finished, Recoverable) render nothing here.
+ */
+@Composable
+private fun RideActionBar(
+    state: RideSessionState,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val colors = BuzzTheme.colors
+    val primaryLabel: String? =
+        when (state) {
+            is RideSessionState.Ready -> START_LABEL
+            is RideSessionState.Recording -> PAUSE_LABEL
+            is RideSessionState.Paused -> RESUME_LABEL
+            else -> null
+        }
+    if (primaryLabel == null) return
+    val onPrimary =
+        when (state) {
+            is RideSessionState.Ready -> onStart
+            is RideSessionState.Recording -> onPause
+            is RideSessionState.Paused -> onResume
+            else -> return
+        }
+    val primaryEnabled = state !is RideSessionState.Ready || state.gps != GpsStatus.NO_PERMISSION
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(colors.ground)
+                .padding(horizontal = CONTENT_PADDING_DP.dp, vertical = ACTION_BAR_PADDING_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(ACTION_BAR_GAP_DP.dp),
+    ) {
+        BuzzButton(
+            text = primaryLabel,
+            onClick = onPrimary,
+            modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
+            enabled = primaryEnabled,
+        )
+        if (state is RideSessionState.Recording || state is RideSessionState.Paused) {
+            HoldToStopButton(
+                onConfirmed = onStop,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun IdleContent() {
     Text(
@@ -299,14 +390,13 @@ private fun ReadyContent(
     bikeSelection: RideBikeSelection,
     permissionResult: LocationPermissionRequestResult,
     onRequestPermission: () -> Unit,
+    onOpenAppSettings: () -> Unit,
     onSelectBike: (String?) -> Unit,
-    onStart: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenGarage: () -> Unit,
 ) {
     val colors = BuzzTheme.colors
-    val hasPermission = state.gps != GpsStatus.NO_PERMISSION
     val prompt = LocationPermissionUi.resolve(state.gps, permissionResult)
 
     BuzzDisplay(
@@ -340,13 +430,15 @@ private fun ReadyContent(
             modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
         )
     }
+    if (prompt.showOpenSettingsAction) {
+        BuzzButton(
+            text = prompt.openSettingsActionLabel,
+            onClick = onOpenAppSettings,
+            modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
+            primary = false,
+        )
+    }
     BikeSelector(selection = bikeSelection, onSelect = onSelectBike)
-    BuzzButton(
-        text = START_LABEL,
-        onClick = onStart,
-        modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
-        enabled = hasPermission,
-    )
     BuzzButton(
         text = SETTINGS_LABEL,
         onClick = onOpenSettings,
@@ -446,9 +538,6 @@ private fun ActiveRideContent(
     speedText: String,
     bannerText: String?,
     bannerTone: StatusTone,
-    primaryLabel: String,
-    onPrimary: () -> Unit,
-    onStop: () -> Unit,
     locale: Locale,
 ) {
     val colors = BuzzTheme.colors
@@ -470,15 +559,6 @@ private fun ActiveRideContent(
         )
     }
     MetricGrid(liveMetricCells(live, locale))
-    BuzzButton(
-        text = primaryLabel,
-        onClick = onPrimary,
-        modifier = Modifier.fillMaxWidth().heightIn(min = BuzzDimens.RideActionHeight),
-    )
-    HoldToStopButton(
-        onConfirmed = onStop,
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 @Composable
@@ -661,3 +741,11 @@ private fun finishedMetricCells(
         calorieMetricCell(summary.calories, summary.hasProfile, locale),
     )
 }
+
+/** Unwraps the Activity from a Context so the permission rationale can be read. */
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }

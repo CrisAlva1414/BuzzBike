@@ -4,7 +4,9 @@ import com.buzzbike.app.domain.history.GeoPoint
 import com.buzzbike.app.domain.history.TrackGeoJson
 import com.buzzbike.app.domain.model.TrackPoint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** JVM tests for the pure state machine behind the ride map. */
@@ -169,6 +171,65 @@ class RideMapStateTest {
     @Test
     fun given_NoTrack_when_onRetry_then_stateIsUnchanged() {
         assertSame(RideMapUiState.NoTrack, RideMapUiState.NoTrack.onRetry())
+    }
+
+    @Test
+    fun given_initialLoading_when_mapStateAndStyleLoaded_then_doesNotAnnounce() {
+        val loading = loading()
+
+        val initial = RideMapAnnouncement.initial(loading)
+
+        assertFalse(initial.sawFailure)
+        assertFalse(initial.onMapState(loading).onStyleLoaded().announceRecovered)
+    }
+
+    @Test
+    fun given_failureThenRetry_when_styleLoaded_then_announcesRecovered() {
+        val loading = loading()
+        val failed = loading.onFailure()
+
+        val recovered =
+            RideMapAnnouncement
+                .initial(loading)
+                .onMapState(failed)
+                .onMapState(failed.onRetry())
+                .onStyleLoaded()
+
+        assertTrue(recovered.announceRecovered)
+        assertFalse(recovered.sawFailure)
+    }
+
+    @Test
+    fun given_retryFailsAgain_then_doesNotAnnounce() {
+        val loading = loading()
+        val failed = loading.onFailure()
+
+        val afterSecondFailure =
+            RideMapAnnouncement
+                .initial(loading)
+                .onMapState(failed)
+                .onMapState(failed.onRetry())
+                .onMapState(failed)
+
+        assertFalse(afterSecondFailure.announceRecovered)
+    }
+
+    @Test
+    fun given_recovered_when_failsAgain_then_announcementIsCleared() {
+        val loading = loading()
+        val failed = loading.onFailure()
+        val recovered =
+            RideMapAnnouncement
+                .initial(loading)
+                .onMapState(failed)
+                .onMapState(failed.onRetry())
+                .onStyleLoaded()
+
+        val failedAgain = recovered.onMapState(failed)
+
+        assertTrue(recovered.announceRecovered)
+        assertFalse(failedAgain.announceRecovered)
+        assertTrue(failedAgain.sawFailure)
     }
 
     private fun loading() =

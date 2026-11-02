@@ -2,6 +2,7 @@ package com.buzzbike.app.data.export
 
 import android.content.Context
 import android.net.Uri
+import com.buzzbike.app.core.runCatchingCancellable
 import com.buzzbike.app.domain.export.GpxExporter
 import com.buzzbike.app.domain.export.GpxRide
 import com.buzzbike.app.domain.export.GpxWriter
@@ -38,7 +39,7 @@ class AndroidGpxExporter
             ride: GpxRide,
         ): Result<Unit> =
             withContext(Dispatchers.IO) {
-                runCatching {
+                runCatchingCancellable {
                     val uri = Uri.parse(destination)
                     require(uri.scheme == CONTENT_SCHEME) { "unsupported scheme" }
                     val xml = GpxWriter.write(ride)

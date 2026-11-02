@@ -7,6 +7,7 @@ import com.buzzbike.app.domain.wear.BikeRepository
 import com.buzzbike.app.domain.wear.ComponentRepository
 import com.buzzbike.app.domain.wear.ComponentUsage
 import com.buzzbike.app.domain.wear.ComponentWear
+import com.buzzbike.app.domain.wear.MAX_GARAGE_NOTES_LENGTH
 import com.buzzbike.app.domain.wear.NewComponent
 import com.buzzbike.app.domain.wear.WearEngine
 import com.buzzbike.app.domain.wear.WearLifecycle
@@ -351,6 +352,37 @@ class GarageViewModelTest {
             assertEquals(3.5, call.consumedHours ?: -1.0, DELTA)
             assertEquals(123.4 / 2000.0, call.wearRatio ?: -1.0, DELTA)
             assertEquals("cadena nueva", call.notes)
+        }
+
+    @Test
+    fun given_overlongServiceNotes_when_submitted_thenNotesErrorIsShownAndNothingIsLogged() =
+        runTest {
+            val bike = bike(id = "bike-1", name = "Gravel")
+            val bikes = FakeBikeRepository(listOf(bike))
+            val components = FakeComponentRepository()
+            components.components.value =
+                listOf(
+                    component(
+                        id = "chain",
+                        bikeId = bike.id,
+                        lifecycle = WearLifecycle(lifecycleKm = 2000.0),
+                    ),
+                )
+            val viewModel = GarageViewModel(bikes, components)
+            backgroundScope.launch { viewModel.state.collect() }
+            advanceUntilIdle()
+
+            viewModel.openForm(GarageFormTarget.ServiceComponent("chain"))
+            val form = viewModel.form.value as GarageForm.Service
+            viewModel.updateForm(form.copy(notes = "x".repeat(MAX_GARAGE_NOTES_LENGTH + 1)))
+            viewModel.submitForm()
+            advanceUntilIdle()
+
+            assertEquals(
+                SERVICE_NOTES_TOO_LONG_MESSAGE,
+                (viewModel.form.value as GarageForm.Service).notesError,
+            )
+            assertTrue(components.services.isEmpty())
         }
 
     @Test

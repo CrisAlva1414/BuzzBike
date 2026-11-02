@@ -68,11 +68,34 @@ y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
   transiciones y evita estados inválidos.
 - La auto-pausa se deriva de la detección de movimiento existente (ADR-005),
   sin umbrales nuevos.
+- **Barra de acciones del ride fija**: INICIAR, PAUSA/SEGUIR y TERMINAR quedan
+  ancladas fuera del área con scroll, visibles sin desplazar en pantallas de
+  320 dp de ancho.
+- **Pestañas DATOS/MAPA del detalle fijas**: el selector queda anclado arriba
+  del contenido con scroll.
+- **Semántica accesible sin dobles lecturas**: TalkBack ya no lee label y valor
+  por separado (`clearAndSetSemantics` con descripción única por métrica).
+- **`liveRegion` en el mapa**: el aviso de offline y la recuperación de
+  conexión se anuncian automáticamente (`LiveRegionMode.Polite`).
+- **«ABRIR AJUSTES» en denegación permanente** del permiso de ubicación, y
+  **re-evaluación de la sesión al reanudar** (`ON_RESUME`) al volver del
+  diálogo de permisos o de los ajustes del sistema.
+- **Cotas de longitud en garaje** compartidas por formulario y repositorio:
+  notas hasta **500** caracteres, nombre de bici y label de componente hasta
+  **40**.
+- **`UserProfile.isComplete` valida rangos de producto** (peso 20–300 kg,
+  altura 100–250 cm, edad 10–120 años, sexo conocido): un perfil persistido o
+  inyectado fuera de rango no estrecha la banda calórica.
 
 ### Corregido
 
 - La instalación limpia dejaba «INICIAR RIDE» deshabilitado para siempre
   porque nadie solicitaba el permiso de ubicación.
+- **`runCatching` tragaba `CancellationException`** en ViewModels y exportador
+  GPX; ahora la cancelación se propaga (nueva función `runCatchingCancellable`).
+- **`RideFormat` degrada a `—`** con valores NaN, infinitos o negativos en
+  distancia, velocidad, desnivel y banda calórica, y los formatos de tiempo
+  son invariantes por locale (`Locale.ROOT`).
 
 ### Seguridad
 

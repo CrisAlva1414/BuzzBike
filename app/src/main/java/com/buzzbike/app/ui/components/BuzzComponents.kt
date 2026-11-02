@@ -24,16 +24,21 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.buzzbike.app.ui.theme.BuzzDimens
 import com.buzzbike.app.ui.theme.BuzzTheme
 import kotlinx.coroutines.launch
+
+private const val HOLD_TO_STOP_DESCRIPTION = "Terminar ride. Mantené pulsado durante un segundo"
+private const val HOLD_TO_STOP_ACTION = "Terminar ride"
 
 /**
  * Anton va SIEMPRE en mayúsculas y compose no tiene text-transform: usá este composable
@@ -74,10 +79,10 @@ fun HoldToStopButton(
                 .drawBehind {
                     drawRect(color = colors.ink, size = Size(size.width * progress.value, size.height))
                 }.border(BuzzDimens.Border, colors.ink)
-                .semantics {
+                .clearAndSetSemantics {
                     role = Role.Button
-                    contentDescription = "Terminar ride. Mantené pulsado durante un segundo"
-                    onLongClick(label = "Terminar ride") {
+                    contentDescription = HOLD_TO_STOP_DESCRIPTION
+                    onLongClick(label = HOLD_TO_STOP_ACTION) {
                         onConfirmed()
                         true
                     }
@@ -113,10 +118,24 @@ fun HoldToStopButton(
 }
 
 /**
+ * Builds the single TalkBack reading of a metric cell.
+ *
+ * The value already carries its unit (`"12,35 km"`), so the description is
+ * `"Distancia: 12,35 km"`: label first for context, then value + unit once.
+ * Keep this pure so the JVM suite can assert no word is duplicated.
+ */
+internal fun metricCellDescription(
+    label: String,
+    value: String,
+): String = "$label: $value"
+
+/**
  * Celda de la rejilla 2×2 de métricas: borde sólido, sin sombra y objetivo
  * táctil mínimo. El valor va en Anton 44 sp; la etiqueta, en el cuerpo.
  *
- * TalkBack lee `"<label>, <value>"` como una sola unidad.
+ * [clearAndSetSemantics] drops the two child [Text] semantics so TalkBack reads
+ * [metricCellDescription] exactly once instead of announcing text plus a
+ * redundant `contentDescription`.
  */
 @Composable
 fun MetricCell(
@@ -132,7 +151,7 @@ fun MetricCell(
                 .background(colors.ground)
                 .border(BuzzDimens.Border, colors.ink)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .semantics { contentDescription = "$label, $value" },
+                .clearAndSetSemantics { contentDescription = metricCellDescription(label, value) },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
@@ -153,6 +172,9 @@ fun MetricCell(
  *
  * [primary] usa el acento; el secundario usa el panel. El texto va en Anton
  * 24 sp y en mayúsculas mediante [BuzzDisplay].
+ *
+ * [role] defaults to [Role.Button]; tab selectors pass [Role.Tab] so TalkBack
+ * announces the pressed option as a selected tab instead of a plain button.
  */
 @Composable
 fun BuzzButton(
@@ -161,6 +183,7 @@ fun BuzzButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     primary: Boolean = true,
+    role: Role = Role.Button,
 ) {
     val colors = BuzzTheme.colors
     val background = if (primary) colors.accent else colors.panel
@@ -171,7 +194,7 @@ fun BuzzButton(
                 .heightIn(min = BuzzDimens.MinTouch)
                 .background(background)
                 .border(BuzzDimens.Border, colors.ink)
-                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .clickable(enabled = enabled, role = role, onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -187,26 +210,47 @@ fun BuzzButton(
 enum class StatusTone { WARNING, DANGER, INFO }
 
 /**
+ * Visible/accessible message of a [StatusBanner].
+ *
+ * Pure so the JVM suite can assert the prefix is added exactly once; the
+ * prefix keeps the status from being communicated by colour alone.
+ */
+internal fun statusBannerMessage(
+    text: String,
+    tone: StatusTone,
+): String =
+    when (tone) {
+        StatusTone.WARNING -> "AVISO: $text"
+        StatusTone.DANGER -> "ATENCIÓN: $text"
+        StatusTone.INFO -> "INFO: $text"
+    }
+
+/**
  * Franja de estado con relleno sólido y texto contrastante.
  *
  * No comunica el estado solo con color: el texto se prefija con "AVISO",
  * "ATENCIÓN" o "INFO" y ese prefijo también va en la descripción accesible.
  * Sin animaciones.
+ *
+ * [clearAndSetSemantics] replaces the child [Text] semantics, so TalkBack reads
+ * the banner once. When [announceChanges] is true the banner becomes a polite
+ * live region (used for the map's offline notice).
  */
 @Composable
 fun StatusBanner(
     text: String,
     tone: StatusTone,
     modifier: Modifier = Modifier,
+    announceChanges: Boolean = false,
 ) {
     val colors = BuzzTheme.colors
-    val (background, content, prefix) =
+    val (background, content) =
         when (tone) {
-            StatusTone.WARNING -> Triple(colors.accent, colors.onAccent, "AVISO")
-            StatusTone.DANGER -> Triple(colors.danger, colors.onDanger, "ATENCIÓN")
-            StatusTone.INFO -> Triple(colors.panel, colors.ink, "INFO")
+            StatusTone.WARNING -> colors.accent to colors.onAccent
+            StatusTone.DANGER -> colors.danger to colors.onDanger
+            StatusTone.INFO -> colors.panel to colors.ink
         }
-    val message = "$prefix: $text"
+    val message = statusBannerMessage(text, tone)
     Box(
         modifier =
             modifier
@@ -214,7 +258,10 @@ fun StatusBanner(
                 .background(background)
                 .border(BuzzDimens.Border, colors.ink)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
-                .semantics { contentDescription = message },
+                .clearAndSetSemantics {
+                    contentDescription = message
+                    if (announceChanges) liveRegion = LiveRegionMode.Polite
+                },
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(

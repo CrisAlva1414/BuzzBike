@@ -434,6 +434,33 @@ class RideSessionManagerTest {
         }
 
     @Test
+    fun given_movingFixesWithRealDisplacement_when_emitted_thenLiveAccumulatesDistanceAndMovingTime() =
+        runTest {
+            val tracking = FakeTrackingManager()
+            val manager = manager(tracking = tracking, engine = RideEngine())
+            manager.startRide()
+            runCurrent()
+
+            // Real fixes: each second the position advances ~1.1 m and the
+            // reported speed is above V_GO. A static `geo fix` (same lat/lon)
+            // cannot exercise the distance/moving-time path.
+            tracking.points.value =
+                List(20) { index ->
+                    point(
+                        seconds = index.toLong(),
+                        speedMps = 5.0,
+                        lat = BASE_LAT + index * LAT_STEP,
+                    )
+                }
+            runCurrent()
+
+            val state = manager.state.first() as RideSessionState.Recording
+            assertTrue(state.live.distanceM > 0.0)
+            assertTrue(state.live.movingSeconds > 0L)
+            assertFalse(state.autoPaused)
+        }
+
+    @Test
     fun given_confirmedStop_when_pointsEmitted_thenAutoPausedIsTrue() =
         runTest {
             val tracking = FakeTrackingManager()

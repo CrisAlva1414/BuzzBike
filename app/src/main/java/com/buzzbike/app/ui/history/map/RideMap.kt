@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,7 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -87,6 +90,7 @@ private const val CONTENT_PADDING_DP = 16
 private const val PANEL_GAP_DP = 12
 private const val NO_TRACK_TEXT = "Sin recorrido para mostrar"
 private const val OFFLINE_TEXT = "Mapa no disponible sin conexión"
+private const val MAP_AVAILABLE_TEXT = "Mapa disponible"
 private const val RETRY_LABEL = "REINTENTAR"
 
 /**
@@ -104,11 +108,8 @@ private const val OSM_ATTRIBUTION = "© OpenStreetMap contributors"
 private const val OPENMAPTILES_ATTRIBUTION = "© OpenMapTiles"
 private const val OPENFREEMAP_ATTRIBUTION = "OpenFreeMap"
 private const val ATTRIBUTION_SEPARATOR = " · "
-private const val ATTRIBUTION_CONTENT_DESCRIPTION =
-    "Atribución del mapa: OpenStreetMap contributors, OpenMapTiles y OpenFreeMap"
 private const val ATTRIBUTION_PADDING_DP = 8
 private const val ATTRIBUTION_CORNER_DP = 4
-private const val ATTRIBUTION_BACKGROUND_ALPHA = 0.85f
 
 /**
  * Map of a completed ride's trace.
@@ -142,11 +143,19 @@ fun RideMap(
     val trackColor = colors.ink.toArgb()
     val isOnline by rememberIsOnline()
     var state by remember(points) { mutableStateOf(mapStateFor(points, isOnline)) }
+    var announcement by remember(points) { mutableStateOf(RideMapAnnouncement.initial(state)) }
 
     // If connectivity drops while the map is loading, stop waiting on MapLibre
     // and surface the offline notice. The map stays failed until REINTENTAR.
     LaunchedEffect(isOnline) {
         if (!isOnline) state = state.onFailure()
+    }
+
+    // Accessible recovery announcement: a live region only receives text after
+    // OnStyleLoaded, so TalkBack is never told the map is back while a retry is
+    // still loading or after it failed again.
+    LaunchedEffect(state) {
+        announcement = announcement.onMapState(state)
     }
 
     Box(
@@ -165,6 +174,7 @@ fun RideMap(
                             geoJson = current.geoJson,
                             lineColor = trackColor,
                             onFailure = { state = state.onFailure() },
+                            onStyleLoaded = { announcement = announcement.onStyleLoaded() },
                         )
                     }
                 } else {
@@ -185,7 +195,30 @@ fun RideMap(
                     .align(Alignment.BottomStart)
                     .padding(ATTRIBUTION_PADDING_DP.dp),
         )
+        if (announcement.announceRecovered) {
+            MapRecoveredAnnouncement()
+        }
     }
+}
+
+/**
+ * Small live-region-only node announced when the map recovers.
+ *
+ * It is deliberately 1 dp and not focusable: it exists only so TalkBack gets a
+ * polite live-region update. The offline case is announced by the visible
+ * [StatusBanner] in [MapOffline].
+ */
+@Composable
+private fun MapRecoveredAnnouncement() {
+    Box(
+        modifier =
+            Modifier
+                .size(1.dp)
+                .semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    contentDescription = MAP_AVAILABLE_TEXT
+                },
+    )
 }
 
 @Composable
@@ -213,6 +246,7 @@ private fun MapOffline(onRetry: () -> Unit) {
             text = OFFLINE_TEXT,
             tone = StatusTone.WARNING,
             modifier = Modifier.fillMaxWidth(),
+            announceChanges = true,
         )
         BuzzButton(
             text = RETRY_LABEL,
@@ -252,11 +286,12 @@ private fun MapAttribution(modifier: Modifier = Modifier) {
         color = colors.ink,
         modifier =
             modifier
+                // Fully opaque panel: the credits must pass contrast on top of
+                // any tile, in both the Sol and Noche palettes.
                 .background(
-                    color = colors.panel.copy(alpha = ATTRIBUTION_BACKGROUND_ALPHA),
+                    color = colors.panel,
                     shape = RoundedCornerShape(ATTRIBUTION_CORNER_DP.dp),
-                ).padding(horizontal = ATTRIBUTION_PADDING_DP.dp, vertical = ATTRIBUTION_PADDING_DP.dp / 2)
-                .semantics { contentDescription = ATTRIBUTION_CONTENT_DESCRIPTION },
+                ).padding(horizontal = ATTRIBUTION_PADDING_DP.dp, vertical = ATTRIBUTION_PADDING_DP.dp / 2),
     )
 }
 
@@ -317,10 +352,12 @@ private fun RideMapCanvas(
     geoJson: String,
     lineColor: Int,
     onFailure: () -> Unit,
+    onStyleLoaded: () -> Unit,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnFailure by rememberUpdatedState(onFailure)
+    val currentOnStyleLoaded by rememberUpdatedState(onStyleLoaded)
     var styleLoaded by remember { mutableStateOf(false) }
     val mapView =
         remember(context) {
@@ -370,6 +407,7 @@ private fun RideMapCanvas(
             map.setStyle(STYLE_URL) { style ->
                 styleLoaded = true
                 renderTrack(map = map, style = style, points = points, geoJson = geoJson, lineColor = lineColor)
+                currentOnStyleLoaded()
             }
         }
         onDispose {

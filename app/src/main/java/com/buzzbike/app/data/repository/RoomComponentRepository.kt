@@ -10,6 +10,7 @@ import com.buzzbike.app.domain.wear.BikeComponent
 import com.buzzbike.app.domain.wear.ComponentRepository
 import com.buzzbike.app.domain.wear.ComponentUsage
 import com.buzzbike.app.domain.wear.ComponentWear
+import com.buzzbike.app.domain.wear.MAX_GARAGE_COMPONENT_LABEL_LENGTH
 import com.buzzbike.app.domain.wear.NewComponent
 import com.buzzbike.app.domain.wear.WearClock
 import com.buzzbike.app.domain.wear.WearEngine
@@ -53,12 +54,12 @@ class RoomComponentRepository
                     id = id,
                     bikeId = draft.bikeId,
                     type = draft.type.toStorage(),
-                    label = requireNonBlank(draft.label, "component label"),
+                    label = requireNonBlank(draft.label, "component label", MAX_GARAGE_COMPONENT_LABEL_LENGTH),
                     installedAtMillis = draft.installedAtMillis ?: clock.nowMillis(),
                     lifecycleKm = draft.lifecycle?.lifecycleKm,
                     lifecycleHours = draft.lifecycle?.lifecycleHours,
                     lifecycleDays = draft.lifecycle?.lifecycleDays,
-                    notes = draft.notes,
+                    notes = ComponentInputValidator.normalizeNotes(draft.notes),
                 ),
             )
             return id
@@ -72,7 +73,16 @@ class RoomComponentRepository
                 "unknown bike: ${component.bikeId}"
             }
             componentDao.updateComponent(
-                component.copy(label = requireNonBlank(component.label, "component label")).toComponentEntity(),
+                component
+                    .copy(
+                        label =
+                            requireNonBlank(
+                                component.label,
+                                "component label",
+                                MAX_GARAGE_COMPONENT_LABEL_LENGTH,
+                            ),
+                        notes = ComponentInputValidator.normalizeNotes(component.notes),
+                    ).toComponentEntity(),
             )
         }
 
@@ -94,9 +104,9 @@ class RoomComponentRepository
             requireNotNull(componentDao.getComponent(componentId)) {
                 "unknown component: $componentId"
             }
-            requireValidMeasurement(consumedKm, "consumedKm")
-            requireValidMeasurement(consumedHours, "consumedHours")
-            requireValidMeasurement(wearRatio, "wearRatio")
+            ComponentInputValidator.requireValidMeasurement(consumedKm, "consumedKm")
+            ComponentInputValidator.requireValidMeasurement(consumedHours, "consumedHours")
+            ComponentInputValidator.requireValidMeasurement(wearRatio, "wearRatio")
             eventDao.insertEvent(
                 ComponentEventEntity(
                     id = UUID.randomUUID().toString(),
@@ -106,7 +116,7 @@ class RoomComponentRepository
                     wearRatioAtEvent = wearRatio,
                     consumedKm = consumedKm,
                     consumedHours = consumedHours,
-                    notes = notes,
+                    notes = ComponentInputValidator.normalizeNotes(notes),
                 ),
             )
         }
@@ -144,19 +154,6 @@ class RoomComponentRepository
                 assessment = WearEngine.assess(component.lifecycle, usage),
                 baselineMillis = baseline,
             )
-        }
-
-        /**
-         * Rejects negative or non-finite measurements before they reach the
-         * event log. [value] is null when the axis is not tracked.
-         */
-        private fun requireValidMeasurement(
-            value: Double?,
-            field: String,
-        ) {
-            require(value == null || value.isFinite() && value >= 0.0) {
-                "$field must be a non-negative finite number"
-            }
         }
 
         /** Clamps corrupt aggregates to zero so the usage model stays valid. */

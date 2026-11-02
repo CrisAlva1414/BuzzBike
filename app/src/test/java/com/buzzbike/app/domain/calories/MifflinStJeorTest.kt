@@ -2,6 +2,7 @@ package com.buzzbike.app.domain.calories
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -62,5 +63,36 @@ class MifflinStJeorTest {
         val profile = UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 30, isMale = false)
 
         assertTrue(profile.isComplete)
+    }
+
+    @Test
+    fun given_profileOutsideProductBounds_thenIsIncompleteAndReeIsNull() {
+        val outOfBounds =
+            listOf(
+                UserProfile(weightKg = 19.9, heightCm = 175.0, ageYears = 30, isMale = true),
+                UserProfile(weightKg = 300.1, heightCm = 175.0, ageYears = 30, isMale = true),
+                UserProfile(weightKg = 70.0, heightCm = 99.9, ageYears = 30, isMale = true),
+                UserProfile(weightKg = 70.0, heightCm = 250.1, ageYears = 30, isMale = true),
+                UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 9, isMale = true),
+                UserProfile(weightKg = 70.0, heightCm = 175.0, ageYears = 121, isMale = true),
+                UserProfile(weightKg = Double.NaN, heightCm = 175.0, ageYears = 30, isMale = true),
+                UserProfile(weightKg = Double.POSITIVE_INFINITY, heightCm = 175.0, ageYears = 30, isMale = true),
+            )
+
+        outOfBounds.forEach { profile ->
+            assertFalse("expected incomplete: $profile", profile.isComplete)
+            assertNull(restingEnergyExpenditureKcalPerDay(profile))
+        }
+    }
+
+    @Test
+    fun given_profileOnProductBounds_thenIsComplete() {
+        val minimum = UserProfile(weightKg = 20.0, heightCm = 100.0, ageYears = 10, isMale = true)
+        val maximum = UserProfile(weightKg = 300.0, heightCm = 250.0, ageYears = 120, isMale = false)
+
+        assertTrue(minimum.isComplete)
+        assertTrue(maximum.isComplete)
+        assertNotNull(restingEnergyExpenditureKcalPerDay(minimum))
+        assertNotNull(restingEnergyExpenditureKcalPerDay(maximum))
     }
 }

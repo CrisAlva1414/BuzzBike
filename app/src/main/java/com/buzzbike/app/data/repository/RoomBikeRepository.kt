@@ -5,6 +5,7 @@ import com.buzzbike.app.data.local.dao.RideUsageDao
 import com.buzzbike.app.data.local.entity.BikeEntity
 import com.buzzbike.app.domain.wear.Bike
 import com.buzzbike.app.domain.wear.BikeRepository
+import com.buzzbike.app.domain.wear.MAX_GARAGE_NAME_LENGTH
 import com.buzzbike.app.domain.wear.WearClock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -40,7 +41,7 @@ class RoomBikeRepository
                 BikeEntity(
                     id = id,
                     name = requireNonBlank(name, "bike name"),
-                    notes = notes,
+                    notes = ComponentInputValidator.normalizeNotes(notes),
                     createdAtMillis = clock.nowMillis(),
                 ),
             )
@@ -48,7 +49,11 @@ class RoomBikeRepository
         }
 
         override suspend fun updateBike(bike: Bike) {
-            val normalized = bike.copy(name = requireNonBlank(bike.name, "bike name"))
+            val normalized =
+                bike.copy(
+                    name = requireNonBlank(bike.name, "bike name"),
+                    notes = ComponentInputValidator.normalizeNotes(bike.notes),
+                )
             bikeDao.updateBike(normalized.toBikeEntity())
         }
 
@@ -68,16 +73,19 @@ class RoomBikeRepository
     }
 
 /**
- * Trims [value] and rejects an empty result.
+ * Trims [value] and rejects an empty or over-long result.
  *
- * Bike and component names come from user input; rejecting blank values here
- * keeps the garage free of unnamed rows even if a caller bypasses the UI.
+ * Bike names and component labels come from user input; rejecting blank values
+ * here keeps the garage free of unnamed rows, and [maxLength] mirrors the UI
+ * bound so a caller bypassing the form cannot persist an unbounded string.
  */
 internal fun requireNonBlank(
     value: String,
     field: String,
+    maxLength: Int = MAX_GARAGE_NAME_LENGTH,
 ): String {
     val trimmed = value.trim()
     require(trimmed.isNotEmpty()) { "$field must not be blank" }
+    require(trimmed.length <= maxLength) { "$field must be at most $maxLength characters" }
     return trimmed
 }

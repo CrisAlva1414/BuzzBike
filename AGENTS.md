@@ -11,19 +11,20 @@
 
 **¿En qué quedó esto?** Fundación, scaffold, dominio, captura, descriptores,
 elevación, calorías (nivel 3), **backend/sync**, **U3 (Ajustes y perfil)**,
-**U4 (Garaje y desgaste)** y **U5 (Mapa)** están cerrados. El backend/sync cerró con gate PASS; hoy el gate acumula
-**576 tests**. `test`, `ktlintCheck`, `detekt`,
+**U4 (Garaje y desgaste)**, **U5 (Mapa)** y **U6 (Accesibilidad y pulido)**
+están cerrados. El backend/sync cerró con gate PASS; hoy el gate acumula
+**618 tests**. `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
-compila. La UI de producto está en curso: **U0 (tema/componentes), L1
-(pause/resume + FGS), U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime),
-U2 (historial/detalle + GPX), U3 (Ajustes y perfil), U4 (Garaje y desgaste) y
-U5 (Mapa)** están hechos; el próximo
-slice es **U6 (Accesibilidad y pulido)**. La UI de U1 vive en `ui/ride/` y su contrato en
+compila. **El roadmap de producto (fases 0–5) está cerrado**: lo único que
+queda es la **Fase 6 — release** (release firmada con keystore + 5 secrets y
+E2E real del sync contra Hermes/NAS). La UI de U1 vive en `ui/ride/` y su contrato en
 `domain/ride/session/RideSessionState.kt`; la de U2 vive en `ui/history/`, con
 dominio en `domain/history/` y `domain/export/`; la de U3 en `ui/settings/`
 (perfil) con persistencia en `data/local/` y `data/repository/`; la de U4 en
 `ui/garage/` con el motor de desgaste en `domain/wear/` (ADR-004); la de U5 en
-`ui/history/map/` (mapa del detalle, ADR-002).
+`ui/history/map/` (mapa del detalle, ADR-002); la de U6 en los componentes de
+UI y ViewModels (semántica, barras fijas, `runCatchingCancellable` en
+`core/`).
 CI/CD vive en `.github/workflows/android.yml` (GitHub Actions): corre el gate,
 sube el artifact `buzzbike-debug-apk`, está **verde** y ya se publicó el release
 **`v0.1.0`** con el APK de debug.
@@ -110,8 +111,22 @@ visible, y eso ocurre únicamente cuando el usuario toca MAPA. Artefacto
 **`android-sdk-opengl:13.7.1`** (no `android-sdk`, que es Vulkan-only en
 13.7.1) con renderer OpenGL; release solo `arm64-v8a` + `armeabi-v7a` (debug
 conserva x86/x86_64 para el emulador; APK debug ~84.5 MB → ~70 MB). El AAR
-aporta el permiso `ACCESS_WIFI_STATE` (documentado, no se quita). **Próximo
-slice: U6 — Accesibilidad y pulido.**
+aporta el permiso `ACCESS_WIFI_STATE` (documentado, no se quita).
+
+**Accesibilidad y pulido (U6):** **U6 está hecho y cerrado el 2026-11-01** sobre
+**618 tests**. Contrato: la barra de acción del ride (INICIAR/PAUSA/TERMINAR) y
+las tabs DATOS/MAPA del detalle quedan **fijas fuera del scroll** (visibles en
+320 dp); las métricas usan **`clearAndSetSemantics`** para que TalkBack lea una
+sola descripción (sin dobles lecturas); el aviso de offline y la recuperación
+del mapa declaran **`liveRegion`**; la denegación permanente del permiso ofrece
+**«ABRIR AJUSTES»** y `RidePermissionCoordinator` **re-evalúa `Ready` al
+reanudar** (solo en `Ready`, nunca pisa un ride en curso). En repositorio:
+cotas de **notas 500** y **nombre/label 40** (`GarageLimits`).
+`UserProfile.isComplete` valida **rangos de producto** (no solo > 0).
+`runCatchingCancellable` (en `core/`) **propaga `CancellationException`** en
+lugar de tragársela. `RideFormat` degrada a **`—`** con NaN/Infinity/negativos
+y formatea tiempo con `Locale.ROOT`. **Este cierre cierra el roadmap de
+producto completo (fases 0–5); solo queda la Fase 6 (release).**
 
 ---
 
@@ -192,7 +207,7 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**576 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**618 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
 > **Emulador local disponible** vía AVD **`tester36`** (`~/android-sdk/emulator`, system image `android-36;google_apis;x86_64`): `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en ese AVD (**10/10 PASS**). El gate JVM local sigue siendo `test`, `ktlintCheck`, `detekt`, `lintDebug`.
 >

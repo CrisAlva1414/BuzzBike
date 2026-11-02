@@ -114,7 +114,7 @@ class GarageViewModel
                 }
                 is GarageForm.Service -> {
                     val validated = validateServiceForm(current)
-                    if (validated.form.kmError != null || validated.form.hoursError != null) {
+                    if (validated.form.hasError) {
                         _form.value = validated.form
                     } else {
                         performMutation { submitServiceForm(componentRepository, validated) }

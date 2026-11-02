@@ -1,5 +1,7 @@
 package com.buzzbike.app.ui.settings
 
+import com.buzzbike.app.domain.calories.UserProfile
+
 /**
  * Form parsing and validation for the body profile.
  *
@@ -8,12 +10,12 @@ package com.buzzbike.app.ui.settings
  * 1750 cm keeps a bad profile from silently widening or narrowing the
  * uncertainty band. Values are always entered in metric units (kg, cm, years).
  */
-internal const val MIN_WEIGHT_KG = 20.0
-internal const val MAX_WEIGHT_KG = 300.0
-internal const val MIN_HEIGHT_CM = 100.0
-internal const val MAX_HEIGHT_CM = 250.0
-internal const val MIN_AGE_YEARS = 10
-internal const val MAX_AGE_YEARS = 120
+internal const val MIN_WEIGHT_KG = UserProfile.MIN_WEIGHT_KG
+internal const val MAX_WEIGHT_KG = UserProfile.MAX_WEIGHT_KG
+internal const val MIN_HEIGHT_CM = UserProfile.MIN_HEIGHT_CM
+internal const val MAX_HEIGHT_CM = UserProfile.MAX_HEIGHT_CM
+internal const val MIN_AGE_YEARS = UserProfile.MIN_AGE_YEARS
+internal const val MAX_AGE_YEARS = UserProfile.MAX_AGE_YEARS
 
 internal const val INVALID_WEIGHT_MESSAGE = "Ingresá un peso válido en kg."
 internal const val WEIGHT_RANGE_MESSAGE = "El peso debe estar entre 20 y 300 kg."

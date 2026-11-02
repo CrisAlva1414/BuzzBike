@@ -3,6 +3,7 @@ package com.buzzbike.app.ui.ride
 import com.buzzbike.app.domain.calories.CalorieModel
 import com.buzzbike.app.domain.calories.CalorieSummary
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -125,6 +126,103 @@ class RideFormatTest {
     fun caloriesBand_preservesUnknownModelName() {
         val band = RideFormat.caloriesBand(summary(100.0, 200.0, "MY_CUSTOM_MODEL"), false, esCl)
         assertEquals("MY_CUSTOM_MODEL · sin perfil", band?.model)
+    }
+
+    @Test
+    fun unitSuffixes_areInvariantAcrossLocales() {
+        // Only the decimal separator may change: the unit text itself must be
+        // identical so TalkBack and screenshots do not depend on the locale.
+        val distanceUs = RideFormat.distanceKm(12345.6, Locale.US)
+        val distanceCl = RideFormat.distanceKm(12345.6, esCl)
+        assertEquals(" km", distanceUs.takeLast(3))
+        assertEquals(distanceUs.replace(',', '.'), distanceCl.replace(',', '.'))
+
+        val speedUs = RideFormat.speedKmh(3.6, Locale.US)
+        val speedCl = RideFormat.speedKmh(3.6, esCl)
+        assertEquals(" km/h", speedUs.takeLast(5))
+        assertEquals(speedUs.replace(',', '.'), speedCl.replace(',', '.'))
+
+        val elevationUs = RideFormat.elevationM(240.0, Locale.US)
+        val elevationCl = RideFormat.elevationM(240.0, esCl)
+        assertEquals(" m", elevationUs.takeLast(2))
+        assertEquals(elevationUs, elevationCl)
+
+        val bandUs = RideFormat.caloriesBand(summary(310.4, 559.2), false, Locale.US)
+        val bandCl = RideFormat.caloriesBand(summary(310.4, 559.2), false, esCl)
+        assertNotNull(bandUs)
+        assertNotNull(bandCl)
+        assertEquals(" kcal", bandUs?.value?.takeLast(5))
+        assertEquals(bandUs?.value, bandCl?.value)
+    }
+
+    @Test
+    fun distanceKm_degradesNegativeAndNonFiniteValues() {
+        assertEquals("—", RideFormat.distanceKm(-0.1, esCl))
+        assertEquals("—", RideFormat.distanceKm(Double.NaN, esCl))
+        assertEquals("—", RideFormat.distanceKm(Double.POSITIVE_INFINITY, esCl))
+        assertEquals("—", RideFormat.distanceKm(Double.NEGATIVE_INFINITY, esCl))
+    }
+
+    @Test
+    fun elevationAndAltitude_handleInfinityAndKeepZero() {
+        assertEquals("—", RideFormat.elevationM(Double.POSITIVE_INFINITY, esCl))
+        assertEquals("—", RideFormat.elevationM(Double.NEGATIVE_INFINITY, esCl))
+        assertEquals("0 m", RideFormat.elevationM(0.0, esCl))
+        assertEquals("—", RideFormat.altitudeM(Double.NEGATIVE_INFINITY, esCl))
+        assertEquals("0 m", RideFormat.altitudeM(0.0, esCl))
+    }
+
+    @Test
+    fun duration_handlesLongExtremesWithoutOverflowOrCrash() {
+        assertEquals("0:00", RideFormat.duration(Long.MIN_VALUE))
+        assertTrue(RideFormat.duration(Long.MAX_VALUE).isNotEmpty())
+    }
+
+    @Test
+    fun caloriesBand_handlesEqualBoundsAndZero() {
+        assertEquals(
+            "≈ 310–310 kcal",
+            RideFormat.caloriesBand(summary(310.0, 310.0), hasProfile = false, locale = esCl)?.value,
+        )
+        assertEquals(
+            "≈ 0–0 kcal",
+            RideFormat.caloriesBand(summary(0.0, 0.0), hasProfile = false, locale = esCl)?.value,
+        )
+    }
+
+    @Test
+    fun caloriesBand_rejectsNegativeBoundsInsteadOfClampingThem() {
+        assertNull(RideFormat.caloriesBand(summary(-1.0, 300.0), hasProfile = false, locale = esCl))
+        assertNull(RideFormat.caloriesBand(summary(100.0, -1.0), hasProfile = false, locale = esCl))
+    }
+
+    @Test
+    fun hostileLocales_neverLeakNaNAndKeepTheUnitSuffix() {
+        val locales =
+            listOf(
+                esCl,
+                Locale.forLanguageTag("ar-EG"),
+                Locale.forLanguageTag("tr-TR"),
+            )
+        val unusable = listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, -1.0)
+        locales.forEach { locale ->
+            unusable.forEach { value ->
+                assertEquals("—", RideFormat.distanceKm(value, locale))
+                assertEquals("—", RideFormat.speedKmh(value, locale))
+                assertEquals("—", RideFormat.elevationM(value, locale))
+            }
+
+            val distance = RideFormat.distanceKm(12_345.6, locale)
+            val speed = RideFormat.speedKmh(3.6, locale)
+            val elevation = RideFormat.elevationM(1_240.0, locale)
+            listOf(distance, speed, elevation).forEach { text ->
+                assertFalse("unexpected NaN/Infinity in: $text", text.contains("NaN"))
+                assertFalse("unexpected NaN/Infinity in: $text", text.contains("∞"))
+            }
+            assertTrue(distance.endsWith(" km"))
+            assertTrue(speed.endsWith(" km/h"))
+            assertTrue(elevation.endsWith(" m"))
+        }
     }
 
     private fun summary(

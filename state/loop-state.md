@@ -66,6 +66,50 @@ altos/críticos; 2 LOW residuales). Sin escalado.
 
 ---
 
+## Tarea — Fase 5: U6 Accesibilidad y pulido
+
+### Estado
+**completada** · clase **Heavy**: `tester: PASS` (621 JVM + 10 instrumentados) y
+`security-reviewer: PASS` (hallazgos bajos corregidos). 2026-11-01.
+
+### Decisiones
+- La barra de acciones del ride y las tabs del detalle quedan **fijas fuera del
+  scroll** (visibles a 320 dp, verificado con `uiautomator` en `tester36`).
+- Semántica accesible con `clearAndSetSemantics` (una sola lectura por métrica,
+  banner y botón de mantener pulsado) y `liveRegion` en el aviso offline y en la
+  recuperación del mapa (anuncio **solo** cuando el estilo cargó).
+- `runCatchingCancellable` en `core/`: propaga `CancellationException`; se
+  reemplazaron todos los `runCatching` de `src/main`.
+- Cotas de longitud compartidas en `domain/wear/GarageLimits.kt` (nombre/label 40,
+  notas 500) y aplicadas **en repositorios**, no solo en UI.
+- `UserProfile.isComplete` valida rangos de producto (20–300 kg, 100–250 cm,
+  10–120 años).
+- Permiso: denegación permanente → **ABRIR AJUSTES** (con catch de
+  `ActivityNotFoundException`), re-evaluación en `ON_RESUME` solo en `Ready`.
+
+### Iteraciones
+| Iter | Slice | Resultado |
+|---|---|---|
+| 1 | S1 a11y + layout fijo | incompleto (step limit) → PASS (581) |
+| 2 | S2 robustez/permisos/bordes | FAIL detekt (TooManyFunctions/TooGeneric) → PASS (603) |
+| 3 | gates | PASS/PASS con hallazgos bajos |
+| 4 | fix bajos (Ajustes, notas, topes, anuncio) | PASS (618) |
+| 5 | tabs `Role.Tab` + notas de bici | PASS (621) |
+
+### Verificación
+- `test` = **621**, 0 fallos; `detekt` 0; `connectedDebugAndroidTest` **10/10**.
+- Manual en AVD 320x640: `INICIAR` `[107,544..]`, `PAUSA` `[131,452..]`,
+  `TERMINAR` `[16,520..]`, tabs dentro de 0..640 sin scroll.
+- Auto-pause: confirmado que el 0.00 km del emulador era artefacto de `geo fix`
+  estático; con desplazamiento real el dominio acumula distancia y tiempo.
+
+### Deuda
+- `SyncSettingsViewModel` conserva `catch (Exception)` sin re-lanzar
+  `CancellationException` (fuera del diff de U6; higiene).
+- `ACCESS_BACKGROUND_LOCATION` sigue fuera de alcance (requiere ADR).
+
+---
+
 ## Tarea — Fase 4: U5 Mapa del detalle
 
 ### Estado

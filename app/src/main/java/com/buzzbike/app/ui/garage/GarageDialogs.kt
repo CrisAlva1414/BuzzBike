@@ -179,6 +179,7 @@ fun ServiceFormDialog(
     onSubmit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val notesError = serviceNotesError(form.notes) ?: form.notesError
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Registrar servicio") },
@@ -211,14 +212,14 @@ fun ServiceFormDialog(
                 )
                 FormField(
                     value = form.notes,
-                    onValueChange = { onChange(form.copy(notes = it)) },
+                    onValueChange = { onChange(form.copy(notes = it, notesError = null)) },
                     label = NOTES_LABEL,
-                    error = null,
+                    error = notesError,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onSubmit, enabled = !isBusy) {
+            TextButton(onClick = onSubmit, enabled = !isBusy && notesError == null) {
                 Text("Registrar")
             }
         },

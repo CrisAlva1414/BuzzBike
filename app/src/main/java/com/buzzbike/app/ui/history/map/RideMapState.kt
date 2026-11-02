@@ -68,6 +68,41 @@ internal fun mapStateFor(
     }
 }
 
+/**
+ * Announcement state for the map's polite "Mapa disponible" live region.
+ *
+ * Recovering must be announced only after the style actually loaded. Moving
+ * back to [RideMapUiState.Loading] is not enough: a retry can fail again, and
+ * announcing on [RideMapUiState.Loading] would tell TalkBack the map is back
+ * before it renders.
+ */
+internal data class RideMapAnnouncement(
+    val sawFailure: Boolean = false,
+    val announceRecovered: Boolean = false,
+) {
+    /** Tracks map-state changes; [RideMapUiState.Loading] never announces. */
+    fun onMapState(state: RideMapUiState): RideMapAnnouncement =
+        when (state) {
+            is RideMapUiState.Failed -> copy(sawFailure = true, announceRecovered = false)
+            is RideMapUiState.Loading -> copy(announceRecovered = false)
+            RideMapUiState.NoTrack -> RideMapAnnouncement()
+        }
+
+    /** Announces a recovery only for a map that failed earlier in this tab. */
+    fun onStyleLoaded(): RideMapAnnouncement =
+        if (sawFailure) {
+            RideMapAnnouncement(sawFailure = false, announceRecovered = true)
+        } else {
+            this
+        }
+
+    companion object {
+        /** Initial announcement state for [state]. */
+        fun initial(state: RideMapUiState): RideMapAnnouncement =
+            RideMapAnnouncement(sawFailure = state is RideMapUiState.Failed)
+    }
+}
+
 /** Filters a persisted trace down to coordinates a map can safely render. */
 internal fun validMapPoints(points: List<TrackPoint>): List<GeoPoint> =
     points.mapNotNull { point ->

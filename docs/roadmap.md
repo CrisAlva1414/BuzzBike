@@ -25,7 +25,7 @@
 | **2 — U3 Ajustes y perfil** ✅ **COMPLETA (2026-11-01, 465 tests)** | **Perfil corporal en Room cifrado (ADR-007)**, **ADR de dato personal** nuevo (ADR-007), y cablear `hasProfile` en ride/historial/detalle (estaba hardcodeado en `false`). | `tester: PASS` + `security-reviewer: PASS`. |
 | **3 — U4 Garaje y desgaste** ✅ **COMPLETA (2026-11-01, 551 tests)** | Migración Room **5→6** con tablas `bikes`, `components`, `component_events` + `WearEngine` (ADR-004) + UI de garaje + bici asignada al ride. | `tester: PASS` + `security-reviewer: PASS`. |
 | **4 — U5 Mapa** ✅ **COMPLETA (2026-11-01, 576 tests)** | **Se implementó** (la opción de quitar la dependencia quedó descartada): MapLibre + OpenFreeMap online con estilo Liberty, track en el detalle vía pestaña **DATOS/MAPA**, atribución ODbL visible, aviso offline con reintento. Artefacto cambiado a **`android-sdk-opengl:13.7.1`** (ver actualización 2026-11-01 de ADR-002). | `tester: PASS` (576 tests, 0 fallos); `security-reviewer: PASS` (0 altos/críticos; 1 medio de atribución y 2 bajos, ver `state/loop-state.md`). |
-| **5 — U6 Accesibilidad y pulido** | TalkBack, contraste, deuda de corrutinas (p. ej. `runCatching` que captura `CancellationException`) y tests de borde. | `tester: PASS` + `security-reviewer: PASS`. |
+| **5 — U6 Accesibilidad y pulido** ✅ **COMPLETA (2026-11-01, 618 tests)** | TalkBack sin dobles lecturas (`clearAndSetSemantics`), barra de acción y tabs DATOS/MAPA fijas (320 dp), `liveRegion` en el mapa, «ABRIR AJUSTES» + re-evaluación al reanudar, cotas de notas/nombre en repositorios, `isComplete` con rangos de producto, `runCatchingCancellable` (cancelación propagada) y `RideFormat` con fallback `—`. | `tester: PASS` (618 tests, 0 fallos) + `security-reviewer: PASS`. |
 | **6 — Release** | Keystore + secrets, **release firmada**, **E2E del sync contra un Hermes real**, `security-reviewer` final sobre el diff acumulado, docs `PRIVACY`/`SECURITY`/`CONTRIBUTING`/guía de usuario/inventario de datos y `CHANGELOG` **v1.0.0**. | `security-reviewer` final PASS + tag + GitHub Release firmada. |
 
 > **Nota sobre Fase 2 (U3) — 2026-11-01:** completada. El plan original decía
@@ -53,6 +53,21 @@
 > ~70 MB**. **Sin migración Room: la DB sigue en v6.** Gate JVM en **576
 > tests, 0 fallos**. Detalle: actualización 2026-11-01 de ADR-002.
 
+> **Nota sobre Fase 5 (U6 Accesibilidad y pulido) — 2026-11-01:** completada.
+> Gate JVM en **618 tests, 0 fallos**. Quedaron **resueltos** los follow-ups
+> de deuda/UX abiertos desde slices anteriores: TalkBack con dobles lecturas
+> (métricas con `clearAndSetSemantics`), TERMINAR bajo el fold en 320 dp
+> (barra de acciones fija + tabs DATOS/MAPA fijas), `runCatching` que tragaba
+> `CancellationException` (nuevo `runCatchingCancellable`, propagación en
+> ViewModels y exportador GPX), bordes de `RideFormat` (NaN/Infinity/negativos
+> → `—`, tiempo con `Locale.ROOT`) y los follow-ups de U1.1 («ABRIR AJUSTES»
+> en denegación permanente, re-evaluación de `Ready` en `ON_RESUME` vía
+> `RidePermissionCoordinator`). Además: `liveRegion` en aviso offline/
+> recuperación del mapa, cotas de longitud (notas 500, nombre/label 40) en
+> repositorios, y `UserProfile.isComplete` validando rangos de producto.
+> **Sin migración Room: la DB sigue en v6.** **Todo el roadmap de producto
+> (fases 0–5) está cerrado; solo queda la Fase 6 (release).**
+
 > **Nota sobre Fase 6 (2026-10-31):** el pipeline de **release firmado ya está
 > preparado en CI** (`.github/workflows/android.yml`, job `release` en tags `v*`:
 > `assembleRelease` + `app-release.apk.sha256`, fail-closed sin secrets,
@@ -74,9 +89,11 @@
 > **Nota breve (2026-11-01).** El estado vigente del proyecto se mantiene en
 > **`AGENTS.md` §0**. A la fecha: **U0 (tema/componentes), L1 (pause/resume + FGS),
 > U1 (Ride en vivo), U1.1 (permiso de ubicación en runtime), U2
-> (historial/detalle + GPX), U3 (Ajustes y perfil), U4 (Garaje y desgaste) y
-> U5 (Mapa)** están hechos**; el próximo slice es **U6 (Accesibilidad y
-> pulido)**. El resto de este documento
+> (historial/detalle + GPX), U3 (Ajustes y perfil), U4 (Garaje y desgaste),
+> U5 (Mapa) y U6 (Accesibilidad y pulido)** están hechos — **el roadmap de
+> producto (fases 0–5) está cerrado**. **Lo único que queda es la Fase 6
+> (release): release firmada (keystore + 5 secrets) y E2E real del sync
+> contra Hermes/NAS.** El resto de este documento
 > queda como **referencia de fases y
 > criterios**, no como estado real; si hay conflicto, manda `AGENTS.md` §0.
 

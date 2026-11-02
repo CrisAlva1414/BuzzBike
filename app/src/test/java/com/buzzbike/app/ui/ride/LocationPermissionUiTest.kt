@@ -76,6 +76,37 @@ class LocationPermissionUiTest {
     }
 
     @Test
+    fun given_noPermissionAndPermanentDenial_thenOffersRetryAndOpenSettings() {
+        val model =
+            LocationPermissionUi.resolve(
+                gps = GpsStatus.NO_PERMISSION,
+                result = LocationPermissionRequestResult.DENIED_PERMANENTLY,
+            )
+
+        assertTrue(model.showGrantAction)
+        assertEquals("DAR PERMISO", model.grantActionLabel)
+        assertTrue(model.showOpenSettingsAction)
+        assertEquals("ABRIR AJUSTES", model.openSettingsActionLabel)
+        assertEquals(
+            "El permiso de ubicación está bloqueado. Habilitalo en Ajustes y volvé a intentar.",
+            model.message,
+        )
+    }
+
+    @Test
+    fun given_noPermissionAndRetryableDenial_thenDoesNotOfferOpenSettings() {
+        val model =
+            LocationPermissionUi.resolve(
+                gps = GpsStatus.NO_PERMISSION,
+                result = LocationPermissionRequestResult.DENIED,
+            )
+
+        assertTrue(model.showGrantAction)
+        assertFalse(model.showOpenSettingsAction)
+        assertEquals("ABRIR AJUSTES", model.openSettingsActionLabel)
+    }
+
+    @Test
     fun given_fineAndCoarseGranted_when_classify_thenGranted() {
         assertEquals(
             LocationPermissionRequestResult.GRANTED,
@@ -96,6 +127,30 @@ class LocationPermissionUiTest {
         assertEquals(
             LocationPermissionRequestResult.DENIED,
             LocationPermissionUi.classify(fineGranted = false, coarseGranted = false),
+        )
+    }
+
+    @Test
+    fun given_deniedWithoutRationale_when_classify_thenPermanentDenial() {
+        assertEquals(
+            LocationPermissionRequestResult.DENIED_PERMANENTLY,
+            LocationPermissionUi.classify(
+                fineGranted = false,
+                coarseGranted = false,
+                shouldShowRationale = false,
+            ),
+        )
+    }
+
+    @Test
+    fun given_deniedWithRationale_when_classify_thenRetryableDenial() {
+        assertEquals(
+            LocationPermissionRequestResult.DENIED,
+            LocationPermissionUi.classify(
+                fineGranted = false,
+                coarseGranted = false,
+                shouldShowRationale = true,
+            ),
         )
     }
 

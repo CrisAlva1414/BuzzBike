@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.buzzbike.app.domain.history.RideDetail
@@ -48,6 +53,7 @@ import java.util.Locale
 private const val CONTENT_PADDING_DP = 16
 private const val SECTION_GAP_DP = 16
 private const val TAB_GAP_DP = 8
+private const val TAB_BAR_PADDING_DP = 12
 private const val TRACE_HEIGHT_DP = 230
 private const val MAP_HEIGHT_DP = 320
 private const val DATA_TAB_LABEL = "DATOS"
@@ -116,36 +122,53 @@ internal fun RideDetailContent(
     initialTab: RideDetailTab = RideDetailTab.DATA,
 ) {
     val colors = BuzzTheme.colors
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
+    // Tabs stay pinned below the scroll area so DATOS/MAPA remain reachable
+    // without scrolling on a 320 dp wide screen.
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(colors.ground)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .verticalScroll(rememberScrollState())
-                .padding(CONTENT_PADDING_DP.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(SECTION_GAP_DP.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        DetailHeader(onBack = onBack)
-        when (state) {
-            is RideDetailUiState.Loading -> Message(LOADING_TEXT)
-            is RideDetailUiState.NotFound -> Message(NOT_FOUND_TEXT)
-            is RideDetailUiState.Error ->
-                StatusBanner(
-                    text = state.message,
-                    tone = StatusTone.DANGER,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            is RideDetailUiState.Content ->
-                DetailContent(
-                    detail = state.detail,
-                    bikeName = state.bikeName,
-                    exportState = exportState,
-                    locale = locale,
-                    onExport = onExport,
-                    initialTab = initialTab,
-                )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(CONTENT_PADDING_DP.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(SECTION_GAP_DP.dp),
+            ) {
+                DetailHeader(onBack = onBack)
+                when (state) {
+                    is RideDetailUiState.Loading -> Message(LOADING_TEXT)
+                    is RideDetailUiState.NotFound -> Message(NOT_FOUND_TEXT)
+                    is RideDetailUiState.Error ->
+                        StatusBanner(
+                            text = state.message,
+                            tone = StatusTone.DANGER,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    is RideDetailUiState.Content ->
+                        DetailContent(
+                            detail = state.detail,
+                            bikeName = state.bikeName,
+                            exportState = exportState,
+                            locale = locale,
+                            selectedTab = selectedTab,
+                            onExport = onExport,
+                        )
+                }
+            }
+        }
+        if (state is RideDetailUiState.Content) {
+            DetailTabBar(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it },
+            )
         }
     }
 }
@@ -185,12 +208,11 @@ private fun DetailContent(
     bikeName: String?,
     exportState: GpxExportState,
     locale: Locale,
+    selectedTab: RideDetailTab,
     onExport: (Long) -> Unit,
-    initialTab: RideDetailTab,
 ) {
     val ride = detail.ride
     val colors = BuzzTheme.colors
-    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     Text(
         text = RideHistoryFormat.rideTitle(ride.startTimeMillis),
         style = MaterialTheme.typography.titleLarge,
@@ -205,10 +227,6 @@ private fun DetailContent(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    DetailTabSelector(
-        selectedTab = selectedTab,
-        onTabSelected = { selectedTab = it },
-    )
     when (selectedTab) {
         RideDetailTab.DATA ->
             RideTrace(
@@ -252,12 +270,33 @@ private fun DetailContent(
     )
 }
 
+/** Pinned DATOS/MAPA selector; always visible above the scroll area. */
+@Composable
+private fun DetailTabBar(
+    selectedTab: RideDetailTab,
+    onTabSelected: (RideDetailTab) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(BuzzTheme.colors.ground)
+                .padding(horizontal = CONTENT_PADDING_DP.dp, vertical = TAB_BAR_PADDING_DP.dp),
+    ) {
+        DetailTabSelector(
+            selectedTab = selectedTab,
+            onTabSelected = onTabSelected,
+        )
+    }
+}
+
 /**
  * DATOS / MAPA selector.
  *
  * The selected option uses the primary button style so the current tab stays
- * visible without relying on color alone in TalkBack: [BuzzButton] exposes the
- * role and both options keep their text.
+ * visible without relying on color alone in TalkBack: the row is a
+ * [selectableGroup], each option exposes [Role.Tab] and [selected] marks the
+ * current one, so TalkBack says "seleccionado" without a second click action.
  */
 @Composable
 private fun DetailTabSelector(
@@ -265,20 +304,22 @@ private fun DetailTabSelector(
     onTabSelected: (RideDetailTab) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(TAB_GAP_DP.dp),
     ) {
         BuzzButton(
             text = DATA_TAB_LABEL,
             onClick = { onTabSelected(RideDetailTab.DATA) },
             primary = selectedTab == RideDetailTab.DATA,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { selected = selectedTab == RideDetailTab.DATA },
+            role = Role.Tab,
         )
         BuzzButton(
             text = MAP_TAB_LABEL,
             onClick = { onTabSelected(RideDetailTab.MAP) },
             primary = selectedTab == RideDetailTab.MAP,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { selected = selectedTab == RideDetailTab.MAP },
+            role = Role.Tab,
         )
     }
 }

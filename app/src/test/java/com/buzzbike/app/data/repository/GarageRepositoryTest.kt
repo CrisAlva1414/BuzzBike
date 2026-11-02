@@ -13,6 +13,9 @@ import com.buzzbike.app.data.local.entity.ComponentEventEntity
 import com.buzzbike.app.data.local.entity.RideEntity
 import com.buzzbike.app.domain.wear.BikeRepository
 import com.buzzbike.app.domain.wear.ComponentRepository
+import com.buzzbike.app.domain.wear.MAX_GARAGE_COMPONENT_LABEL_LENGTH
+import com.buzzbike.app.domain.wear.MAX_GARAGE_NAME_LENGTH
+import com.buzzbike.app.domain.wear.MAX_GARAGE_NOTES_LENGTH
 import com.buzzbike.app.domain.wear.NewComponent
 import com.buzzbike.app.domain.wear.WearAxis
 import com.buzzbike.app.domain.wear.WearClock
@@ -291,6 +294,146 @@ class GarageRepositoryTest {
         }
 
     @Test
+    fun given_overlongBikeName_when_creating_thenItIsRejected() =
+        runTest {
+            val error =
+                runCatching {
+                    bikeRepository.createBike("x".repeat(MAX_GARAGE_NAME_LENGTH + 1))
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertTrue(bikeRepository.observeBikes().first().isEmpty())
+        }
+
+    @Test
+    fun given_bikeNameAtLimit_when_creating_thenItIsStored() =
+        runTest {
+            val name = "x".repeat(MAX_GARAGE_NAME_LENGTH)
+
+            val id = bikeRepository.createBike(name)
+
+            assertEquals(name, bikeRepository.getBike(id)?.name)
+        }
+
+    @Test
+    fun given_overlongBikeName_when_updating_thenItIsRejectedAndNameIsKept() =
+        runTest {
+            val id = bikeRepository.createBike("Gravel")
+            val stored = requireNotNull(bikeRepository.getBike(id))
+
+            val error =
+                runCatching {
+                    bikeRepository.updateBike(stored.copy(name = "x".repeat(MAX_GARAGE_NAME_LENGTH + 1)))
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertEquals("Gravel", bikeRepository.getBike(id)?.name)
+        }
+
+    @Test
+    fun given_overlongNotes_when_creatingBike_thenItIsRejected() =
+        runTest {
+            val error =
+                runCatching {
+                    bikeRepository.createBike("Gravel", notes = "x".repeat(MAX_GARAGE_NOTES_LENGTH + 1))
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertTrue(bikeRepository.observeBikes().first().isEmpty())
+        }
+
+    @Test
+    fun given_notesAtLimit_when_creatingBike_thenTheyAreStoredAndTrimmed() =
+        runTest {
+            val notes = "  ${"x".repeat(MAX_GARAGE_NOTES_LENGTH)}  "
+
+            val id = bikeRepository.createBike("Gravel", notes = notes)
+
+            assertEquals("x".repeat(MAX_GARAGE_NOTES_LENGTH), bikeRepository.getBike(id)?.notes)
+        }
+
+    @Test
+    fun given_overlongNotes_when_updatingBike_thenItIsRejectedAndNotesAreKept() =
+        runTest {
+            val id = bikeRepository.createBike("Gravel", notes = "original")
+            val stored = requireNotNull(bikeRepository.getBike(id))
+
+            val error =
+                runCatching {
+                    bikeRepository.updateBike(stored.copy(notes = "x".repeat(MAX_GARAGE_NOTES_LENGTH + 1)))
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertEquals("original", bikeRepository.getBike(id)?.notes)
+        }
+
+    @Test
+    fun given_overlongComponentLabel_when_creating_thenItIsRejected() =
+        runTest {
+            val bikeId = bikeRepository.createBike("Gravel")
+
+            val error =
+                runCatching {
+                    componentRepository.createComponent(
+                        NewComponent(
+                            bikeId = bikeId,
+                            type = WearType.CHAIN,
+                            label = "x".repeat(MAX_GARAGE_COMPONENT_LABEL_LENGTH + 1),
+                            lifecycle = WearLifecycle(lifecycleKm = CHAIN_KM),
+                        ),
+                    )
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertTrue(componentRepository.observeComponents(bikeId).first().isEmpty())
+        }
+
+    @Test
+    fun given_componentLabelAtLimit_when_creating_thenItIsStored() =
+        runTest {
+            val bikeId = bikeRepository.createBike("Gravel")
+            val label = "x".repeat(MAX_GARAGE_COMPONENT_LABEL_LENGTH)
+
+            val componentId =
+                componentRepository.createComponent(
+                    NewComponent(
+                        bikeId = bikeId,
+                        type = WearType.CHAIN,
+                        label = label,
+                        lifecycle = WearLifecycle(lifecycleKm = CHAIN_KM),
+                    ),
+                )
+
+            assertEquals(label, componentRepository.getComponent(componentId)?.label)
+        }
+
+    @Test
+    fun given_overlongComponentLabel_when_updating_thenItIsRejectedAndLabelIsKept() =
+        runTest {
+            val bikeId = bikeRepository.createBike("Gravel")
+            val componentId =
+                componentRepository.createComponent(
+                    NewComponent(
+                        bikeId = bikeId,
+                        type = WearType.CHAIN,
+                        label = "Chain",
+                        lifecycle = WearLifecycle(lifecycleKm = CHAIN_KM),
+                    ),
+                )
+            val stored = requireNotNull(componentRepository.getComponent(componentId))
+
+            val error =
+                runCatching {
+                    componentRepository.updateComponent(
+                        stored.copy(label = "x".repeat(MAX_GARAGE_COMPONENT_LABEL_LENGTH + 1)),
+                    )
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertEquals("Chain", componentRepository.getComponent(componentId)?.label)
+        }
+
+    @Test
     fun given_negativeMeasurement_when_loggingService_thenItIsRejected() =
         runTest {
             val bikeId = bikeRepository.createBike("Gravel")
@@ -307,6 +450,77 @@ class GarageRepositoryTest {
             val error =
                 runCatching {
                     componentRepository.logService(componentId, consumedKm = -1.0, consumedHours = 0.0, wearRatio = 0.0)
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertNull(eventDao.getLastServiceEvent(componentId))
+        }
+
+    @Test
+    fun given_overlongNotes_when_creatingComponent_thenItIsRejected() =
+        runTest {
+            val bikeId = bikeRepository.createBike("Gravel")
+
+            val error =
+                runCatching {
+                    componentRepository.createComponent(
+                        NewComponent(
+                            bikeId = bikeId,
+                            type = WearType.CHAIN,
+                            label = "Chain",
+                            lifecycle = WearLifecycle(lifecycleKm = CHAIN_KM),
+                            notes = "x".repeat(MAX_GARAGE_NOTES_LENGTH + 1),
+                        ),
+                    )
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalArgumentException)
+            assertTrue(componentRepository.observeComponents(bikeId).first().isEmpty())
+        }
+
+    @Test
+    fun given_notesAtLimit_when_creatingComponent_thenTheyAreStoredAndTrimmed() =
+        runTest {
+            val bikeId = bikeRepository.createBike("Gravel")
+            val notes = "  ${"x".repeat(MAX_GARAGE_NOTES_LENGTH)}  "
+
+            val componentId =
+                componentRepository.createComponent(
+                    NewComponent(
+                        bikeId = bikeId,
+                        type = WearType.CHAIN,
+                        label = "Chain",
+                        lifecycle = WearLifecycle(lifecycleKm = CHAIN_KM),
+                        notes = notes,
+                    ),
+                )
+
+            assertEquals("x".repeat(MAX_GARAGE_NOTES_LENGTH), componentRepository.getComponent(componentId)?.notes)
+        }
+
+    @Test
+    fun given_overlongNotes_when_loggingService_thenItIsRejectedAndNoEventIsStored() =
+        runTest {
+            val bikeId = bikeRepository.createBike("Gravel")
+            val componentId =
+                componentRepository.createComponent(
+                    NewComponent(
+                        bikeId = bikeId,
+                        type = WearType.CHAIN,
+                        label = "Chain",
+                        lifecycle = WearLifecycle(lifecycleKm = CHAIN_KM),
+                    ),
+                )
+
+            val error =
+                runCatching {
+                    componentRepository.logService(
+                        componentId = componentId,
+                        consumedKm = 0.0,
+                        consumedHours = 0.0,
+                        wearRatio = 0.0,
+                        notes = "x".repeat(MAX_GARAGE_NOTES_LENGTH + 1),
+                    )
                 }.exceptionOrNull()
 
             assertTrue(error is IllegalArgumentException)

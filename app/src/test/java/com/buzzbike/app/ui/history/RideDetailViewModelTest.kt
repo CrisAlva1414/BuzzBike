@@ -9,6 +9,7 @@ import com.buzzbike.app.domain.history.RideRecord
 import com.buzzbike.app.domain.model.TrackPoint
 import com.buzzbike.app.domain.wear.Bike
 import com.buzzbike.app.domain.wear.BikeRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -91,6 +92,22 @@ class RideDetailViewModelTest {
             advanceUntilIdle()
 
             assertEquals(RideDetailUiState.Error("No se pudo cargar el ride."), viewModel.state.value)
+        }
+
+    @Test
+    fun given_sourceThrowsCancellation_when_created_thenStateStaysLoading() =
+        runTest {
+            val viewModel =
+                viewModel(
+                    RIDE_ID,
+                    FakeSource(detail(), failure = CancellationException("cancelled")),
+                )
+
+            advanceUntilIdle()
+
+            // The helper must rethrow instead of mapping it to Error: a
+            // cancelled coroutine leaves the state untouched.
+            assertEquals(RideDetailUiState.Loading, viewModel.state.value)
         }
 
     @Test

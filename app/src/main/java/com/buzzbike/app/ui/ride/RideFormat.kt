@@ -112,9 +112,9 @@ object RideFormat {
      * a single exact number (ADR-001, AGENTS.md §6.4).
      *
      * The low bound is rounded down and the high bound up so the displayed
-     * range never becomes narrower than the calculated one. `null`, non-finite
-     * or inverted bands return `null`; the UI shows [UNKNOWN] instead of
-     * inventing a value.
+     * range never becomes narrower than the calculated one. `null`, non-finite,
+     * negative or inverted bands return `null`; the UI shows [UNKNOWN] instead
+     * of inventing a value.
      */
     fun caloriesBand(
         calories: CalorieSummary?,
@@ -122,8 +122,13 @@ object RideFormat {
         locale: Locale = Locale.getDefault(),
     ): CalorieBandText? =
         calories
-            ?.takeIf { it.lowKcal.isFinite() && it.highKcal.isFinite() && it.lowKcal <= it.highKcal }
-            ?.let { buildBand(it, hasProfile, locale) }
+            ?.takeIf {
+                it.lowKcal.isFinite() &&
+                    it.highKcal.isFinite() &&
+                    it.lowKcal >= MIN_METERS &&
+                    it.highKcal >= MIN_METERS &&
+                    it.lowKcal <= it.highKcal
+            }?.let { buildBand(it, hasProfile, locale) }
 
     private fun buildBand(
         calories: CalorieSummary,

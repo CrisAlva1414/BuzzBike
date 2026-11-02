@@ -1,13 +1,15 @@
 package com.buzzbike.app.ui.garage
 
+import com.buzzbike.app.domain.wear.MAX_GARAGE_COMPONENT_LABEL_LENGTH
+import com.buzzbike.app.domain.wear.MAX_GARAGE_NAME_LENGTH
 import com.buzzbike.app.domain.wear.WearLifecycle
 import com.buzzbike.app.domain.wear.WearType
 
 /** Maximum bike name length accepted by the create/rename form. */
-internal const val MAX_BIKE_NAME_LENGTH = 40
+internal const val MAX_BIKE_NAME_LENGTH = MAX_GARAGE_NAME_LENGTH
 
 /** Maximum component label length; keeps long labels readable on the card. */
-internal const val MAX_COMPONENT_LABEL_LENGTH = 40
+internal const val MAX_COMPONENT_LABEL_LENGTH = MAX_GARAGE_COMPONENT_LABEL_LENGTH
 
 /**
  * One editable garage form.
@@ -44,7 +46,12 @@ sealed interface GarageForm {
         val wearRatio: Double?,
         val kmError: String? = null,
         val hoursError: String? = null,
-    ) : GarageForm
+        val notesError: String? = null,
+    ) : GarageForm {
+        /** True when any field has a validation message; the form must not submit. */
+        val hasError: Boolean
+            get() = kmError != null || hoursError != null || notesError != null
+    }
 }
 
 /** What the user asked to open; the view model resolves it into a [GarageForm]. */

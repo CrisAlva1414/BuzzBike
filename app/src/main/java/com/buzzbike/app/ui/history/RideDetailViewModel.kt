@@ -3,6 +3,7 @@ package com.buzzbike.app.ui.history
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.buzzbike.app.core.runCatchingCancellable
 import com.buzzbike.app.domain.export.GpxExporter
 import com.buzzbike.app.domain.export.GpxRide
 import com.buzzbike.app.domain.history.RideDetailSource
@@ -54,7 +55,7 @@ class RideDetailViewModel
             }
             _state.value = RideDetailUiState.Loading
             _state.value =
-                runCatching { source.getRideDetail(id) }
+                runCatchingCancellable { source.getRideDetail(id) }
                     .fold(
                         onSuccess = { detail ->
                             if (detail == null) {
@@ -79,7 +80,7 @@ class RideDetailViewModel
          * failing the whole load.
          */
         private suspend fun resolveBikeName(bikeId: String?): String? =
-            bikeId?.let { id -> runCatching { bikeRepository.getBike(id) }.getOrNull()?.name }
+            bikeId?.let { id -> runCatchingCancellable { bikeRepository.getBike(id) }.getOrNull()?.name }
 
         /**
          * Hands the loaded ride to the exporter for [destination].
