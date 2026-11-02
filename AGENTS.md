@@ -13,7 +13,7 @@
 elevación, calorías (nivel 3), **backend/sync**, **U3 (Ajustes y perfil)**,
 **U4 (Garaje y desgaste)**, **U5 (Mapa)** y **U6 (Accesibilidad y pulido)**
 están cerrados. El backend/sync cerró con gate PASS; hoy el gate acumula
-**618 tests**. `test`, `ktlintCheck`, `detekt`,
+**633 tests**. `test`, `ktlintCheck`, `detekt`,
 `assembleDebug` y `lintDebug` están en verde, y `assembleDebugAndroidTest`
 compila. **El roadmap de producto (fases 0–5) está cerrado**: lo único que
 queda es la **Fase 6 — release** (release firmada con keystore + 5 secrets y
@@ -207,7 +207,7 @@ app/
 
 > **Estado del entorno (2026-10-30):** toolchain **instalado**. JDK **Temurin 21.0.13**, Android SDK **37.0** en `~/android-sdk` (platform-tools, build-tools 36.0.0, licencias aceptadas), Gradle **9.8.2** vía wrapper. Matriz de versiones en `gradle/libs.versions.toml`.
 >
-> **Gate actual: verde.** `test` (**618 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
+> **Gate actual: verde.** `test` (**633 tests, 0 fallos**), `ktlintCheck`, `detekt`, `assembleDebug` y `lintDebug` en 0; `assembleDebugAndroidTest` compila.
 >
 > **Emulador local disponible** vía AVD **`tester36`** (`~/android-sdk/emulator`, system image `android-36;google_apis;x86_64`): `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en ese AVD (**10/10 PASS**). El gate JVM local sigue siendo `test`, `ktlintCheck`, `detekt`, `lintDebug`.
 >

@@ -11,6 +11,7 @@ import com.buzzbike.app.domain.sync.OutboxEnqueuer
 import com.buzzbike.app.domain.sync.OutboxStore
 import com.buzzbike.app.domain.sync.RideSyncCoordinator
 import com.buzzbike.app.domain.sync.RideSyncDataSource
+import com.buzzbike.app.domain.sync.SyncConsentChecker
 import com.buzzbike.app.domain.sync.SyncConsentGate
 import com.buzzbike.app.domain.sync.SyncGatekeeper
 import com.buzzbike.app.domain.sync.SyncMutationGate
@@ -72,6 +73,10 @@ object SyncModule {
     @Provides
     @Singleton
     fun provideSyncConsentGate(gatekeeper: SyncGatekeeper): SyncConsentGate = gatekeeper
+
+    @Provides
+    @Singleton
+    fun provideSyncConsentChecker(gatekeeper: SyncGatekeeper): SyncConsentChecker = gatekeeper
 
     @Provides
     @Singleton

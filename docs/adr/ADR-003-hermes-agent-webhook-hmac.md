@@ -14,7 +14,7 @@ BuzzBike puede, de forma **opcional**, enviar un reporte de cada ride a un agent
   - **CUIDADO DE NOMBRE:** Hermes Agent ≠ el modelo LLM Hermes (Hermes 3 8B / Hermes 4.x, open-weights en HuggingFace). Son cosas distintas. El framework es Python, corre en el NAS, y expone webhooks HTTP nativos.
 - El NAS es alcanzable desde el teléfono por **Tailscale** (WireGuard) — no hay puertos abiertos a internet.
 - La app es local-first: los tracks GPS son datos sensibles (GDPR). Nada puede salir del dispositivo sin acción explícita del usuario.
-- El usuario no tiene HR strap ni potenciómetro; el reporte de ride es esencialmente GPS + descriptores + calorías estimadas + wear.
+- El usuario no tiene HR strap ni potenciómetro; el reporte de ride es esencialmente GPS + descriptores + calorías estimadas.
 
 ### Capacidades verificadas de Hermes Agent (webhooks)
 
@@ -59,16 +59,15 @@ Por defecto el payload NO incluye el track GPS crudo de alta frecuencia. Incluye
 - `ride.id` (UUID local), timestamps de inicio/fin
 - Métricas agregadas: distancia, moving time, velocidad media/pico, desnivel +/-, calorías estimadas con su **modelo e intervalo de incertidumbre** (consistente con ADR-001)
 - **Waypoints decimados** (p. ej. 1 punto cada N metros / N segundos) para visualización aproximada
-- Estado de wear de componentes al cierre del ride
 
-NO incluye por defecto: track crudo, datos de sensores crudos, identificadores del dispositivo, o cualquier PII además del que el usuario ya aceptó al configurar el webhook.
+NO incluye por defecto: track crudo, datos de sensores crudos, identificadores del dispositivo, **el estado de wear del garaje ni el perfil corporal**, o cualquier PII además del que el usuario ya aceptó al configurar el webhook.
 
 El usuario puede, en una opción futura, elegir enviar el track completo — pero eso es un cambio de ADR, no un default.
 
 ### Transporte
 
 - **Tailscale (WireGuard)** entre teléfono y NAS. El endpoint es la IP Tailscale del NAS (o MagicDNS hostname), no una IP pública.
-- HTTPS si el NAS ya lo expone; si no, el canal ya está cifrado por Tailscale. Documentar en la UI que el tráfico va por la tailnet del usuario.
+- **HTTPS es obligatorio en todo caso, también dentro de la tailnet**: la app rechaza `http://` en claro (validación en `HermesConfig` y en `OutboxProcessor`; `network_security_config.xml` con `cleartextTrafficPermitted="false"`). Documentar en la UI que el tráfico va por la tailnet del usuario.
 - La app **no** debe configurar ni rotar Tailscale; eso es infraestructura del usuario.
 
 ---
@@ -199,6 +198,28 @@ reincorporarse antes de habilitar trackeo real en background: hoy
 `TrackingService` no se inicia desde código, así que el trackeo continuo con
 la app en background no es una función activa. Se acepta como deuda explícita
 para el slice de trackeo.
+
+## Actualización 2026-11-01 — reglas vigentes (superan el texto de 2026-10-02)
+
+Corrección de drift entre este ADR y el código. Estas son las **reglas
+vigentes**; el texto original de «Decision / Transporte» y de «Data
+minimization» quedó superado en los dos puntos siguientes:
+
+- **HTTPS es siempre obligatorio**, también dentro de la tailnet: no existe
+  el caso «el NAS no expone HTTPS, se acepta `http://` porque Tailscale ya
+  cifra». La app rechaza endpoints `http://` (validación en `HermesConfig`
+  y en `OutboxProcessor`; `network_security_config.xml` con
+  `cleartextTrafficPermitted="false"`). El texto de 2026-10-02 que decía
+  «HTTPS si el NAS ya lo expone; si no, el canal ya está cifrado por
+  Tailscale» está superado.
+- **El payload NO incluye el estado de wear del garaje ni el perfil
+  corporal.** Solo lleva métricas agregadas (con banda calórica y modelo) y
+  waypoints decimados. El ítem «Estado de wear de componentes al cierre del
+  ride» de la lista original de data minimization está superado; el código
+  (`RidePayloadBuilder`) no lo emite.
+
+Todo lo demás de este ADR (outbox + WorkManager, HMAC V2, Keystore,
+idempotencia, data minimization general) sigue vigente.
 
 ## Fuentes
 

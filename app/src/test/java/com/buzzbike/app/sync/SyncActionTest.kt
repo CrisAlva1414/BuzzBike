@@ -27,6 +27,11 @@ class SyncActionTest {
     }
 
     @Test
+    fun given_consentRevokedOutcome_when_toSyncAction_then_successWithoutRetry() {
+        assertEquals(SyncAction.SUCCESS, ProcessOutcome.ConsentRevoked.toSyncAction())
+    }
+
+    @Test
     fun given_partialOutcome_when_toSyncAction_then_retry() {
         assertEquals(SyncAction.RETRY, ProcessOutcome.Partial(sent = 1, failed = 2).toSyncAction())
     }

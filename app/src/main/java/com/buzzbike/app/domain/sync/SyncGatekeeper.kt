@@ -23,7 +23,8 @@ class SyncGatekeeper
         private val configStore: SyncConfigStore,
         private val secretManager: HmacSecretManager,
         private val gate: SyncMutationGate,
-    ) : SyncConsentGate {
+    ) : SyncConsentGate,
+        SyncConsentChecker {
         /**
          * Runs [block] with the configuration re-read under the gate when sync
          * is enabled (a configuration exists **and** a secret is stored).
@@ -39,5 +40,26 @@ class SyncGatekeeper
                 } else {
                     block(config)
                 }
+            }
+
+        /** Snapshots the shared revocation epoch for a drain to validate against. */
+        override fun currentEpoch(): Long = gate.currentEpoch()
+
+        /**
+         * Reads configuration, secret and revocation epoch under the shared
+         * gate and releases it before returning, so the outbox drain can do
+         * HTTP without holding the lock.
+         *
+         * The epoch is checked first: if `disconnect()` revoked after the drain
+         * captured [epochAtStart], this returns `false` even while the cleanup
+         * has not yet cleared the configuration and secret. That closes the
+         * window where the worker could acquire the gate before the cleanup and
+         * send one extra ride.
+         */
+        override suspend fun isSyncAllowed(epochAtStart: Long): Boolean =
+            gate.withLock {
+                !gate.isRevokedSince(epochAtStart) &&
+                    configStore.current() != null &&
+                    secretManager.hasSecret()
             }
     }

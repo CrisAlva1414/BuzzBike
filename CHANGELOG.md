@@ -5,111 +5,87 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
+## [1.0.0] - 2026-11-01
+
+Primera release consolidada del producto completo: fundación (dominio
+físico, captura GPS, sync HMAC) más las unidades de producto U1–U6.
+Local-first, MIT, sin backend propio ni telemetría.
+
+### Añadido
+
+- **Ciclo completo de ride:** captura GPS con foreground service, pantalla
+  en vivo con estados sellados, pausa/terminar, resumen y recuperación de un
+  ride interrumpido; permiso de ubicación en runtime con acción «ABRIR
+  AJUSTES» en denegación permanente (U1 / U1.1).
+- **Descriptores de ride** (distancia, moving time, velocidades, desnivel
+  +/−) y **motor de calorías nivel 3** (Compendium 2024) con banda de
+  incertidumbre y modelo siempre visibles, nunca un número exacto
+  (ADR-001, ADR-005, ADR-006).
+- **Historial y detalle:** lista de rides con franja semanal, detalle con
+  8 métricas y pestañas **DATOS/MAPA**; **exportación GPX 1.1 +
+  `TrackPointExtension`** a destino elegido por el usuario vía SAF (U2).
+- **Perfil corporal** (peso, altura, edad, sexo) en **Room cifrado con
+  SQLCipher**, con snapshot por ride, `hasProfile` y Mifflin-St Jeor como
+  baseline de paradas (U3, ADR-007).
+- **Garaje y desgaste:** bicis y componentes con motor de desgaste por
+  máximos normalizados, alertas al **80%** y **100%**, historial de
+  servicios y bici asignada al ride (U4, ADR-004).
+- **Mapa del recorrido** con MapLibre + OpenFreeMap sin API key, atribución
+  visible permanente y aviso de offline con reintentar (U5, ADR-002); el
+  track se renderiza en local y sus coordenadas no se envían.
+- **Sync opcional** a tu propio Hermes/NAS: webhook firmado **HMAC-SHA256**
+  sobre **HTTPS**, outbox en Room, WorkManager con backoff, data
+  minimization (métricas agregadas + waypoints decimados, no track crudo)
+  y dedupe idempotente por `ride.id` (ADR-003); secreto en Android Keystore.
+- **Persistencia cifrada** (Room + SQLCipher, passphrase en Keystore),
+  tema Sol/Night y CI con GitHub Actions (gate + artifact + release en tags).
+
+### Cambiado
+
+- Barra de acción del ride y tabs DATOS/MAPA **fijas** fuera del scroll
+  (visibles en 320 dp); métricas con semántica TalkBack sin dobles
+  lecturas; `liveRegion` en el aviso del mapa (U6).
+- Borrar una bici deja los rides con su `bike_id` como **referencia
+  histórica suave** (detalle: «Bici eliminada»); componentes y eventos se
+  borran por CASCADE.
+- Un perfil **parcial** degrada a la banda sin perfil (±30–40%): no se
+  inventa un estado intermedio; sin peso se etiqueta «supuesto: 70 kg».
+- Contrato de sync en **payload v2**: la banda calórica y el modelo van
+  embebidos (breaking change respecto del escalar `caloriesKcal` v1).
+
+### Corregido
+
+- La instalación limpia dejaba «INICIAR RIDE» deshabilitado porque nadie
+  solicitaba el permiso de ubicación.
+- `runCatching` tragaba `CancellationException` en ViewModels y exportador
+  GPX; ahora la cancelación se propaga (`runCatchingCancellable`).
+- `RideFormat` degrada a `—` con NaN, infinitos o negativos, y formatea
+  tiempo con `Locale.ROOT`.
+
+### Seguridad
+
+- Releases **sin APKs de debug**; el job de release es fail-closed con los
+  5 secrets, publica checksum **SHA-256** y rechaza `android:debuggable` y
+  certificados `CN=Android Debug`.
+- **HTTPS-only** (`cleartextTrafficPermitted=false`), HMAC en cada envío,
+  secretos sellados con AAD de propósito, SQLCipher 4.19.1 y lockfile de
+  dependencias.
+- **Gate de mutación de sync** (revocación por epoch) que cierra la carrera
+  save/disconnect entre pantallas y con el ride.
+- `testConnection` descarta resultados obsoletos por generación; sin
+  analytics, sin crash reporting con PII, sin cuentas.
+
+---
+
 ## [No publicado]
 
 ### Añadido
 
-- Pantalla de ride en vivo con estados de reposo, listo, grabando, pausado,
-  terminado y recuperable.
-- Resumen del ride al terminar, con distancia, velocidad, duración, desnivel y
-  banda calórica.
-- Recuperación de un ride interrumpido: al reabrir la app se puede salvar o
-  descartar sin perder los datos capturados.
-- Métricas en vivo con banda de incertidumbre calórica y modelo aplicado
-  (ADR-001).
-- Solicitud del permiso de ubicación en runtime desde la pantalla de ride, con
-  acciones y mensajes para permiso denegado y ubicación aproximada.
-- Historial de rides con lista ordenada y franja semanal (distancia y cantidad
-  de rides por semana calendario).
-- Detalle del ride con su traza y 8 métricas; la banda calórica solo se muestra
-  si el modelo y los extremos están completos (nunca se rellena con valores
-  inventados).
-- Exportación a GPX 1.1 con `TrackPointExtension` a un destino elegido por el
-  usuario vía Storage Access Framework (destinos `content://`, sin permisos de
-  almacenamiento).
-- **Perfil corporal** (peso, altura, edad y sexo) editable desde Ajustes y
-  persistido en **Room cifrado con SQLCipher** (tabla `user_profile`,
-  [ADR-007](docs/adr/ADR-007-perfil-corporal-dato-personal.md)): misma
-  frontera de cifrado que los rides, nunca en DataStore ni en SharedPreferences,
-  y nunca fuera del dispositivo.
-- **Mifflin-St Jeor como baseline de paradas con perfil completo**
-  (`REE/1440` kcal/min, ADR-001); sin perfil las paradas siguen usando
-  `1.0 MET` (Compendium `07021`). Con perfil completo la banda calórica pasa a
-  **±20–30%** (sin perfil, ±30–40%).
-- **Snapshot de los 4 campos del perfil por ride**: historial y detalle
-  muestran el perfil real con el que se calculó cada ride, y borrar o editar el
-  perfil no altera los rides históricos.
-- Etiqueta **`supuesto: 70 kg`** visible en la UI cuando se usa ese peso de
-  referencia (ADR-001 §5.3.2), nunca presentado como dato del usuario.
-- **Garaje:** alta, edición y borrado de bicis y de sus componentes
-  (cadena, suspensión, neumáticos, frenos), con **alertas de desgaste al 80%
-  («se acerca») y al 100% («vencido»)** según el motor de la
-  [ADR-004](docs/adr/ADR-004-wear-tracking-maximos-normalizados.md).
-- **Motor de desgaste** (`WearEngine`): ratio normalizado
-  `max(km/lifecycleKm, hours/lifecycleHours, days/lifecycleDays)` con defaults
-  configurables por componente (cadena 2000 km, suspensión 100 h, neumáticos
-  3000 km; frenos sin default, requieren configuración del usuario).
-- **Registro de servicios:** cada `service` resetea el acumulado del componente
-  y guarda snapshot previo (consumido, fecha y ratio al momento) en
-  `component_events`, dejando el historial de mantenimiento consultable.
-- **Selector de bici al iniciar el ride** («BICI DEL RIDE») y **nombre de la
-  bici en el detalle** del ride; si la bici ya no existe se muestra
-  «Bici eliminada» (los rides conservan su referencia histórica).
-- **Mapa del recorrido en el detalle del ride** con pestaña **DATOS/MAPA**:
-  MapLibre + OpenFreeMap **sin API key** (estilo Liberty, ADR-002), con
-  **atribución visible permanente** (`© OpenStreetMap contributors`,
-  `© OpenMapTiles` y `OpenFreeMap`, con links) y **aviso de offline con botón
-  REINTENTAR** cuando no hay conexión validada. Online-only: el track se
-  renderiza en local y **las coordenadas nunca se envían**.
-
 ### Cambiado
-
-- La sesión de ride usa un contrato sellado que serializa todas las
-  transiciones y evita estados inválidos.
-- La auto-pausa se deriva de la detección de movimiento existente (ADR-005),
-  sin umbrales nuevos.
-- **Barra de acciones del ride fija**: INICIAR, PAUSA/SEGUIR y TERMINAR quedan
-  ancladas fuera del área con scroll, visibles sin desplazar en pantallas de
-  320 dp de ancho.
-- **Pestañas DATOS/MAPA del detalle fijas**: el selector queda anclado arriba
-  del contenido con scroll.
-- **Semántica accesible sin dobles lecturas**: TalkBack ya no lee label y valor
-  por separado (`clearAndSetSemantics` con descripción única por métrica).
-- **`liveRegion` en el mapa**: el aviso de offline y la recuperación de
-  conexión se anuncian automáticamente (`LiveRegionMode.Polite`).
-- **«ABRIR AJUSTES» en denegación permanente** del permiso de ubicación, y
-  **re-evaluación de la sesión al reanudar** (`ON_RESUME`) al volver del
-  diálogo de permisos o de los ajustes del sistema.
-- **Cotas de longitud en garaje** compartidas por formulario y repositorio:
-  notas hasta **500** caracteres, nombre de bici y label de componente hasta
-  **40**.
-- **`UserProfile.isComplete` valida rangos de producto** (peso 20–300 kg,
-  altura 100–250 cm, edad 10–120 años, sexo conocido): un perfil persistido o
-  inyectado fuera de rango no estrecha la banda calórica.
 
 ### Corregido
 
-- La instalación limpia dejaba «INICIAR RIDE» deshabilitado para siempre
-  porque nadie solicitaba el permiso de ubicación.
-- **`runCatching` tragaba `CancellationException`** en ViewModels y exportador
-  GPX; ahora la cancelación se propaga (nueva función `runCatchingCancellable`).
-- **`RideFormat` degrada a `—`** con valores NaN, infinitos o negativos en
-  distancia, velocidad, desnivel y banda calórica, y los formatos de tiempo
-  son invariantes por locale (`Locale.ROOT`).
-
 ### Seguridad
-
-- Los releases ya no publican APKs debug; el job de release exige firma y
-  publica checksum SHA-256. SQLCipher actualizado a 4.19.1. Secretos sellados
-  con AAD de propósito.
-- El job de release exige `RELEASE_CERT_SHA256` y rechaza APKs con
-  `android:debuggable` o certificados `CN=Android Debug`.
-- Gate de mutación de sync compartido (`SyncMutationGate` + `SyncGatekeeper`)
-  con revocación por epoch: cierra la carrera save/disconnect entre pantallas
-  y con el ride.
-- Lockfile de dependencias para builds reproducibles.
-- `testConnection` descarta resultados obsoletos por generación (evita
-  aplicar respuestas viejas del health check).
 
 ---
 

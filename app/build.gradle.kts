@@ -64,7 +64,7 @@ android {
         // Explicit versioning: GitHub Releases upgrades rely on a monotonic
         // versionCode, and versionName is surfaced to the user.
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

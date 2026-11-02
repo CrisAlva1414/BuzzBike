@@ -3,6 +3,7 @@ package com.buzzbike.app.sync
 import com.buzzbike.app.domain.sync.ConnectivityChecker
 import com.buzzbike.app.domain.sync.HmacSecretManager
 import com.buzzbike.app.domain.sync.OutboxStore
+import com.buzzbike.app.domain.sync.SyncConsentChecker
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -21,6 +22,8 @@ interface HermesWorkerEntryPoint {
     fun connectivityChecker(): ConnectivityChecker
 
     fun hmacSecretManager(): HmacSecretManager
+
+    fun syncConsentChecker(): SyncConsentChecker
 
     fun hermesSenderProvider(): HermesSenderProvider
 }

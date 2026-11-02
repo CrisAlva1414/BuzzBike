@@ -21,12 +21,15 @@ enum class SyncAction {
  * `Partial`, `MorePending` and `BackendUnavailable` all retry: failed rows
  * stay in the outbox with their own backoff deadline, a capped drain still has
  * eligible rows, and an unavailable backend leaves every row pending.
- * `ConfigurationError` is terminal — retrying cannot fix a missing endpoint,
- * so it must not burn WorkManager attempts.
+ * `ConsentRevoked` is a success: the user disconnected, so there is nothing
+ * left to deliver and WorkManager must not retry the pass. `ConfigurationError`
+ * is terminal — retrying cannot fix a missing endpoint, so it must not burn
+ * WorkManager attempts.
  */
 fun ProcessOutcome.toSyncAction(): SyncAction =
     when (this) {
-        is ProcessOutcome.Sent, ProcessOutcome.NoPending -> SyncAction.SUCCESS
+        is ProcessOutcome.Sent, ProcessOutcome.NoPending, ProcessOutcome.ConsentRevoked ->
+            SyncAction.SUCCESS
         is ProcessOutcome.Partial, ProcessOutcome.MorePending, ProcessOutcome.BackendUnavailable ->
             SyncAction.RETRY
         ProcessOutcome.ConfigurationError -> SyncAction.FAILURE

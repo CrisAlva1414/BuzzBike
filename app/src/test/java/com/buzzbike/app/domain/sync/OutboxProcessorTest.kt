@@ -21,7 +21,11 @@ class OutboxProcessorTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
             val connectivity = FakeConnectivityChecker(Reachability.Available)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(connectivity = connectivity, sender = sender),
+                )
 
             val outcome = processor.process("   ", hmacKeyConfigured = true)
 
@@ -38,7 +42,11 @@ class OutboxProcessorTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
             val connectivity = FakeConnectivityChecker(Reachability.Available)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(connectivity = connectivity, sender = sender),
+                )
 
             val outcome = processor.process("http://hermes.example/health", hmacKeyConfigured = true)
 
@@ -54,7 +62,11 @@ class OutboxProcessorTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
             val connectivity = FakeConnectivityChecker(Reachability.Available)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(connectivity = connectivity, sender = sender),
+                )
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -69,7 +81,11 @@ class OutboxProcessorTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
             val connectivity = FakeConnectivityChecker(Reachability.Misconfigured)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(connectivity = connectivity, sender = sender),
+                )
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -89,7 +105,11 @@ class OutboxProcessorTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
             val connectivity = FakeConnectivityChecker(Reachability.Unavailable)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(connectivity = connectivity, sender = sender),
+                )
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -109,7 +129,11 @@ class OutboxProcessorTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A)))
             val connectivity = FakeConnectivityChecker(Reachability.Available)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, connectivity = connectivity, sender = sender)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(connectivity = connectivity, sender = sender),
+                )
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = false)
 
@@ -125,7 +149,7 @@ class OutboxProcessorTest {
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
             val sender = FakeHermesSender()
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -146,7 +170,7 @@ class OutboxProcessorTest {
                         SendResult(success = true)
                     }
                 }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -171,7 +195,7 @@ class OutboxProcessorTest {
                         SendResult(success = true)
                     }
                 }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -189,7 +213,7 @@ class OutboxProcessorTest {
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
             val sender = FakeHermesSender { SendResult(success = false, statusCode = HTTP_UNAUTHORIZED) }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -207,7 +231,7 @@ class OutboxProcessorTest {
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
             val sender = FakeHermesSender { SendResult(success = false, statusCode = HTTP_FORBIDDEN) }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -236,7 +260,7 @@ class OutboxProcessorTest {
                         SendResult(success = true)
                     }
                 }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -256,7 +280,7 @@ class OutboxProcessorTest {
                     }
                     SendResult(success = true)
                 }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -271,7 +295,7 @@ class OutboxProcessorTest {
         runTest {
             val store = FakeOutboxStore(items = emptyList())
             val sender = FakeHermesSender()
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -286,7 +310,7 @@ class OutboxProcessorTest {
             val items = (1..11).map { item("id-$it") }
             val store = FakeOutboxStore(items = items)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, sender = sender, batchSize = 10)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender, batchSize = 10))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -302,7 +326,7 @@ class OutboxProcessorTest {
             val items = (1..25).map { item("id-$it") }
             val store = FakeOutboxStore(items = items)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, sender = sender, batchSize = 10)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender, batchSize = 10))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -323,7 +347,7 @@ class OutboxProcessorTest {
                         SendResult(success = true)
                     }
                 }
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -352,7 +376,11 @@ class OutboxProcessorTest {
             val items = (1..15).map { item("id-$it") }
             val store = FakeOutboxStore(items = items)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, sender = sender, batchSize = 10, maxBatches = 1)
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(sender = sender, batchSize = 10, maxBatches = 1),
+                )
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -361,11 +389,87 @@ class OutboxProcessorTest {
         }
 
     @Test
+    fun given_consentRevokedBetweenSends_when_process_then_stopsAfterFirstWithoutFailures() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
+            var allowed = true
+            val consent = FakeSyncConsentChecker { allowed }
+            val sender =
+                FakeHermesSender {
+                    // The first send completes in flight; revoking right after
+                    // it models the user tapping "Desconectar" mid-drain.
+                    allowed = false
+                    SendResult(success = true)
+                }
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(sender = sender, consent = consent),
+                )
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConsentRevoked, outcome)
+            assertEquals(listOf(rideIdOf(ID_A)), sender.rideIds)
+            assertEquals(listOf(ID_A), store.sentIds)
+            assertTrue(store.failedMarks.isEmpty())
+            assertEquals(listOf(ID_B), store.getPending(NOW_MILLIS, DEFAULT_BATCH_SIZE).map { it.id })
+        }
+
+    @Test
+    fun given_consentRevokedBeforeBatch_when_process_then_neverSendsOrPurges() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A)))
+            val sender = FakeHermesSender()
+            val consent = FakeSyncConsentChecker { false }
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(sender = sender, consent = consent),
+                )
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConsentRevoked, outcome)
+            assertTrue(sender.rideIds.isEmpty())
+            assertTrue(store.failedMarks.isEmpty())
+            assertTrue(store.sentIds.isEmpty())
+            assertEquals(0, store.deleteSentCalls)
+        }
+
+    @Test
+    fun given_epochRevokedButConfigStillPresent_when_process_then_nextCheckBlocks() =
+        runTest {
+            val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)))
+            // Config and secret stay "present" (allowed() keeps returning true);
+            // only the revocation epoch moves, modelling disconnect() before the
+            // cleanup has cleared the persisted state.
+            val consent = FakeSyncConsentChecker()
+            val sender =
+                FakeHermesSender {
+                    consent.revoke()
+                    SendResult(success = true)
+                }
+            val processor =
+                processor(
+                    store = store,
+                    options = ProcessorOptions(sender = sender, consent = consent),
+                )
+
+            val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
+
+            assertEquals(ProcessOutcome.ConsentRevoked, outcome)
+            assertEquals(listOf(rideIdOf(ID_A)), sender.rideIds)
+            assertTrue(store.failedMarks.isEmpty())
+            assertEquals(listOf(ID_B), store.getPending(NOW_MILLIS, DEFAULT_BATCH_SIZE).map { it.id })
+        }
+
+    @Test
     fun given_storeReturnsSameBatchWithoutProgress_when_process_then_stopsInsteadOfLooping() =
         runTest {
             val store = FakeOutboxStore(items = listOf(item(ID_A), item(ID_B)), repeatBatch = true)
             val sender = FakeHermesSender()
-            val processor = processor(store = store, sender = sender)
+            val processor = processor(store = store, options = ProcessorOptions(sender = sender))
 
             val outcome = processor.process(HEALTH_URL, hmacKeyConfigured = true)
 
@@ -376,22 +480,34 @@ class OutboxProcessorTest {
 
     private fun processor(
         store: OutboxStore,
-        connectivity: ConnectivityChecker = FakeConnectivityChecker(Reachability.Available),
-        sender: HermesSender = FakeHermesSender(),
-        batchSize: Int = DEFAULT_BATCH_SIZE,
-        maxBatches: Int = DEFAULT_MAX_BATCHES,
+        options: ProcessorOptions = ProcessorOptions(),
     ): OutboxProcessor =
         OutboxProcessor(
-            store = store,
-            connectivity = connectivity,
-            sender = sender,
-            clock = { NOW_MILLIS },
-            config =
-                OutboxProcessorConfig(
-                    batchSize = batchSize,
-                    maxBatches = maxBatches,
-                ),
+            OutboxProcessorDependencies(
+                store = store,
+                connectivity = options.connectivity,
+                sender = options.sender,
+                consent = options.consent,
+                clock = { NOW_MILLIS },
+                config =
+                    OutboxProcessorConfig(
+                        batchSize = options.batchSize,
+                        maxBatches = options.maxBatches,
+                    ),
+            ),
         )
+
+    /**
+     * Defaults for the optional collaborators, so each test only overrides the
+     * one it cares about (detekt `LongParameterList`).
+     */
+    private data class ProcessorOptions(
+        val connectivity: ConnectivityChecker = FakeConnectivityChecker(Reachability.Available),
+        val sender: HermesSender = FakeHermesSender(),
+        val consent: SyncConsentChecker = FakeSyncConsentChecker(),
+        val batchSize: Int = DEFAULT_BATCH_SIZE,
+        val maxBatches: Int = DEFAULT_MAX_BATCHES,
+    )
 
     private fun item(
         id: String,
@@ -520,6 +636,26 @@ private class FakeConnectivityChecker(
         lastUrl = healthCheckUrl
         lastHmacKeyConfigured = hmacKeyConfigured
         return reachability
+    }
+}
+
+private class FakeSyncConsentChecker(
+    private val allowed: () -> Boolean = { true },
+) : SyncConsentChecker {
+    var checks: Int = 0
+        private set
+    private var epoch: Long = 0
+
+    /** Models `disconnect()` bumping the revocation epoch. */
+    fun revoke() {
+        epoch++
+    }
+
+    override fun currentEpoch(): Long = epoch
+
+    override suspend fun isSyncAllowed(epochAtStart: Long): Boolean {
+        checks++
+        return allowed() && epochAtStart == epoch
     }
 }
 

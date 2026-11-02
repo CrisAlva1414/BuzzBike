@@ -4,7 +4,7 @@
 
 **Computadora de bicicleta que no miente con las calorías.**
 
-Android · Kotlin · Compose · local-first · sin cuentas · MIT
+Android · Kotlin · Compose · local-first · sin cuentas · MIT · **v1.0.0**
 
 `Kotlin 2.4` · `Jetpack Compose` · `MapLibre` · `minSdk 26` · `MIT` · `sin telemetría`
 
@@ -30,7 +30,7 @@ Hecho para la comunidad, en español, y quiero que se use: si le falta algo o un
 
 ## Estado actual (honesto)
 
-Verificado contra el código en `main` (2026-10-30):
+Verificado contra el código en `main` (2026-11-01):
 
 **Hecho y cerrado:**
 
@@ -45,7 +45,7 @@ Verificado contra el código en `main` (2026-10-30):
 - ✅ **Sync a Hermes Agent:** outbox en Room + WorkManager, firma HMAC V2 con secret en Android Keystore, SQLCipher, data minimization y dedupe por `ride.id` (ADR-003). *La validación E2E contra un NAS real sigue pendiente.*
 - ✅ **Arquitectura:** `ui → domain ← data`, puertos explícitos, Hilt, Room.
 - ✅ **CI:** `.github/workflows/android.yml` verde en cada push/PR (gate `test ktlintCheck detekt lintDebug assembleDebug`) y sube el APK de debug **solo como artifact** `buzzbike-debug-apk`. En tags `v*` corre el job `release`, que construye `assembleRelease` y publica `app-release.apk` + `app-release.apk.sha256` **solo** si están los **5 secrets** (los 4 de firma + `RELEASE_CERT_SHA256`); sin los de firma falla («release signing not configured») y no publica nada; además **rechaza** APKs con `android:debuggable` y certificados `CN=Android Debug`. La release **`v0.1.0`** (2026-10-30) se publicó con APK de debug, antes de este cambio.
-- ✅ **Gate verde:** `test` (**618 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **~70 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **10/10 PASS**).
+- ✅ **Gate verde:** `test` (**633 tests, 0 fallos, 0 errores, 0 skipped**), `ktlintCheck`, `detekt`, `assembleDebug` (APK de debug **~70 MB**) y `lintDebug` pasan. `assembleDebugAndroidTest` compila y `connectedDebugAndroidTest` corre en el emulador local (AVD **`tester36`**; **10/10 PASS**).
 
 **Todavía no:**
 
@@ -53,6 +53,7 @@ Verificado contra el código en `main` (2026-10-30):
 - ✅ **U4 — Garaje y desgaste:** tablas `bikes`/`components`/`component_events` (Room v6) con `WearEngine` (ADR-004), alertas al 80% y 100%, historial de servicios y bici asignada al ride.
 - ✅ **U5 — Mapa:** pestaña DATOS/MAPA en el detalle con **MapLibre (artifact `android-sdk-opengl`) + OpenFreeMap**, sin API key; atribución visible permanente, aviso offline con `REINTENTAR` y el track renderizado en local (las coordenadas no se envían).
 - ✅ **U6 — Accesibilidad:** barra de acción y tabs DATOS/MAPA fijas (320 dp), TalkBack sin dobles lecturas (`clearAndSetSemantics`), `liveRegion` en el mapa, «ABRIR AJUSTES» en denegación permanente, cotas de longitud en garaje y `RideFormat` con fallback `—`.
+- ✅ **Docs de release (Fase 6):** [`PRIVACY.md`](PRIVACY.md), [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [guía de usuario](docs/user-guide.md), [inventario de datos](docs/data-inventory.md) y [`CHANGELOG.md`](CHANGELOG.md) con la entrada **`1.0.0`**.
 - ❌ **Release firmada de producción:** el pipeline de release en CI ya está preparado, pero falta el keystore y los 5 secrets (`RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` y `RELEASE_CERT_SHA256`); sin ellos el job `release` falla y no publica nada.
 - ❌ **E2E del sync con Hermes real:** nunca validado contra un NAS con Hermes Agent (la spec está implementada y testeada contra mock).
 - ❌ **BLE** (frecuencia cardíaca / potenciómetro): fuera de v1.
@@ -79,18 +80,20 @@ BMR de reposo con Mifflin-St Jeor. Regla dura: la UI **debe** mostrar el interva
 
 El GPS miente en desnivel (en cerros con árboles, bastante). Se fusiona barómetro con altitud GPS, con suavizado e histéresis para no acumular metros fantasma en cada ondulación del terreno.
 
-### Desgaste de componentes (ADR-004) — en diseño, aún no implementado
+### Desgaste de componentes (ADR-004) — implementado en U4
 
-Cada pieza tendrá su ciclo de vida normalizado en tres ejes — kilómetros, horas y días — y alertará al 80% y al 100%. Sin eso, la cadena se cambia cuando ya está destruyendo los piñones.
+El motor vive en `domain/wear` (`WearEngine`) y persiste en las tablas `bikes`, `components` y `component_events` (Room v6). Cada pieza tiene su ciclo de vida normalizado en tres ejes — kilómetros, horas y días — y la app alerta al **80%** («se acerca») y al **100%** («vencido»). Los servicios reinician el acumulado y guardan snapshot del consumo previo; sin esto, la cadena se cambia cuando ya está destruyendo los piñones.
 
 ---
 
 ## Privacidad: no trackeamos datos personales
 
+Detalle completo en [`PRIVACY.md`](PRIVACY.md) e [`inventario de datos`](docs/data-inventory.md).
+
 - **Nada sale del dispositivo sin una acción explícita tuya.** No hay backend de BuzzBike. No existe.
 - **Sin cuentas, sin analytics, sin crash reporting con datos personales.**
 - El sync opcional a un agente local (Hermes Agent, ver abajo) está **apagado por defecto** y manda métricas agregadas + waypoints decimados, no el track crudo de alta frecuencia.
-- Los datos viven en Room: borrás la app y se borra todo. Exportación GPX a tu propio storage.
+- Los datos viven en Room cifrada (SQLCipher, clave en Android Keystore): borrás la app y se borra todo. Exportación GPX a tu propio storage.
 
 ---
 
@@ -144,13 +147,15 @@ cd BuzzBike
 ./gradlew test ktlintCheck detekt lintDebug assembleDebug   # gate antes de cualquier PR
 ```
 
+Guía de uso (rides, historial, garaje, sync): [`docs/user-guide.md`](docs/user-guide.md).
 Guía paso a paso desde una máquina vacía (Linux, sin sudo), con los pitfalls del toolchain: [`docs/setup-entorno.md`](docs/setup-entorno.md).
+Cómo contribuir (gate, reglas, tests de migración): [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
 ## Descargar / instalar
 
-Todavía **no hay release firmada de producción**: el CI dejó de publicar APKs de debug y el job de release necesita los 5 secrets de firma (pendientes de configurar).
+**Versión documentada: 1.0.0** (entrada en [`CHANGELOG.md`](CHANGELOG.md)). Todavía **no hay release firmada de producción**: el CI dejó de publicar APKs de debug y el job de release necesita los 5 secrets de firma (pendientes de configurar); hasta entonces la única release publicada es la histórica `v0.1.0` (APK de debug).
 
 - **Release `v0.1.0` (APK debug, 2026-10-30):** descarga directa en [github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0](https://github.com/CrisAlva1414/BuzzBike/releases/tag/v0.1.0). Fue la última release publicada con APK de debug: los tags nuevos ya no publican debug.
 - **Historial de releases:** [github.com/CrisAlva1414/BuzzBike/releases](https://github.com/CrisAlva1414/BuzzBike/releases).
@@ -170,13 +175,13 @@ Esto se construye en público y le faltan ojos. Lo que más me sirve:
 - **Gente de datos y fitness:** ¿el orden de la cascada te parece correcto? ¿Falta Polar o Firstbeat?
 - **Self-hosters:** qué formato de payload te gustaría consumir en Home Assistant, Grafana o n8n.
 
-Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Convenciones en [`AGENTS.md`](AGENTS.md): `./gradlew test ktlintCheck detekt lintDebug assembleDebug` en verde y Conventional Commits.
+Abrí un [issue](https://github.com/CrisAlva1414/BuzzBike/issues) o un PR. Convenciones en [`CONTRIBUTING.md`](CONTRIBUTING.md) y [`AGENTS.md`](AGENTS.md): `./gradlew test ktlintCheck detekt lintDebug assembleDebug` en verde y Conventional Commits.
 
 ---
 
 ## Roadmap
 
-Estado al 2026-10-30 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
+Estado al 2026-11-01 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
 
 - [x] Fundación: ADR-001..006, docs, toolchain
 - [x] Scaffold de build + dominio (tracking, descriptores, elevación, calorías) con gate verde
@@ -189,6 +194,7 @@ Estado al 2026-10-30 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
 - [x] Garaje y desgaste de componentes: schema `bikes`/`components` + `WearEngine` (ADR-004, U4)
 - [x] Mapa en el detalle con MapLibre + OpenFreeMap (U5, ADR-002)
 - [x] Accesibilidad y pulido (U6: TalkBack, barras fijas, cancelación, bordes de formato)
+- [x] Docs de release: PRIVACY / SECURITY / CONTRIBUTING / guía de usuario / inventario de datos / CHANGELOG 1.0.0
 - [ ] Primera release firmada (keystore + los 5 secrets de CI; el job de release ya está preparado)
 - [ ] Post-v1: BLE frecuencia cardíaca/potencia, PMTiles offline, F-Droid
 
@@ -198,10 +204,18 @@ Estado al 2026-10-30 (detalle y gate en [`docs/roadmap.md`](docs/roadmap.md)):
 
 | Qué | Dónde |
 |---|---|
-| Decisiones de arquitectura | [`docs/adr/`](docs/adr/) — ADR-001 a ADR-006 |
+| Decisiones de arquitectura | [`docs/adr/`](docs/adr/) — ADR-001 a ADR-007 |
 | Roadmap y estado | [`docs/roadmap.md`](docs/roadmap.md) |
+| Guía de uso | [`docs/user-guide.md`](docs/user-guide.md) |
+| Inventario de datos | [`docs/data-inventory.md`](docs/data-inventory.md) |
+| Privacidad | [`PRIVACY.md`](PRIVACY.md) |
+| Seguridad y reporte de vulnerabilidades | [`SECURITY.md`](SECURITY.md) |
+| Contribuir | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
+| Contrato de sync | [`docs/sync-contract.md`](docs/sync-contract.md) |
 | Convenciones de código | [`docs/format/`](docs/format/) |
 | Guía de entorno | [`docs/setup-entorno.md`](docs/setup-entorno.md) |
+| Testing | [`docs/testing.md`](docs/testing.md) |
 | Bitácora de sesiones | [`docs/sessions/`](docs/sessions/) |
 | Fuentes | Anton, Darker Grotesque y JetBrains Mono bajo OFL — licencias en [`docs/licenses/`](docs/licenses/) |
 

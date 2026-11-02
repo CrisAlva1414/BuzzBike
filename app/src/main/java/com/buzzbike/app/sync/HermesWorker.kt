@@ -7,6 +7,7 @@ import androidx.work.ListenableWorker.Result
 import androidx.work.WorkerParameters
 import com.buzzbike.app.domain.sync.HermesConfig
 import com.buzzbike.app.domain.sync.OutboxProcessor
+import com.buzzbike.app.domain.sync.OutboxProcessorDependencies
 import com.buzzbike.app.domain.sync.endpointValidationError
 import dagger.hilt.android.EntryPointAccessors
 
@@ -63,9 +64,12 @@ class HermesWorker(
         val sender = entryPoint.hermesSenderProvider().create(config)
         val processor =
             OutboxProcessor(
-                store = entryPoint.outboxStore(),
-                connectivity = entryPoint.connectivityChecker(),
-                sender = sender,
+                OutboxProcessorDependencies(
+                    store = entryPoint.outboxStore(),
+                    connectivity = entryPoint.connectivityChecker(),
+                    sender = sender,
+                    consent = entryPoint.syncConsentChecker(),
+                ),
             )
         val hmacKeyConfigured = entryPoint.hmacSecretManager().hasSecret()
         return processor

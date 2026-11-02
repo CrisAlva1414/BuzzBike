@@ -66,6 +66,56 @@ altos/críticos; 2 LOW residuales). Sin escalado.
 
 ---
 
+## Tarea — Fase 6: Release 1.0.0
+
+### Estado
+**completada** (salvo la firma de producción y el E2E real) · clase **Heavy**:
+`tester: PASS` (633 JVM + 10 instrumentados) y `security-reviewer: PASS`
+(autoriza la release). 2026-11-01.
+
+### Decisiones
+- `versionName = 1.0.0`, `versionCode = 1`.
+- **Keystore efímero en `/tmp`** solo para verificar el camino de release; se
+  borró. No se generó ni commiteó una clave de producción (decisión del usuario).
+- Verificación material del APK: `apksigner` firma **v2 válida**, **no
+  debuggable**, ABIs **solo `arm64-v8a` + `armeabi-v7a`**, ~33.6 MB,
+  `lintRelease` 0 errores.
+- E2E del sync contra un **receptor HTTPS local** (cert de test) con HMAC
+  verificado por un oráculo independiente; 401/429 sin reintento.
+- **Consentimiento mid-drain**: epoch capturado antes del health check, re-chequeo
+  por lote y por envío, fail-closed, sin deadlock, `ConsentRevoked` sin fallo ni
+  purga.
+- Docs de release: `PRIVACY.md`, `SECURITY.md`, `CONTRIBUTING.md`,
+  `docs/user-guide.md`, `docs/data-inventory.md`, `CHANGELOG [1.0.0]`.
+
+### Iteraciones
+| Iter | Slice | Resultado |
+|---|---|---|
+| 1 | versión + release con keystore efímero + E2E sync | PASS (624) |
+| 2 | docs de release | PASS |
+| 3 | gates | tester **FAIL** (5 afirmaciones falsas en docs) / security PASS |
+| 4 | fix docs + consentimiento en worker | PASS (627) |
+| 5 | fix ventana de epoch | PASS (633) |
+| 6 | security delta | **PASS** (ratifica 1.0.0) |
+
+### Verificación
+- `test` = **633**, 0 fallos; `detekt` 0; `connectedDebugAndroidTest` **10/10**.
+- Release local firmada verificada y keystore eliminado; sin residuos en el repo.
+
+### Pendiente (depende del usuario)
+- Configurar los **5 secrets** (`RELEASE_KEYSTORE_BASE64`,
+  `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`,
+  `RELEASE_CERT_SHA256`) y pushear el tag `v1.0.0` para que CI publique.
+- **E2E real** contra un NAS con Hermes (el test actual usa un receptor local).
+
+### Deuda aceptada
+- Sin certificate pinning ni gate biométrico (documentado en `SECURITY.md`).
+- CI no corre `connectedDebugAndroidTest` en el job de tag; wrapper sin
+  `distributionSha256Sum`; sin SCA automatizado.
+- BouncyCastle desactualizado en tooling de test/lint (no en release).
+
+---
+
 ## Tarea — Fase 5: U6 Accesibilidad y pulido
 
 ### Estado
